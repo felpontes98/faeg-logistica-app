@@ -180,6 +180,7 @@ class Viagem(Base):
     data_criacao = Column(DateTime, server_default=func.now())
     status_viagem = Column(String(30), default="Planejada")
 
+    tipo_viagem = Column(String(50))
     tipo_frete = Column(String(50))
     rota_resumo = Column(String(100))
     km_rota_planejado = Column(Numeric(10, 2))
@@ -260,6 +261,7 @@ def sincronizar_colunas_banco():
         "ALTER TABLE locais ADD COLUMN IF NOT EXISTS id_cliente INTEGER REFERENCES clientes(id_cliente);",
         "ALTER TABLE locais ALTER COLUMN restricao_horario TYPE VARCHAR(120);",
         "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS razao_social VARCHAR(150);",
+        "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS tipo_viagem VARCHAR(50);",
     ]
     with engine.begin() as conn:
         for sql in comandos:

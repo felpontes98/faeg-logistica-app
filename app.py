@@ -36,13 +36,13 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def inicializar_banco_uma_vez():
+def inicializar_banco_uma_vez(schema_v=2):
     """Garante automaticamente que as novas colunas existam no Neon sem alterar dados."""
     sincronizar_colunas_banco()
     return True
 
 
-inicializar_banco_uma_vez()
+inicializar_banco_uma_vez(schema_v=2)
 
 
 # ==============================================================================
@@ -838,24 +838,21 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
 
     pares_info = [
         ("Cliente:", dados_resumo["cliente"][:36], "Status:", dados_resumo["status"]),
-        ("Modalidade:", dados_resumo["modalidade"][:36], "Veiculo:", dados_resumo["veiculo"][:30]),
-        ("Motorista:", dados_resumo["motorista"][:36], "KM Rodado:", f"{dados_resumo['km_rodado']} km"),
-        ("Rota:", dados_resumo["rota"][:38], "Data Coleta:", dados_resumo["data_coleta"]),
-        ("Coleta:", dados_resumo["coleta"][:36], "Data Entrega:", dados_resumo["data_entrega"]),
-        ("Entrega:", dados_resumo["entrega"][:36], "CIOT:", dados_resumo["ciot"]),
-        (
-            "NF-e / CT-e:",
-            f"{dados_resumo['nfe']} / {dados_resumo['cte']}",
-            "MDF-e:",
-            dados_resumo["mdfe"],
-        ),
+        ("Tipo Viagem:", dados_resumo["tipo_viagem"][:36], "Tipo Frete:", dados_resumo["tipo_frete"][:30]),
+        ("Veiculo:", dados_resumo["veiculo"][:36], "KM Rodado:", f"{dados_resumo['km_rodado']} km"),
+        ("Motorista:", dados_resumo["motorista"][:36], "Data Coleta:", dados_resumo["data_coleta"]),
+        ("Rota:", dados_resumo["rota"][:38], "Data Entrega:", dados_resumo["data_entrega"]),
+        ("Coleta:", dados_resumo["coleta"][:36], "CIOT:", dados_resumo["ciot"]),
+        ("Entrega:", dados_resumo["entrega"][:36], "MDF-e:", dados_resumo["mdfe"]),
+        ("NF-e / CT-e:", f"{dados_resumo['nfe']} / {dados_resumo['cte']}", "", ""),
     ]
 
     for lbl1, val1, lbl2, val2 in pares_info:
         text(36, y, lbl1, size=8.5, bold=True, rgb=(100, 116, 139))
         text(105, y, val1, size=8.5, bold=False, rgb=(13, 38, 60))
-        text(315, y, lbl2, size=8.5, bold=True, rgb=(100, 116, 139))
-        text(390, y, val2, size=8.5, bold=False, rgb=(13, 38, 60))
+        if lbl2:
+            text(315, y, lbl2, size=8.5, bold=True, rgb=(100, 116, 139))
+            text(390, y, val2, size=8.5, bold=False, rgb=(13, 38, 60))
         y += 17
 
     y += 12
@@ -901,7 +898,7 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
         text(200, y + 14, "Nenhuma despesa lancada para esta viagem.", size=8.5, bold=False, rgb=(100, 116, 139))
         y += 22
     else:
-        for i, d in enumerate(despesas_lista[:22]):
+        for i, d in enumerate(despesas_lista[:20]):
             if i % 2 == 1:
                 rect(36, y, 523, 18, (248, 250, 252))
             text(44, y + 12, str(d["tipo_despesa"])[:20], size=8, bold=False, rgb=(13, 38, 60))
@@ -1028,10 +1025,10 @@ def sync_campo(chave_widget, chave_dado):
         st.session_state["form_data"][chave_dado] = st.session_state[chave_widget]
 
 
-def on_tipo_frete_change():
-    """Sincroniza Tipo de Frete (Individual/Ciclo) e bloqueia/limpa o número do ciclo quando Individual."""
-    sync_campo("w_tipo_frete", "tipo_frete")
-    if get_campo("tipo_frete") == "Individual":
+def on_tipo_viagem_change():
+    """Sincroniza Tipo de Viagem (Individual/Ciclo) e bloqueia/limpa o número do ciclo quando Individual."""
+    sync_campo("w_tipo_viagem", "tipo_viagem")
+    if get_campo("tipo_viagem") == "Individual":
         st.session_state["form_data"]["ciclo_nome"] = ""
     if "w_ciclo_nome" in st.session_state:
         del st.session_state["w_ciclo_nome"]
@@ -1131,8 +1128,9 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
             "vei_id": 0,
             "id_frete": "",
             "data_frete": date.today(),
-            "tipo_frete": "Individual",
+            "tipo_viagem": "Individual",
             "ciclo_nome": "",
+            "tipo_frete": "Dedicado",
             "rota": "",
             "km_rota": 0.0,
             "tipo_mat": "",
@@ -1173,13 +1171,23 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
         c = v.ciclo
         fin = c.financeiro if c else None
 
-        tipo_frete_norm = (
-            "Ciclo" if v.tipo_frete in ["Ciclo", "Dedicado"] else "Individual"
-        )
+        raw_tv = getattr(v, "tipo_viagem", None)
+        if raw_tv in ["Individual", "Ciclo"]:
+            tipo_viagem_norm = raw_tv
+        elif v.tipo_frete in ["Individual", "Ciclo"]:
+            tipo_viagem_norm = v.tipo_frete
+        elif c and c.nome_operacao and not str(c.nome_operacao).startswith("Individual"):
+            tipo_viagem_norm = "Ciclo"
+        else:
+            tipo_viagem_norm = "Individual"
+
         ciclo_nome_norm = ""
-        if tipo_frete_norm == "Ciclo" and c and c.nome_operacao:
+        if tipo_viagem_norm == "Ciclo" and c and c.nome_operacao:
             if not str(c.nome_operacao).startswith("Individual"):
                 ciclo_nome_norm = c.nome_operacao
+
+        opcoes_tipo_frete = ["Dedicado", "Complemento", "Cheio", "Fracionado", "Agregado"]
+        tipo_frete_norm = v.tipo_frete if v.tipo_frete in opcoes_tipo_frete else "Dedicado"
 
         st.session_state["form_data"] = {
             "id_viagem_label": resolver_codigo_viagem(v, c),
@@ -1188,8 +1196,9 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
             "vei_id": v.id_veiculo or 0,
             "id_frete": v.id_frete_externo or "",
             "data_frete": v.data_coleta or (c.data_abertura if c and c.data_abertura else date.today()),
-            "tipo_frete": tipo_frete_norm,
+            "tipo_viagem": tipo_viagem_norm,
             "ciclo_nome": ciclo_nome_norm,
+            "tipo_frete": tipo_frete_norm,
             "rota": v.rota_resumo or "",
             "km_rota": to_float(v.km_rota_planejado),
             "tipo_mat": v.tipo_material or "",
@@ -1233,7 +1242,8 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
     cli_id = get_campo("cli_id", 0)
     col_id = get_campo("col_id", 0)
     ent_id = get_campo("ent_id", 0)
-    tipo_frete_val = get_campo("tipo_frete", "Individual")
+    tipo_viagem_val = get_campo("tipo_viagem", "Individual")
+    tipo_frete_val = get_campo("tipo_frete", "Dedicado")
     ciclo_num_val = (get_campo("ciclo_nome") or "").strip()
 
     faltando = []
@@ -1241,7 +1251,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
         faltando.append("Motorista (Etapa 1)")
     if not vei_id:
         faltando.append("Veículo (Etapa 1)")
-    if tipo_frete_val == "Ciclo" and not ciclo_num_val:
+    if tipo_viagem_val == "Ciclo" and not ciclo_num_val:
         faltando.append("Nº do Ciclo Operacional (Etapa 2)")
     if not cli_id:
         faltando.append("Cliente (Etapa 3)")
@@ -1263,7 +1273,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
         codigo_viagem_editado = calcular_proximo_codigo_viagem(viagens_lista)
 
     nome_operacao_final = (
-        ciclo_num_val if tipo_frete_val == "Ciclo" else f"Individual - {codigo_viagem_editado}"
+        ciclo_num_val if tipo_viagem_val == "Ciclo" else f"Individual - {codigo_viagem_editado}"
     )
 
     status_escolhido = get_campo("status_viagem", "Nova Operação")
@@ -1302,6 +1312,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 id_motorista=mot_id,
                 id_veiculo=vei_id,
                 id_frete_externo=get_campo("id_frete", ""),
+                tipo_viagem=tipo_viagem_val,
                 tipo_frete=tipo_frete_val,
                 rota_resumo=get_campo("rota", ""),
                 km_rota_planejado=get_campo("km_rota", 0.0),
@@ -1378,6 +1389,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
             v.id_motorista = mot_id
             v.id_veiculo = vei_id
             v.id_frete_externo = get_campo("id_frete", "")
+            v.tipo_viagem = tipo_viagem_val
             v.tipo_frete = tipo_frete_val
             v.rota_resumo = get_campo("rota", "")
             v.km_rota_planejado = get_campo("km_rota", 0.0)
@@ -1630,12 +1642,12 @@ with st.container(border=True):
         render_navegacao_rodape(0, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 2: FRETE, CARGA E DOCUMENTOS (TIPO DE FRETE -> CICLO OPERACIONAL)
+    # TAB 2: FRETE, CARGA E DOCUMENTOS (TIPO DE VIAGEM, CICLO E TIPO DE FRETE)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[1]:
         render_cabecalho_aba("fa-solid fa-file-invoice", "Frete, Carga e Documentos", 2)
 
-        c1, c2, c3, c4 = st.columns([2.2, 2.5, 2.5, 4.8])
+        c1, c2, c3, c4, c5 = st.columns([1.8, 2.2, 2.2, 3.3, 2.5])
         c1.text_input(
             "ID Frete",
             value=get_campo("id_frete", ""),
@@ -1652,30 +1664,42 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_data_frete", "data_frete"),
         )
-        tipos_frete = ["Individual", "Ciclo"]
-        tf_val = get_campo("tipo_frete", "Individual")
-        if tf_val not in tipos_frete:
-            tf_val = "Ciclo" if tf_val == "Dedicado" else "Individual"
-        tipo_frete_sel = c3.selectbox(
-            "Tipo de Frete",
-            tipos_frete,
-            index=tipos_frete.index(tf_val),
-            key="w_tipo_frete",
-            on_change=on_tipo_frete_change,
+        tipos_viagem = ["Individual", "Ciclo"]
+        tv_val = get_campo("tipo_viagem", "Individual")
+        if tv_val not in tipos_viagem:
+            tv_val = "Individual"
+        tipo_viagem_sel = c3.selectbox(
+            "Tipo de Viagem",
+            tipos_viagem,
+            index=tipos_viagem.index(tv_val),
+            key="w_tipo_viagem",
+            on_change=on_tipo_viagem_change,
         )
-        eh_individual = tipo_frete_sel == "Individual"
+        eh_individual = tipo_viagem_sel == "Individual"
         c4.text_input(
             "Nº do Ciclo Operacional",
             value="" if eh_individual else get_campo("ciclo_nome", ""),
-            placeholder="Bloqueado (Frete Individual)" if eh_individual else "Digite o nº do ciclo (Ex: 2026-01)",
+            placeholder="Bloqueado (Viagem Individual)" if eh_individual else "Digite o nº do ciclo (Ex: 2026-01)",
             disabled=eh_individual,
             key="w_ciclo_nome",
             on_change=sync_campo,
             args=("w_ciclo_nome", "ciclo_nome"),
         )
+        tipos_frete = ["Dedicado", "Complemento", "Cheio", "Fracionado", "Agregado"]
+        tf_val = get_campo("tipo_frete", "Dedicado")
+        if tf_val not in tipos_frete:
+            tf_val = "Dedicado"
+        c5.selectbox(
+            "Tipo de Frete",
+            tipos_frete,
+            index=tipos_frete.index(tf_val),
+            key="w_tipo_frete",
+            on_change=sync_campo,
+            args=("w_tipo_frete", "tipo_frete"),
+        )
 
-        c5, c6 = st.columns([9.5, 2.5])
-        c5.text_input(
+        c6, c7 = st.columns([9.5, 2.5])
+        c6.text_input(
             "Rota (Origem -> Destino)",
             value=get_campo("rota", ""),
             placeholder="Ex: Suzano/SP -> Rio de Janeiro/RJ",
@@ -1683,7 +1707,7 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_rota", "rota"),
         )
-        c6.number_input(
+        c7.number_input(
             "KM Planejado",
             value=to_float(get_campo("km_rota", 0.0)),
             min_value=0.0,
@@ -1694,8 +1718,8 @@ with st.container(border=True):
         )
 
         st.markdown('<div class="sec-subtitle">Detalhes da Carga</div>', unsafe_allow_html=True)
-        c7, c8, c9, c10 = st.columns([5.5, 2.0, 2.0, 2.5])
-        c7.text_input(
+        c8, c9, c10, c11 = st.columns([5.5, 2.0, 2.0, 2.5])
+        c8.text_input(
             "Tipo de Material",
             value=get_campo("tipo_mat", ""),
             placeholder="Ex: Bobinas de Aço / Carga Geral",
@@ -1703,7 +1727,7 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_tipo_mat", "tipo_mat"),
         )
-        c8.number_input(
+        c9.number_input(
             "QT Volumes",
             value=to_int(get_campo("qt_vol", 0)),
             min_value=0,
@@ -1712,7 +1736,7 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_qt_vol", "qt_vol"),
         )
-        c9.number_input(
+        c10.number_input(
             "Volume (m³)",
             value=to_float(get_campo("vol_m3", 0.0)),
             min_value=0.0,
@@ -1721,7 +1745,7 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_vol_m3", "vol_m3"),
         )
-        c10.number_input(
+        c11.number_input(
             "Peso Bruto (KG)",
             value=to_float(get_campo("peso_kg", 0.0)),
             min_value=0.0,
@@ -2502,9 +2526,10 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
-        tf_rel = get_campo("tipo_frete", "Individual")
+        tv_rel = get_campo("tipo_viagem", "Individual")
         ciclo_rel = (get_campo("ciclo_nome") or "").strip()
-        mod_rel = f"Ciclo ({ciclo_rel})" if (tf_rel == "Ciclo" and ciclo_rel) else "Individual"
+        tipo_viagem_fmt = f"Ciclo ({ciclo_rel})" if (tv_rel == "Ciclo" and ciclo_rel) else "Individual"
+        tipo_frete_fmt = get_campo("tipo_frete", "Dedicado")
 
         buffer_xlsx = io.BytesIO()
         df_exp_desp = pd.DataFrame(lista_export_desp)
@@ -2512,7 +2537,8 @@ with st.container(border=True):
             [
                 {
                     "Viagem": id_label_ctx,
-                    "Modalidade": mod_rel,
+                    "Tipo de Viagem": tipo_viagem_fmt,
+                    "Tipo de Frete": tipo_frete_fmt,
                     "Cliente": cli_nome_ctx,
                     "Motorista": mot_nome_ctx,
                     "Rota": rota_ctx,
@@ -2546,7 +2572,8 @@ with st.container(border=True):
         dados_pdf = {
             "codigo": id_label_ctx,
             "status": status_ctx,
-            "modalidade": mod_rel,
+            "tipo_viagem": tipo_viagem_fmt,
+            "tipo_frete": tipo_frete_fmt,
             "cliente": cli_nome_ctx,
             "motorista": mot_nome_ctx,
             "veiculo": f"{vei_obj['descricao_marca']} ({vei_obj['placa']})" if vei_obj else "Não selecionado",
