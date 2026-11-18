@@ -73,6 +73,15 @@ CATEGORIAS_DESPESA_FORNECEDOR = [
     "Outros",
 ]
 
+OPCOES_SITUACAO_OPERACAO = [
+    "Aguardando Adiantamento",
+    "Adiantamento Recebido",
+    "Em Transporte",
+    "Entregue / Aguardando Saldo",
+    "Quitada / Concluída",
+    "Cancelada",
+]
+
 
 # ==============================================================================
 # FUNÇÕES DE PROGRESSÃO E EXTRAÇÃO DO CÓDIGO DA VIAGEM
@@ -114,7 +123,7 @@ def calcular_proximo_codigo_viagem(viagens_lista):
 
 
 # ==============================================================================
-# CACHE DE DADOS PARA NAVEGAÇÃO INSTANTÂNEA E CONSULTAS
+# CACHE DE DADOS PARA NAVEGAÇÃO INSTANTÂNEA, CONSULTAS E EXPORTAÇÃO COMPLETA
 # ==============================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_listas_base():
@@ -210,13 +219,29 @@ def carregar_listas_base():
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_todas_viagens_consulta():
-    """Carrega visão consolidada de todas as viagens, ciclos, receitas e despesas para a tela de Consultas."""
+    """Carrega visão consolidada de todas as viagens, ciclos, receitas e despesas para Consultas e BI."""
     with SessionLocal() as session:
         viagens_raw = session.query(Viagem).order_by(Viagem.id_viagem.desc()).all()
         despesas_all = session.query(ViagemDespesa).all()
         desp_por_viagem = {}
+        desp_detalhadas = []
+        cod_map = {vg.id_viagem: resolver_codigo_viagem(vg, vg.ciclo) for vg in viagens_raw}
+
         for d in despesas_all:
-            desp_por_viagem[d.id_viagem] = desp_por_viagem.get(d.id_viagem, 0.0) + to_float(d.valor_total)
+            v_tot = to_float(d.valor_total)
+            desp_por_viagem[d.id_viagem] = desp_por_viagem.get(d.id_viagem, 0.0) + v_tot
+            desp_detalhadas.append(
+                {
+                    "ID Despesa": d.id_despesa,
+                    "Código Viagem": cod_map.get(d.id_viagem, f"ID-{d.id_viagem}"),
+                    "Tipo Despesa": d.tipo_despesa,
+                    "Descrição": d.descricao_detalhe or "-",
+                    "Fornecedor / Posto": d.fornecedor.nome_fantasia if d.fornecedor else "Não informado",
+                    "Quantidade": to_float(d.quantidade),
+                    "Valor Unitário (R$)": to_float(d.valor_unitario),
+                    "Valor Total (R$)": v_tot,
+                }
+            )
 
         resultado = []
         for vg in viagens_raw:
@@ -240,6 +265,7 @@ def carregar_todas_viagens_consulta():
                 else "-"
             )
 
+            val_div = to_float(fin.valor_divulgado) if fin else 0.0
             val_neg = to_float(fin.valor_negociado_total) if fin else 0.0
             val_adiant = to_float(fin.valor_adiantamento) if fin else 0.0
             val_saldo = to_float(fin.valor_saldo) if fin else 0.0
@@ -247,6 +273,9 @@ def carregar_todas_viagens_consulta():
             receita_efetiva = val_neg if val_neg > 0 else total_rec
             total_desp = desp_por_viagem.get(vg.id_viagem, 0.0)
             lucro_liq = receita_efetiva - total_desp
+            km_rod = to_int(vg.km_real_rodado, 0)
+            custo_km = (total_desp / km_rod) if km_rod > 0 else 0.0
+            margem_pct = ((lucro_liq / receita_efetiva) * 100.0) if receita_efetiva > 0 else 0.0
 
             cli_nome = "-"
             if c and c.cliente:
@@ -265,7 +294,7 @@ def carregar_todas_viagens_consulta():
                     "codigo_viagem": cod,
                     "seq_num": extrair_numero_sequencial(cod, vg.id_viagem),
                     "id_frete": vg.id_frete_externo or "-",
-                    "status": vg.status_viagem or "Em Andamento",
+                    "status": vg.status_viagem or "Aguardando Adiantamento",
                     "tipo_viagem": tipo_v,
                     "ciclo": ciclo_nome,
                     "tipo_frete": vg.tipo_frete or "-",
@@ -282,18 +311,22 @@ def carregar_todas_viagens_consulta():
                     "cte": vg.cte_numero or "-",
                     "mdfe": vg.mdfe_numero or "-",
                     "ciot": vg.ciot_numero or "-",
+                    "valor_divulgado": val_div,
                     "valor_negociado": val_neg,
                     "valor_adiantamento": val_adiant,
                     "valor_saldo": val_saldo,
                     "total_recebido": total_rec,
+                    "receita_efetiva": receita_efetiva,
                     "total_despesas": total_desp,
                     "resultado_liquido": lucro_liq,
-                    "km_rodado": to_int(vg.km_real_rodado, 0),
+                    "margem_pct": margem_pct,
+                    "km_rodado": km_rod,
+                    "custo_km": custo_km,
                 }
             )
 
         resultado.sort(key=lambda x: (x["seq_num"], x["id_viagem"]), reverse=True)
-        return resultado
+        return resultado, desp_detalhadas
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -317,6 +350,66 @@ def carregar_despesas_viagem(id_viagem):
             .order_by(ViagemDespesa.id_despesa)
             .all()
         ]
+
+
+def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores):
+    """Gera arquivo Excel (.xlsx) completo com todas as viagens, despesas e cadastros do sistema."""
+    buf = io.BytesIO()
+
+    df_viagens = pd.DataFrame(
+        [
+            {
+                "Código Viagem": v["codigo_viagem"],
+                "ID Frete": v["id_frete"],
+                "Situação": v["status"],
+                "Tipo Viagem": v["tipo_viagem"],
+                "Ciclo": v["ciclo"],
+                "Tipo Frete": v["tipo_frete"],
+                "Origem Frete": v["origem_frete"],
+                "Data Coleta": v["data_coleta"].strftime("%d/%m/%Y") if v["data_coleta"] else "-",
+                "Data Entrega": v["data_entrega"].strftime("%d/%m/%Y") if v["data_entrega"] else "-",
+                "Cliente": v["cliente"],
+                "Motorista": v["motorista"],
+                "Veículo": v["veiculo"],
+                "Rota": v["rota"],
+                "Coleta": v["coleta"],
+                "Entrega": v["entrega"],
+                "NF-e": v["nfe"],
+                "CT-e": v["cte"],
+                "MDF-e": v["mdfe"],
+                "CIOT": v["ciot"],
+                "Valor Divulgado (R$)": v["valor_divulgado"],
+                "Valor Negociado (R$)": v["valor_negociado"],
+                "Adiantamento (R$)": v["valor_adiantamento"],
+                "Saldo (R$)": v["valor_saldo"],
+                "Total Recebido (R$)": v["total_recebido"],
+                "Despesas Totais (R$)": v["total_despesas"],
+                "Resultado Líquido (R$)": v["resultado_liquido"],
+                "Margem (%)": round(v["margem_pct"], 2),
+                "KM Rodado": v["km_rodado"],
+                "Custo por KM (R$)": round(v["custo_km"], 2),
+            }
+            for v in todas_viagens
+        ]
+    )
+
+    df_desp = pd.DataFrame(desp_detalhadas)
+    df_mot = pd.DataFrame(motoristas)
+    df_vei = pd.DataFrame(veiculos)
+    df_cli = pd.DataFrame(clientes)
+    df_loc = pd.DataFrame(locais)
+    df_forn = pd.DataFrame(fornecedores)
+
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df_viagens.to_excel(writer, sheet_name="Viagens_e_Ciclos", index=False)
+        df_desp.to_excel(writer, sheet_name="Despesas_Viagens", index=False)
+        df_mot.to_excel(writer, sheet_name="Cad_Motoristas", index=False)
+        df_vei.to_excel(writer, sheet_name="Cad_Veiculos", index=False)
+        df_cli.to_excel(writer, sheet_name="Cad_Clientes", index=False)
+        df_loc.to_excel(writer, sheet_name="Cad_Locais", index=False)
+        df_forn.to_excel(writer, sheet_name="Cad_Fornecedores", index=False)
+
+    return buf.getvalue()
 
 
 def obter_caminho_logo():
@@ -452,22 +545,28 @@ st.markdown(
             line-height: 1.3;
         }
 
-        /* Selectbox da Viagem Ativa na Sidebar */
-        section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
-            background-color: #143654 !important;
-            border: 1px solid rgba(171, 206, 225, 0.45) !important;
-            border-radius: 0.45rem !important;
-            min-height: 42px !important;
+        /* Cartão Fixo da Viagem Ativa na Sidebar */
+        .sidebar-active-trip-card {
+            background-color: #143654;
+            border: 1px solid rgba(171, 206, 225, 0.38);
+            border-left: 4px solid #F34D25;
+            border-radius: 0.45rem;
+            padding: 0.65rem 0.85rem;
+            margin: 0 0.95rem 0.55rem 0.95rem;
         }
-        section[data-testid="stSidebar"] div[data-baseweb="select"] span,
-        section[data-testid="stSidebar"] div[data-baseweb="select"] div {
-            color: #FFFFFF !important;
-            -webkit-text-fill-color: #FFFFFF !important;
-            font-size: 0.8rem !important;
-            font-weight: 600 !important;
+        .sidebar-active-trip-tag {
+            font-size: 0.62rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #ABCEE1;
+            letter-spacing: 0.06em;
         }
-        section[data-testid="stSidebar"] div[data-baseweb="select"] svg {
-            fill: #F34D25 !important;
+        .sidebar-active-trip-code {
+            font-size: 0.95rem;
+            font-weight: 900;
+            color: #FFFFFF;
+            margin-top: 0.15rem;
+            word-break: break-word;
         }
 
         /* Menu Lateral (st.radio) */
@@ -506,6 +605,19 @@ st.markdown(
         }
         section[data-testid="stSidebar"] div[role="radiogroup"] label > div:first-child {
             display: none !important;
+        }
+
+        /* Botão Secundário na Sidebar (+ Nova Viagem) */
+        section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+            background-color: rgba(171, 206, 225, 0.14) !important;
+            color: #FFFFFF !important;
+            border: 1px solid rgba(171, 206, 225, 0.45) !important;
+            font-weight: 700 !important;
+            font-size: 0.75rem !important;
+            border-radius: 0.4rem !important;
+        }
+        section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+            background-color: rgba(171, 206, 225, 0.28) !important;
         }
 
         /* Botão Principal CTA em Laranja Energia (#F34D25) */
@@ -865,7 +977,7 @@ st.markdown(
             letter-spacing: 0.04em;
         }
         .kpi-consulta-val {
-            font-size: 1.25rem;
+            font-size: 1.2rem;
             font-weight: 900;
             color: #0D263C;
             margin-top: 0.2rem;
@@ -984,7 +1096,7 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
     y += 24
 
     pares_info = [
-        ("Cliente:", dados_resumo["cliente"][:36], "Status:", dados_resumo["status"]),
+        ("Cliente:", dados_resumo["cliente"][:36], "Situacao:", dados_resumo["status"][:28]),
         ("Tipo Viagem:", dados_resumo["tipo_viagem"][:36], "Tipo Frete:", dados_resumo["tipo_frete"][:30]),
         ("Origem Frete:", dados_resumo["origem_frete"][:36], "KM Rodado:", f"{dados_resumo['km_rodado']} km"),
         ("Veiculo:", dados_resumo["veiculo"][:36], "Data Coleta:", dados_resumo["data_coleta"]),
@@ -1177,7 +1289,7 @@ def _limpar_widgets_financeiros():
 
 
 def on_negociacao_change(origem_alterada):
-    """Recalcula automaticamente Adiantamento e Saldo em % e R$ sempre que qualquer campo financeiro muda."""
+    """Calcula automaticamente % <-> R$ tanto para Adiantamento quanto para Saldo, e atualiza Total Recebido."""
     if origem_alterada == "val_negociado":
         sync_campo("w_val_negociado", "val_negociado")
     elif origem_alterada == "perc_adiant":
@@ -1190,43 +1302,42 @@ def on_negociacao_change(origem_alterada):
         sync_campo("w_val_saldo", "val_saldo")
 
     fd = st.session_state["form_data"]
-    val_neg = to_float(fd.get("val_negociado", 0.0))
+    val_neg = max(0.0, to_float(fd.get("val_negociado", 0.0)))
 
-    if origem_alterada in ["val_negociado", "perc_adiant"]:
+    if origem_alterada == "val_negociado":
         p_ad = min(100.0, max(0.0, to_float(fd.get("perc_adiant", 0.0))))
-        p_sd = round(max(0.0, 100.0 - p_ad), 2) if p_ad > 0 else to_float(fd.get("perc_saldo", 0.0))
-        v_ad = round(val_neg * (p_ad / 100.0), 2)
-        v_sd = round(max(0.0, val_neg - v_ad), 2) if p_ad > 0 else round(val_neg * (p_sd / 100.0), 2)
+        p_sd = min(100.0, max(0.0, to_float(fd.get("perc_saldo", 0.0))))
+        if p_ad > 0:
+            fd["val_adiant"] = round(val_neg * (p_ad / 100.0), 2)
+        elif val_neg > 0 and to_float(fd.get("val_adiant", 0.0)) > 0:
+            fd["perc_adiant"] = round((to_float(fd["val_adiant"]) / val_neg) * 100.0, 2)
+
+        if p_sd > 0:
+            fd["val_saldo"] = round(val_neg * (p_sd / 100.0), 2)
+        elif val_neg > 0 and to_float(fd.get("val_saldo", 0.0)) > 0:
+            fd["perc_saldo"] = round((to_float(fd["val_saldo"]) / val_neg) * 100.0, 2)
+
+    elif origem_alterada == "perc_adiant":
+        p_ad = min(100.0, max(0.0, to_float(fd.get("perc_adiant", 0.0))))
         fd["perc_adiant"] = p_ad
-        fd["val_adiant"] = v_ad
-        fd["perc_saldo"] = p_sd
-        fd["val_saldo"] = v_sd
-        _limpar_widgets_financeiros()
+        fd["val_adiant"] = round(val_neg * (p_ad / 100.0), 2)
 
     elif origem_alterada == "val_adiant":
         v_ad = max(0.0, to_float(fd.get("val_adiant", 0.0)))
-        if val_neg > 0:
-            p_ad = round(min(100.0, (v_ad / val_neg) * 100.0), 2)
-            p_sd = round(max(0.0, 100.0 - p_ad), 2)
-            v_sd = round(max(0.0, val_neg - v_ad), 2)
-            fd["perc_adiant"] = p_ad
-            fd["perc_saldo"] = p_sd
-            fd["val_saldo"] = v_sd
-        _limpar_widgets_financeiros()
+        fd["val_adiant"] = v_ad
+        fd["perc_adiant"] = round((v_ad / val_neg) * 100.0, 2) if val_neg > 0 else 0.0
 
     elif origem_alterada == "perc_saldo":
         p_sd = min(100.0, max(0.0, to_float(fd.get("perc_saldo", 0.0))))
-        v_sd = round(val_neg * (p_sd / 100.0), 2)
         fd["perc_saldo"] = p_sd
-        fd["val_saldo"] = v_sd
-        _limpar_widgets_financeiros()
+        fd["val_saldo"] = round(val_neg * (p_sd / 100.0), 2)
 
     elif origem_alterada == "val_saldo":
         v_sd = max(0.0, to_float(fd.get("val_saldo", 0.0)))
-        if val_neg > 0:
-            p_sd = round(min(100.0, (v_sd / val_neg) * 100.0), 2)
-            fd["perc_saldo"] = p_sd
-        _limpar_widgets_financeiros()
+        fd["val_saldo"] = v_sd
+        fd["perc_saldo"] = round((v_sd / val_neg) * 100.0, 2) if val_neg > 0 else 0.0
+
+    _limpar_widgets_financeiros()
 
 
 def on_tipo_viagem_change():
@@ -1288,9 +1399,16 @@ def _mudar_aba_callback(nova_aba):
 
 
 def _abrir_viagem_para_edicao(id_v, destino_aba):
-    st.session_state["viagem_selecionada_id"] = id_v
+    st.session_state["viagem_ativa_id"] = id_v
     st.session_state["loaded_viagem_id"] = None
     st.session_state["menu_operacional_radio"] = destino_aba
+
+
+def _iniciar_nova_viagem():
+    st.session_state["viagem_ativa_id"] = 0
+    st.session_state["loaded_viagem_id"] = None
+    st.session_state["despesas_temp"] = []
+    st.session_state["menu_operacional_radio"] = "1. Frota FAEG"
 
 
 def render_navegacao_rodape(idx_atual, menu_itens):
@@ -1331,7 +1449,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
         proximo_codigo = calcular_proximo_codigo_viagem(viagens_lista)
         st.session_state["form_data"] = {
             "id_viagem_label": proximo_codigo,
-            "status_viagem": "Nova Operação",
+            "status_viagem": "Aguardando Adiantamento",
             "mot_id": 0,
             "vei_id": 0,
             "id_frete": "",
@@ -1399,7 +1517,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
 
         st.session_state["form_data"] = {
             "id_viagem_label": resolver_codigo_viagem(v, c),
-            "status_viagem": v.status_viagem or "Em Andamento",
+            "status_viagem": v.status_viagem or "Aguardando Adiantamento",
             "mot_id": v.id_motorista or 0,
             "vei_id": v.id_veiculo or 0,
             "id_frete": v.id_frete_externo or "",
@@ -1486,11 +1604,21 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
         ciclo_num_val if tipo_viagem_val == "Ciclo" else f"Individual - {codigo_viagem_editado}"
     )
 
-    status_escolhido = get_campo("status_viagem", "Nova Operação")
-    if status_escolhido == "Nova Operação":
-        status_final = "Concluída" if km_fin > 0 else "Em Andamento"
+    val_neg = to_float(get_campo("val_negociado", 0.0))
+    val_ad = to_float(get_campo("val_adiant", 0.0))
+    val_sd = to_float(get_campo("val_saldo", 0.0))
+    total_rec = val_ad + val_sd
+
+    situacao_atual = get_campo("status_viagem", "Aguardando Adiantamento")
+    if situacao_atual == "Aguardando Adiantamento":
+        if val_neg > 0 and total_rec >= val_neg - 0.01:
+            situacao_final = "Quitada / Concluída"
+        elif val_ad > 0:
+            situacao_final = "Adiantamento Recebido"
+        else:
+            situacao_final = situacao_atual
     else:
-        status_final = "Concluída" if (km_fin > 0 and status_escolhido == "Em Andamento") else status_escolhido
+        situacao_final = situacao_atual
 
     with SessionLocal() as db:
         if id_viagem_atual == 0:
@@ -1507,13 +1635,13 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 id_ciclo=novo_ciclo.id_ciclo,
                 forma_contratacao=get_campo("forma_contr", "Aplicativo de Fretes"),
                 valor_divulgado=get_campo("val_divulgado", 0.0),
-                valor_negociado_total=get_campo("val_negociado", 0.0),
+                valor_negociado_total=val_neg,
                 perc_adiantamento=get_campo("perc_adiant", 0.0),
                 data_prevista_adiantamento=get_campo("data_adiant"),
-                valor_adiantamento=get_campo("val_adiant", 0.0),
+                valor_adiantamento=val_ad,
                 perc_saldo=get_campo("perc_saldo", 0.0),
                 data_prevista_saldo=get_campo("data_saldo"),
-                valor_saldo=get_campo("val_saldo", 0.0),
+                valor_saldo=val_sd,
             )
             db.add(novo_fin)
 
@@ -1545,7 +1673,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 odometro_inicial=km_ini,
                 odometro_final=km_fin,
                 km_real_rodado=km_real,
-                status_viagem=status_final,
+                status_viagem=situacao_final,
             )
             db.add(nova_v)
             db.flush()
@@ -1568,7 +1696,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
             carregar_despesas_viagem.clear()
             st.session_state["despesas_temp"] = []
             st.session_state["edit_desp_tmp_idx"] = None
-            st.session_state["viagem_selecionada_id"] = nova_v.id_viagem
+            st.session_state["viagem_ativa_id"] = nova_v.id_viagem
             st.session_state["loaded_viagem_id"] = None
             st.toast(f"Viagem {codigo_viagem_editado} salva com sucesso!", icon="🟧")
             st.rerun()
@@ -1589,13 +1717,13 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 
             fin.forma_contratacao = get_campo("forma_contr", "Aplicativo de Fretes")
             fin.valor_divulgado = get_campo("val_divulgado", 0.0)
-            fin.valor_negociado_total = get_campo("val_negociado", 0.0)
+            fin.valor_negociado_total = val_neg
             fin.perc_adiantamento = get_campo("perc_adiant", 0.0)
             fin.data_prevista_adiantamento = get_campo("data_adiant")
-            fin.valor_adiantamento = get_campo("val_adiant", 0.0)
+            fin.valor_adiantamento = val_ad
             fin.perc_saldo = get_campo("perc_saldo", 0.0)
             fin.data_prevista_saldo = get_campo("data_saldo")
-            fin.valor_saldo = get_campo("val_saldo", 0.0)
+            fin.valor_saldo = val_sd
 
             v.id_motorista = mot_id
             v.id_veiculo = vei_id
@@ -1623,7 +1751,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
             v.odometro_inicial = km_ini
             v.odometro_final = km_fin
             v.km_real_rodado = km_real
-            v.status_viagem = status_final
+            v.status_viagem = situacao_final
 
             db.commit()
             carregar_listas_base.clear()
@@ -1637,6 +1765,13 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 # LEITURA RÁPIDA EM CACHE DAS BASES
 # ==============================================================================
 motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db, viagens_db = carregar_listas_base()
+
+# Garante que toda nova sessão comece pronta para criar uma nova viagem com código fixo correspondente
+if "viagem_ativa_id" not in st.session_state:
+    st.session_state["viagem_ativa_id"] = 0
+
+viagem_sel_id = st.session_state["viagem_ativa_id"]
+carregar_estado_viagem(viagem_sel_id, viagens_db)
 
 # ==============================================================================
 # SIDEBAR INSTITUCIONAL FAEG
@@ -1661,31 +1796,27 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    prox_cod_sidebar = calcular_proximo_codigo_viagem(viagens_db)
+    cod_ativo_sidebar = get_campo("id_viagem_label", prox_cod_sidebar)
+    tag_modo_sidebar = "Criando Nova Viagem" if viagem_sel_id == 0 else "Editando Viagem Salva"
+
     st.markdown(
-        "<div style='padding: 0 1.2rem 0.35rem 1.2rem; font-size:0.65rem; font-weight:700; color:#ABCEE1; text-transform:uppercase; letter-spacing:0.06em;'>Operação / Viagem Ativa</div>",
+        f"""
+        <div class="sidebar-active-trip-card">
+            <div class="sidebar-active-trip-tag">{tag_modo_sidebar}</div>
+            <div class="sidebar-active-trip-code">{cod_ativo_sidebar}</div>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
-    prox_cod_sidebar = calcular_proximo_codigo_viagem(viagens_db)
-    opcoes_viagens = {0: f"➕ Nova Viagem ({prox_cod_sidebar})"}
-    for v in viagens_db:
-        rota_txt = f" ({v['rota_resumo']})" if v["rota_resumo"] else ""
-        opcoes_viagens[v["id_viagem"]] = f"{v['codigo_viagem']}{rota_txt}"
-
-    default_v_id = st.session_state.get("viagem_selecionada_id", viagens_db[0]["id_viagem"] if viagens_db else 0)
-    if default_v_id not in opcoes_viagens:
-        default_v_id = 0
-
-    viagem_sel_id = st.selectbox(
-        "Viagem em Edição",
-        options=list(opcoes_viagens.keys()),
-        index=list(opcoes_viagens.keys()).index(default_v_id),
-        format_func=lambda x: opcoes_viagens[x],
-        key="viagem_selecionada_id",
-        label_visibility="collapsed",
-    )
-
-    carregar_estado_viagem(viagem_sel_id, viagens_db)
+    if viagem_sel_id != 0:
+        st.button(
+            "➕ Iniciar Nova Viagem",
+            type="secondary",
+            use_container_width=True,
+            on_click=_iniciar_nova_viagem,
+        )
 
     st.markdown(
         "<hr style='margin: 0.7rem 0 0.6rem 0; border-color: rgba(171, 206, 225, 0.2);'>",
@@ -1736,7 +1867,7 @@ mot_nome_ctx = next(
     "Não selecionado",
 )
 rota_ctx = get_campo("rota") or "Rota não definida"
-status_ctx = get_campo("status_viagem", "Nova Operação")
+status_ctx = get_campo("status_viagem", "Aguardando Adiantamento")
 id_label_ctx = get_campo("id_viagem_label", prox_cod_sidebar)
 
 st.markdown(
@@ -1779,7 +1910,7 @@ with st.container(border=True):
     if aba_ativa == MENU_ITENS[0]:
         render_cabecalho_aba("fa-solid fa-truck", "Informações FAEG", 1)
 
-        c_id, c_st, _ = st.columns([3, 3, 6])
+        c_id, c_st, _ = st.columns([3.5, 4.0, 4.5])
         c_id.text_input(
             "ID / Código da Viagem",
             value=get_campo("id_viagem_label", prox_cod_sidebar),
@@ -1788,20 +1919,20 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_id_viagem_label", "id_viagem_label"),
         )
-        status_opcoes = ["Nova Operação", "Em Andamento", "Concluída", "Pendente / Retroativa", "Cancelada"]
-        st_atual = get_campo("status_viagem", "Nova Operação")
-        if st_atual not in status_opcoes:
-            status_opcoes.append(st_atual)
+        situacao_opcoes = list(OPCOES_SITUACAO_OPERACAO)
+        st_atual = get_campo("status_viagem", "Aguardando Adiantamento")
+        if st_atual not in situacao_opcoes:
+            situacao_opcoes.append(st_atual)
         c_st.selectbox(
-            "Status Operacional",
-            options=status_opcoes,
-            index=status_opcoes.index(st_atual),
+            "Situação Financeira / Operação",
+            options=situacao_opcoes,
+            index=situacao_opcoes.index(st_atual),
             key="w_status_viagem",
             on_change=sync_campo,
             args=("w_status_viagem", "status_viagem"),
         )
         st.caption(
-            "💡 O código segue automaticamente a sequência numérica, mas pode ser editado livremente para cadastrar viagens retroativas da planilha."
+            "💡 O código segue automaticamente a sequência numérica da viagem atual, mas pode ser editado livremente para lançamentos retroativos."
         )
 
         st.markdown('<div class="sec-subtitle">Dados do Motorista</div>', unsafe_allow_html=True)
@@ -2066,7 +2197,7 @@ with st.container(border=True):
         render_navegacao_rodape(2, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 4: NEGOCIAÇÃO E RECEBIMENTOS (CÁLCULOS 100% AUTOMÁTICOS)
+    # TAB 4: NEGOCIAÇÃO E RECEBIMENTOS (CÁLCULOS AUTOMÁTICOS BIDIRECIONAIS)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[3]:
         render_cabecalho_aba("fa-solid fa-handshake", "Negociação e Recebimentos", 4)
@@ -2100,7 +2231,7 @@ with st.container(border=True):
             args=("val_negociado",),
         )
 
-        st.markdown('<div class="sec-subtitle">Adiantamento</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec-subtitle">Adiantamento (% ou R$)</div>', unsafe_allow_html=True)
         a1, a2, a3 = st.columns([3, 3.5, 5.5])
         a1.number_input(
             "% Adiantamento",
@@ -2130,7 +2261,7 @@ with st.container(border=True):
             args=("val_adiant",),
         )
 
-        st.markdown('<div class="sec-subtitle">Saldo a Receber</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec-subtitle">Saldo a Receber (% ou R$)</div>', unsafe_allow_html=True)
         s1, s2, s3 = st.columns([3, 3.5, 5.5])
         s1.number_input(
             "% Saldo",
@@ -2173,7 +2304,7 @@ with st.container(border=True):
 
         if val_neg > 0 and abs(val_neg - total_recebido) > 0.01:
             st.caption(
-                f"ℹ️ Diferença entre Valor Negociado ({fmt_brl(val_neg)}) e Total Recebido ({fmt_brl(total_recebido)}): "
+                f"ℹ️ Diferença / Pendente entre Valor Negociado ({fmt_brl(val_neg)}) e Total Recebido ({fmt_brl(total_recebido)}): "
                 f"**{fmt_brl(val_neg - total_recebido)}**"
             )
 
@@ -2331,7 +2462,7 @@ with st.container(border=True):
         render_navegacao_rodape(5, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 7: DESPESAS DE VIAGEM (MESMAS CATEGORIAS DE FORNECEDORES E POSTOS)
+    # TAB 7: DESPESAS DE VIAGEM
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[6]:
         render_cabecalho_aba("fa-solid fa-receipt", "Despesas de Viagem", 7)
@@ -2688,191 +2819,414 @@ with st.container(border=True):
         render_navegacao_rodape(7, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 9: RELATÓRIOS / EXPORTAR
+    # TAB 9: RELATÓRIOS / EXPORTAR (VIAGEM INDIVIDUAL + BI CONSOLIDADO + BASE COMPLETA)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[8]:
-        despesas_rel = (
-            carregar_despesas_viagem(viagem_sel_id) if viagem_sel_id != 0 else st.session_state.get("despesas_temp", [])
-        )
-        total_desp_rel = sum(to_float(d["valor_total"]) for d in despesas_rel)
-        agrupado = {}
-        for d in despesas_rel:
-            agrupado[d["tipo_despesa"]] = agrupado.get(d["tipo_despesa"], 0.0) + to_float(d["valor_total"])
+        render_cabecalho_aba("fa-solid fa-chart-pie", "Relatórios, Métricas e Exportação Geral", 9)
 
-        lista_export_desp = [
-            {
-                "Tipo": d["tipo_despesa"],
-                "Desc": d["descricao_detalhe"],
-                "Qtd": to_float(d["quantidade"]),
-                "R$ Unit": to_float(d["valor_unitario"]),
-                "R$ Total": to_float(d["valor_total"]),
-            }
-            for d in despesas_rel
-        ]
+        todas_viagens_rel, todas_desp_rel = carregar_todas_viagens_consulta()
 
-        neg_rel = to_float(get_campo("val_negociado", 0.0))
-        rec_rel = to_float(get_campo("val_adiant", 0.0)) + to_float(get_campo("val_saldo", 0.0))
-        receita_rel = neg_rel if neg_rel > 0 else rec_rel
-        resultado_rel = receita_rel - total_desp_rel
-
-        km_i = to_int(get_campo("km_ini", 0))
-        km_f = to_int(get_campo("km_fin", 0))
-        km_real_rel = max(0, km_f - km_i) if km_f >= km_i else 0
-        custo_km_rel = (total_desp_rel / km_real_rel) if km_real_rel > 0 else 0.0
-        margem_rel = ((resultado_rel / receita_rel) * 100.0) if receita_rel > 0 else 0.0
-
-        h1, h_xlsx, h_pdf = st.columns([3.4, 1.0, 1.0])
-        h1.markdown(
-            '<div class="tab-title" style="border:none;margin:0;"><i class="fa-solid fa-chart-pie"></i> Relatórios Operacionais</div>',
+        # Botão Global de Exportação da Base Completa (Viagens + Despesas + Todos os Cadastros)
+        exp_c1, exp_c2 = st.columns([6.5, 5.5])
+        exp_c1.markdown(
+            "<div style='font-size:0.84rem;color:#475569;padding-top:0.35rem;'>"
+            "Exporte toda a base do sistema (Viagens, Ciclos, Despesas, Motoristas, Veículos, Clientes, Locais e Fornecedores) em planilha única:"
+            "</div>",
             unsafe_allow_html=True,
         )
-
-        tv_rel = get_campo("tipo_viagem", "Individual")
-        ciclo_rel = (get_campo("ciclo_nome") or "").strip()
-        tipo_viagem_fmt = f"Ciclo ({ciclo_rel})" if (tv_rel == "Ciclo" and ciclo_rel) else "Individual"
-        tipo_frete_fmt = get_campo("tipo_frete", "Dedicado")
-        origem_frete_fmt = get_campo("forma_contr", "Aplicativo de Fretes")
-
-        buffer_xlsx = io.BytesIO()
-        df_exp_desp = pd.DataFrame(lista_export_desp)
-        df_exp_dre = pd.DataFrame(
-            [
-                {
-                    "Viagem": id_label_ctx,
-                    "Tipo de Viagem": tipo_viagem_fmt,
-                    "Tipo de Frete": tipo_frete_fmt,
-                    "Origem de Frete": origem_frete_fmt,
-                    "Cliente": cli_nome_ctx,
-                    "Motorista": mot_nome_ctx,
-                    "Rota": rota_ctx,
-                    "Receita Total": receita_rel,
-                    "Custos Totais": total_desp_rel,
-                    "Resultado Líquido": resultado_rel,
-                    "KM Rodado": km_real_rel,
-                    "Custo por KM": round(custo_km_rel, 2),
-                    "Margem (%)": round(margem_rel, 1),
-                }
-            ]
+        excel_completo_bytes = gerar_excel_base_completa(
+            todas_viagens_rel,
+            todas_desp_rel,
+            motoristas_db,
+            veiculos_db,
+            clientes_db,
+            locais_db,
+            fornecedores_db,
         )
-        with pd.ExcelWriter(buffer_xlsx, engine="openpyxl") as writer:
-            df_exp_dre.to_excel(writer, sheet_name="DRE_Viagem", index=False)
-            df_exp_desp.to_excel(writer, sheet_name="Despesas", index=False)
-
-        h_xlsx.download_button(
-            label="📥 Excel",
-            data=buffer_xlsx.getvalue(),
-            file_name=f"{id_label_ctx}.xlsx",
+        exp_c2.download_button(
+            label="📥 Exportar Base Completa do Sistema (Excel Multi-Abas)",
+            data=excel_completo_bytes,
+            file_name=f"FAEG_Base_Completa_{date.today().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
         )
 
-        vei_obj = next((v for v in veiculos_db if v["id_veiculo"] == get_campo("vei_id", 0)), None)
-        col_obj = next((l for l in locais_db if l["id_local"] == get_campo("col_id", 0)), None)
-        ent_obj = next((l for l in locais_db if l["id_local"] == get_campo("ent_id", 0)), None)
-        dt_col_val = get_campo("data_col")
-        dt_ent_val = get_campo("data_ent")
+        st.markdown("<hr style='margin:0.8rem 0 1.2rem 0;border-color:#E9E9E9;'>", unsafe_allow_html=True)
 
-        dados_pdf = {
-            "codigo": id_label_ctx,
-            "status": status_ctx,
-            "tipo_viagem": tipo_viagem_fmt,
-            "tipo_frete": tipo_frete_fmt,
-            "origem_frete": origem_frete_fmt,
-            "cliente": cli_nome_ctx,
-            "motorista": mot_nome_ctx,
-            "veiculo": f"{vei_obj['descricao_marca']} ({vei_obj['placa']})" if vei_obj else "Não selecionado",
-            "rota": rota_ctx,
-            "km_rodado": km_real_rel,
-            "coleta": f"{col_obj['nome_local']} ({col_obj['cidade']}/{col_obj['uf']})" if col_obj else "-",
-            "data_coleta": dt_col_val.strftime("%d/%m/%Y") if dt_col_val else "-",
-            "entrega": f"{ent_obj['nome_local']} ({ent_obj['cidade']}/{ent_obj['uf']})" if ent_obj else "-",
-            "data_entrega": dt_ent_val.strftime("%d/%m/%Y") if dt_ent_val else "-",
-            "nfe": get_campo("nfe") or "-",
-            "cte": get_campo("cte") or "-",
-            "mdfe": get_campo("mdfe") or "-",
-            "ciot": get_campo("ciot") or "-",
-            "receita": receita_rel,
-            "custos": total_desp_rel,
-            "resultado": resultado_rel,
-            "margem": margem_rel,
-            "custo_km": custo_km_rel,
-        }
-        pdf_bytes = gerar_pdf_relatorio(dados_pdf, despesas_rel)
-        h_pdf.download_button(
-            label="📄 PDF",
-            data=pdf_bytes,
-            file_name=f"{id_label_ctx}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
+        tab_rel_ind, tab_rel_geral = st.tabs(
+            [f"📄 Relatório da Viagem Ativa ({id_label_ctx})", f"📊 Painel Geral & Métricas ({len(todas_viagens_rel)} viagens)"]
         )
 
-        st.markdown("<hr style='margin:0.4rem 0 1.4rem 0;border-color:#E9E9E9;'>", unsafe_allow_html=True)
+        # --- SUB-ABA 1: RELATÓRIO DA VIAGEM ATIVA ---
+        with tab_rel_ind:
+            despesas_rel = (
+                carregar_despesas_viagem(viagem_sel_id) if viagem_sel_id != 0 else st.session_state.get("despesas_temp", [])
+            )
+            total_desp_rel = sum(to_float(d["valor_total"]) for d in despesas_rel)
+            agrupado = {}
+            for d in despesas_rel:
+                agrupado[d["tipo_despesa"]] = agrupado.get(d["tipo_despesa"], 0.0) + to_float(d["valor_total"])
 
-        g1, g2 = st.columns(2)
-        with g1:
-            labels_js = list(agrupado.keys()) if agrupado else ["Sem dados"]
-            data_js = list(agrupado.values()) if agrupado else [1]
+            lista_export_desp = [
+                {
+                    "Tipo": d["tipo_despesa"],
+                    "Desc": d["descricao_detalhe"],
+                    "Qtd": to_float(d["quantidade"]),
+                    "R$ Unit": to_float(d["valor_unitario"]),
+                    "R$ Total": to_float(d["valor_total"]),
+                }
+                for d in despesas_rel
+            ]
 
-            chart_html = f"""
-            <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
-            <div style="background:#FFFFFF;border:1px solid #D6D6D6;border-top:4px solid #0D263C;border-radius:0.55rem;padding:1.2rem;text-align:center;font-family:'Montserrat',sans-serif;">
-                <h3 style="font-size:0.82rem;font-weight:700;color:#0D263C;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem;">
-                    Distribuição de Gastos
-                </h3>
-                <div style="height:260px;position:relative;">
-                    <canvas id="graficoDespesas"></canvas>
-                </div>
-            </div>
-            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-            <script>
-                new Chart(document.getElementById('graficoDespesas').getContext('2d'), {{
-                    type: 'doughnut',
-                    data: {{
-                        labels: {labels_js},
-                        datasets: [{{
-                            data: {data_js},
-                            backgroundColor: ['#0D263C', '#F34D25', '#ABCEE1', '#3B5B78', '#8C8C8C', '#E9E9E9'],
-                            borderColor: '#FFFFFF',
-                            borderWidth: 2
-                        }}]
-                    }},
-                    options: {{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {{
-                            legend: {{
-                                labels: {{
-                                    font: {{ family: 'Montserrat', weight: '600' }},
-                                    color: '#0D263C'
-                                }}
-                            }}
-                        }}
-                    }}
-                }});
-            </script>
-            """
-            components.html(chart_html, height=345)
+            neg_rel = to_float(get_campo("val_negociado", 0.0))
+            rec_rel = to_float(get_campo("val_adiant", 0.0)) + to_float(get_campo("val_saldo", 0.0))
+            receita_rel = neg_rel if neg_rel > 0 else rec_rel
+            resultado_rel = receita_rel - total_desp_rel
+            saldo_a_receber_rel = max(0.0, neg_rel - rec_rel) if neg_rel > 0 else 0.0
 
-        with g2:
-            cor_margem = "#0D263C" if margem_rel >= 0 else "#F34D25"
+            km_i = to_int(get_campo("km_ini", 0))
+            km_f = to_int(get_campo("km_fin", 0))
+            km_real_rel = max(0, km_f - km_i) if km_f >= km_i else 0
+            custo_km_rel = (total_desp_rel / km_real_rel) if km_real_rel > 0 else 0.0
+            receita_km_rel = (receita_rel / km_real_rel) if km_real_rel > 0 else 0.0
+            margem_rel = ((resultado_rel / receita_rel) * 100.0) if receita_rel > 0 else 0.0
+
+            tv_rel = get_campo("tipo_viagem", "Individual")
+            ciclo_rel = (get_campo("ciclo_nome") or "").strip()
+            tipo_viagem_fmt = f"Ciclo ({ciclo_rel})" if (tv_rel == "Ciclo" and ciclo_rel) else "Individual"
+            tipo_frete_fmt = get_campo("tipo_frete", "Dedicado")
+            origem_frete_fmt = get_campo("forma_contr", "Aplicativo de Fretes")
+
+            b1, b2, _ = st.columns([1.5, 1.5, 5])
+            buffer_xlsx = io.BytesIO()
+            df_exp_desp = pd.DataFrame(lista_export_desp)
+            df_exp_dre = pd.DataFrame(
+                [
+                    {
+                        "Viagem": id_label_ctx,
+                        "Situação": status_ctx,
+                        "Tipo de Viagem": tipo_viagem_fmt,
+                        "Tipo de Frete": tipo_frete_fmt,
+                        "Origem de Frete": origem_frete_fmt,
+                        "Cliente": cli_nome_ctx,
+                        "Motorista": mot_nome_ctx,
+                        "Rota": rota_ctx,
+                        "Receita Total": receita_rel,
+                        "Total Recebido": rec_rel,
+                        "Saldo Pendente": saldo_a_receber_rel,
+                        "Custos Totais": total_desp_rel,
+                        "Resultado Líquido": resultado_rel,
+                        "KM Rodado": km_real_rel,
+                        "Receita por KM": round(receita_km_rel, 2),
+                        "Custo por KM": round(custo_km_rel, 2),
+                        "Margem (%)": round(margem_rel, 1),
+                    }
+                ]
+            )
+            with pd.ExcelWriter(buffer_xlsx, engine="openpyxl") as writer:
+                df_exp_dre.to_excel(writer, sheet_name="DRE_Viagem", index=False)
+                df_exp_desp.to_excel(writer, sheet_name="Despesas", index=False)
+
+            b1.download_button(
+                label="📥 Excel da Viagem",
+                data=buffer_xlsx.getvalue(),
+                file_name=f"{id_label_ctx}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+
+            vei_obj = next((v for v in veiculos_db if v["id_veiculo"] == get_campo("vei_id", 0)), None)
+            col_obj = next((l for l in locais_db if l["id_local"] == get_campo("col_id", 0)), None)
+            ent_obj = next((l for l in locais_db if l["id_local"] == get_campo("ent_id", 0)), None)
+            dt_col_val = get_campo("data_col")
+            dt_ent_val = get_campo("data_ent")
+
+            dados_pdf = {
+                "codigo": id_label_ctx,
+                "status": status_ctx,
+                "tipo_viagem": tipo_viagem_fmt,
+                "tipo_frete": tipo_frete_fmt,
+                "origem_frete": origem_frete_fmt,
+                "cliente": cli_nome_ctx,
+                "motorista": mot_nome_ctx,
+                "veiculo": f"{vei_obj['descricao_marca']} ({vei_obj['placa']})" if vei_obj else "Não selecionado",
+                "rota": rota_ctx,
+                "km_rodado": km_real_rel,
+                "coleta": f"{col_obj['nome_local']} ({col_obj['cidade']}/{col_obj['uf']})" if col_obj else "-",
+                "data_coleta": dt_col_val.strftime("%d/%m/%Y") if dt_col_val else "-",
+                "entrega": f"{ent_obj['nome_local']} ({ent_obj['cidade']}/{ent_obj['uf']})" if ent_obj else "-",
+                "data_entrega": dt_ent_val.strftime("%d/%m/%Y") if dt_ent_val else "-",
+                "nfe": get_campo("nfe") or "-",
+                "cte": get_campo("cte") or "-",
+                "mdfe": get_campo("mdfe") or "-",
+                "ciot": get_campo("ciot") or "-",
+                "receita": receita_rel,
+                "custos": total_desp_rel,
+                "resultado": resultado_rel,
+                "margem": margem_rel,
+                "custo_km": custo_km_rel,
+            }
+            pdf_bytes = gerar_pdf_relatorio(dados_pdf, despesas_rel)
+            b2.download_button(
+                label="📄 PDF da Viagem",
+                data=pdf_bytes,
+                file_name=f"{id_label_ctx}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+
             st.markdown(
                 f"""
-                <div style="background:#FFFFFF;border:1px solid #D6D6D6;border-top:4px solid #F34D25;border-radius:0.55rem;padding:1.5rem;height:320px;display:flex;flex-direction:column;justify-content:center;gap:1.2rem;">
-                    <div style="font-size:0.82rem;font-weight:700;color:#0D263C;text-transform:uppercase;letter-spacing:0.06em;text-align:center;border-bottom:1px solid #E9E9E9;padding-bottom:0.55rem;">
-                        Indicadores Estratégicos (KPIs)
+                <div class="kpi-consulta-grid">
+                    <div class="kpi-consulta-card">
+                        <div class="kpi-consulta-lbl">Receita / KM</div>
+                        <div class="kpi-consulta-val">{fmt_brl(receita_km_rel)}</div>
                     </div>
-                    <div style="background:rgba(171, 206, 225, 0.25);border:1px solid #ABCEE1;border-left:5px solid #0D263C;border-radius:0.45rem;padding:1.1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;">
-                        <span style="color:#0D263C;font-weight:700;font-size:0.82rem;text-transform:uppercase;">Custo por KM</span>
-                        <span style="font-size:1.55rem;font-weight:900;color:#0D263C;">{fmt_brl(custo_km_rel)}</span>
+                    <div class="kpi-consulta-card orange">
+                        <div class="kpi-consulta-lbl">Custo / KM</div>
+                        <div class="kpi-consulta-val" style="color:#F34D25;">{fmt_brl(custo_km_rel)}</div>
                     </div>
-                    <div style="background:#F1F5F9;border:1px solid #CBD5E1;border-left:5px solid #F34D25;border-radius:0.45rem;padding:1.1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;">
-                        <span style="color:#0D263C;font-weight:700;font-size:0.82rem;text-transform:uppercase;">Margem de Lucro</span>
-                        <span style="font-size:1.55rem;font-weight:900;color:{cor_margem};">{margem_rel:.1f}%</span>
+                    <div class="kpi-consulta-card">
+                        <div class="kpi-consulta-lbl">Margem Líquida</div>
+                        <div class="kpi-consulta-val">{margem_rel:.1f}%</div>
+                    </div>
+                    <div class="kpi-consulta-card">
+                        <div class="kpi-consulta-lbl">Saldo a Receber</div>
+                        <div class="kpi-consulta-val">{fmt_brl(saldo_a_receber_rel)}</div>
                     </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
+
+            g1, g2 = st.columns(2)
+            with g1:
+                labels_js = list(agrupado.keys()) if agrupado else ["Sem dados"]
+                data_js = list(agrupado.values()) if agrupado else [1]
+
+                chart_html = f"""
+                <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+                <div style="background:#FFFFFF;border:1px solid #D6D6D6;border-top:4px solid #0D263C;border-radius:0.55rem;padding:1.2rem;text-align:center;font-family:'Montserrat',sans-serif;">
+                    <h3 style="font-size:0.82rem;font-weight:700;color:#0D263C;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem;">
+                        Distribuição de Gastos (Viagem Atual)
+                    </h3>
+                    <div style="height:260px;position:relative;">
+                        <canvas id="graficoDespesas"></canvas>
+                    </div>
+                </div>
+                <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                <script>
+                    new Chart(document.getElementById('graficoDespesas').getContext('2d'), {{
+                        type: 'doughnut',
+                        data: {{
+                            labels: {labels_js},
+                            datasets: [{{
+                                data: {data_js},
+                                backgroundColor: ['#0D263C', '#F34D25', '#ABCEE1', '#3B5B78', '#8C8C8C', '#E9E9E9'],
+                                borderColor: '#FFFFFF',
+                                borderWidth: 2
+                            }}]
+                        }},
+                        options: {{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {{
+                                legend: {{
+                                    labels: {{
+                                        font: {{ family: 'Montserrat', weight: '600' }},
+                                        color: '#0D263C'
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }});
+                </script>
+                """
+                components.html(chart_html, height=345)
+
+            with g2:
+                cor_margem = "#0D263C" if resultado_rel >= 0 else "#F34D25"
+                st.markdown(
+                    f"""
+                    <div style="background:#FFFFFF;border:1px solid #D6D6D6;border-top:4px solid #F34D25;border-radius:0.55rem;padding:1.5rem;height:320px;display:flex;flex-direction:column;justify-content:center;gap:1.1rem;">
+                        <div style="font-size:0.82rem;font-weight:700;color:#0D263C;text-transform:uppercase;letter-spacing:0.06em;text-align:center;border-bottom:1px solid #E9E9E9;padding-bottom:0.55rem;">
+                            Resumo Executivo da Viagem
+                        </div>
+                        <div style="background:rgba(171, 206, 225, 0.25);border:1px solid #ABCEE1;border-left:5px solid #0D263C;border-radius:0.45rem;padding:0.95rem 1.2rem;display:flex;justify-content:space-between;align-items:center;">
+                            <span style="color:#0D263C;font-weight:700;font-size:0.8rem;text-transform:uppercase;">Receita Negociada</span>
+                            <span style="font-size:1.35rem;font-weight:900;color:#0D263C;">{fmt_brl(receita_rel)}</span>
+                        </div>
+                        <div style="background:#F1F5F9;border:1px solid #CBD5E1;border-left:5px solid #F34D25;border-radius:0.45rem;padding:0.95rem 1.2rem;display:flex;justify-content:space-between;align-items:center;">
+                            <span style="color:#0D263C;font-weight:700;font-size:0.8rem;text-transform:uppercase;">Resultado Líquido</span>
+                            <span style="font-size:1.35rem;font-weight:900;color:{cor_margem};">{fmt_brl(resultado_rel)}</span>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+        # --- SUB-ABA 2: PAINEL GERAL & MÉTRICAS CONSOLIDADAS ---
+        with tab_rel_geral:
+            if not todas_viagens_rel:
+                st.info("Ainda não há viagens registradas no banco de dados. Salve uma viagem para visualizar os indicadores consolidados.")
+            else:
+                fat_total = sum(v["receita_efetiva"] for v in todas_viagens_rel)
+                rec_caixa = sum(v["total_recebido"] for v in todas_viagens_rel)
+                custo_total = sum(v["total_despesas"] for v in todas_viagens_rel)
+                lucro_total = sum(v["resultado_liquido"] for v in todas_viagens_rel)
+                km_total = sum(v["km_rodado"] for v in todas_viagens_rel)
+                ticket_medio = fat_total / len(todas_viagens_rel)
+                margem_media = ((lucro_total / fat_total) * 100.0) if fat_total > 0 else 0.0
+                custo_km_geral = (custo_total / km_total) if km_total > 0 else 0.0
+
+                st.markdown(
+                    f"""
+                    <div class="kpi-consulta-grid">
+                        <div class="kpi-consulta-card">
+                            <div class="kpi-consulta-lbl">Faturamento Total ({len(todas_viagens_rel)} op.)</div>
+                            <div class="kpi-consulta-val">{fmt_brl(fat_total)}</div>
+                        </div>
+                        <div class="kpi-consulta-card">
+                            <div class="kpi-consulta-lbl">Total Recebido em Caixa</div>
+                            <div class="kpi-consulta-val">{fmt_brl(rec_caixa)}</div>
+                        </div>
+                        <div class="kpi-consulta-card orange">
+                            <div class="kpi-consulta-lbl">Custos Totais Operacionais</div>
+                            <div class="kpi-consulta-val" style="color:#F34D25;">{fmt_brl(custo_total)}</div>
+                        </div>
+                        <div class="kpi-consulta-card">
+                            <div class="kpi-consulta-lbl">Lucro Líquido Consolidado</div>
+                            <div class="kpi-consulta-val">{fmt_brl(lucro_total)}</div>
+                        </div>
+                    </div>
+                    <div class="kpi-consulta-grid">
+                        <div class="kpi-consulta-card">
+                            <div class="kpi-consulta-lbl">Ticket Médio / Viagem</div>
+                            <div class="kpi-consulta-val">{fmt_brl(ticket_medio)}</div>
+                        </div>
+                        <div class="kpi-consulta-card">
+                            <div class="kpi-consulta-lbl">Margem Líquida Média</div>
+                            <div class="kpi-consulta-val">{margem_media:.1f}%</div>
+                        </div>
+                        <div class="kpi-consulta-card">
+                            <div class="kpi-consulta-lbl">KM Total Rodado</div>
+                            <div class="kpi-consulta-val">{km_total:,} km</div>
+                        </div>
+                        <div class="kpi-consulta-card orange">
+                            <div class="kpi-consulta-lbl">Custo Médio / KM</div>
+                            <div class="kpi-consulta-val" style="color:#F34D25;">{fmt_brl(custo_km_geral)}</div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                cg1, cg2 = st.columns(2)
+                with cg1:
+                    top_vg = list(reversed(todas_viagens_rel[:10]))
+                    lbl_vg = [v["codigo_viagem"] for v in top_vg]
+                    rec_vg = [round(v["receita_efetiva"], 2) for v in top_vg]
+                    cus_vg = [round(v["total_despesas"], 2) for v in top_vg]
+                    luc_vg = [round(v["resultado_liquido"], 2) for v in top_vg]
+
+                    bar_html = f"""
+                    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+                    <div style="background:#FFFFFF;border:1px solid #D6D6D6;border-top:4px solid #0D263C;border-radius:0.55rem;padding:1.2rem;font-family:'Montserrat',sans-serif;">
+                        <h3 style="font-size:0.8rem;font-weight:700;color:#0D263C;text-transform:uppercase;text-align:center;margin-bottom:0.8rem;">
+                            Receita × Custos × Lucro (Últimas Viagens)
+                        </h3>
+                        <div style="height:260px;position:relative;">
+                            <canvas id="graficoComparativo"></canvas>
+                        </div>
+                    </div>
+                    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                    <script>
+                        new Chart(document.getElementById('graficoComparativo').getContext('2d'), {{
+                            type: 'bar',
+                            data: {{
+                                labels: {lbl_vg},
+                                datasets: [
+                                    {{ label: 'Receita', data: {rec_vg}, backgroundColor: '#0D263C' }},
+                                    {{ label: 'Custos', data: {cus_vg}, backgroundColor: '#F34D25' }},
+                                    {{ label: 'Lucro', data: {luc_vg}, backgroundColor: '#ABCEE1' }}
+                                ]
+                            }},
+                            options: {{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {{ legend: {{ labels: {{ font: {{ family: 'Montserrat', weight: '600' }} }} }} }}
+                            }}
+                        }});
+                    </script>
+                    """
+                    components.html(bar_html, height=340)
+
+                with cg2:
+                    gastos_cat_geral = {}
+                    for d in todas_desp_rel:
+                        cat = d["Tipo Despesa"]
+                        gastos_cat_geral[cat] = gastos_cat_geral.get(cat, 0.0) + to_float(d["Valor Total (R$)"])
+                    lbl_cat = list(gastos_cat_geral.keys()) if gastos_cat_geral else ["Sem despesas"]
+                    val_cat = [round(x, 2) for x in gastos_cat_geral.values()] if gastos_cat_geral else [1]
+
+                    doughnut_geral_html = f"""
+                    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+                    <div style="background:#FFFFFF;border:1px solid #D6D6D6;border-top:4px solid #F34D25;border-radius:0.55rem;padding:1.2rem;font-family:'Montserrat',sans-serif;">
+                        <h3 style="font-size:0.8rem;font-weight:700;color:#0D263C;text-transform:uppercase;text-align:center;margin-bottom:0.8rem;">
+                            Gastos Consolidados por Categoria
+                        </h3>
+                        <div style="height:260px;position:relative;">
+                            <canvas id="graficoCatGeral"></canvas>
+                        </div>
+                    </div>
+                    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                    <script>
+                        new Chart(document.getElementById('graficoCatGeral').getContext('2d'), {{
+                            type: 'doughnut',
+                            data: {{
+                                labels: {lbl_cat},
+                                datasets: [{{
+                                    data: {val_cat},
+                                    backgroundColor: ['#0D263C', '#F34D25', '#ABCEE1', '#3B5B78', '#8C8C8C', '#64748B', '#1E3A5F'],
+                                    borderColor: '#FFFFFF',
+                                    borderWidth: 2
+                                }}]
+                            }},
+                            options: {{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {{ legend: {{ labels: {{ font: {{ family: 'Montserrat', weight: '600' }} }} }} }}
+                            }}
+                        }});
+                    </script>
+                    """
+                    components.html(doughnut_geral_html, height=340)
+
+                st.markdown('<div class="sec-subtitle">Ranking de Rentabilidade por Cliente</div>', unsafe_allow_html=True)
+                resumo_cli = {}
+                for v in todas_viagens_rel:
+                    cl = v["cliente"]
+                    if cl not in resumo_cli:
+                        resumo_cli[cl] = {"Viagens": 0, "Receita": 0.0, "Custos": 0.0, "Lucro": 0.0}
+                    resumo_cli[cl]["Viagens"] += 1
+                    resumo_cli[cl]["Receita"] += v["receita_efetiva"]
+                    resumo_cli[cl]["Custos"] += v["total_despesas"]
+                    resumo_cli[cl]["Lucro"] += v["resultado_liquido"]
+
+                df_rank_cli = pd.DataFrame(
+                    [
+                        {
+                            "Cliente": k,
+                            "Qtde Viagens": d["Viagens"],
+                            "Receita Total": fmt_brl(d["Receita"]),
+                            "Custos Totais": fmt_brl(d["Custos"]),
+                            "Resultado Líquido": fmt_brl(d["Lucro"]),
+                            "Margem (%)": f"{((d['Lucro'] / d['Receita']) * 100.0 if d['Receita'] > 0 else 0.0):.1f}%",
+                        }
+                        for k, d in sorted(resumo_cli.items(), key=lambda item: item[1]["Lucro"], reverse=True)
+                    ]
+                )
+                st.dataframe(df_rank_cli, use_container_width=True, hide_index=True)
 
         render_navegacao_rodape(8, MENU_ITENS)
 
@@ -2882,9 +3236,15 @@ with st.container(border=True):
     elif aba_ativa == MENU_ITENS[9]:
         render_cabecalho_aba("fa-solid fa-magnifying-glass", "Consultas Gerais — Viagens, Fretes e Ciclos", 10)
 
-        todas_viagens = carregar_todas_viagens_consulta()
+        todas_viagens, _ = carregar_todas_viagens_consulta()
 
-        f_col1, f_col2, f_col3, f_col4 = st.columns([4.2, 2.2, 2.2, 3.4])
+        if not todas_viagens:
+            st.info(
+                "Ainda não existem viagens registradas no banco de dados. "
+                "Assim que você salvar sua primeira viagem (Individual ou Ciclo), os filtros por Situação e Ciclo serão preenchidos automaticamente aqui."
+            )
+
+        f_col1, f_col2, f_col3, f_col4 = st.columns([4.2, 2.2, 2.4, 3.2])
         termo_busca = f_col1.text_input(
             "Pesquisar por Código, Frete, Ciclo, Cliente, Motorista ou Rota",
             placeholder="Ex: FAEG-2026, Ciclo 01, Suzano, Placa...",
@@ -2897,16 +3257,22 @@ with st.container(border=True):
             key="cons_tipo_viagem",
         )
 
-        status_disponiveis = ["Todos"] + sorted(list({v["status"] for v in todas_viagens if v["status"]}))
+        situacoes_existentes = list(OPCOES_SITUACAO_OPERACAO)
+        for v in todas_viagens:
+            if v["status"] and v["status"] not in situacoes_existentes:
+                situacoes_existentes.append(v["status"])
+        status_disponiveis = ["Todos"] + situacoes_existentes
+
         filtro_status = f_col3.selectbox(
-            "Status",
+            "Situação",
             status_disponiveis,
             key="cons_status",
         )
 
-        ciclos_disponiveis = ["Todos"] + sorted(
+        ciclos_cadastrados = sorted(
             list({v["ciclo"] for v in todas_viagens if v["ciclo"] and v["ciclo"] != "-"})
         )
+        ciclos_disponiveis = ["Todos"] + ciclos_cadastrados if ciclos_cadastrados else ["Todos (Nenhum ciclo salvo)"]
         filtro_ciclo = f_col4.selectbox(
             "Filtrar por Ciclo",
             ciclos_disponiveis,
@@ -2919,7 +3285,7 @@ with st.container(border=True):
                 continue
             if filtro_status != "Todos" and v["status"] != filtro_status:
                 continue
-            if filtro_ciclo != "Todos" and v["ciclo"] != filtro_ciclo:
+            if not filtro_ciclo.startswith("Todos") and v["ciclo"] != filtro_ciclo:
                 continue
             if termo_busca:
                 blob = " ".join(
@@ -2970,9 +3336,7 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
-        if not filtradas:
-            st.info("Nenhuma viagem, frete ou ciclo encontrado com os filtros selecionados.")
-        else:
+        if filtradas:
             st.markdown('<div class="sec-subtitle">Abrir Registro para Consulta Detalhada ou Edição</div>', unsafe_allow_html=True)
             ac1, ac2, ac3 = st.columns([5.5, 3.0, 3.5])
             opcoes_abrir = {
@@ -3011,7 +3375,7 @@ with st.container(border=True):
                     {
                         "Código": v["codigo_viagem"],
                         "ID Frete": v["id_frete"],
-                        "Status": v["status"],
+                        "Situação": v["status"],
                         "Tipo Viagem": v["tipo_viagem"],
                         "Ciclo": v["ciclo"],
                         "Tipo Frete": v["tipo_frete"],
@@ -3966,7 +4330,7 @@ with st.container(border=True):
         col_esq3, _ = st.columns(2)
 
         # ======================================================================
-        # 5. FORNECEDORES E POSTOS (MESMA LISTA DE CATEGORIAS DAS DESPESAS)
+        # 5. FORNECEDORES E POSTOS
         # ======================================================================
         with col_esq3:
             with st.container(border=True):
