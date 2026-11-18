@@ -21,6 +21,7 @@ from database.models import (
     Veiculo,
     Viagem,
     ViagemDespesa,
+    sincronizar_colunas_banco,
 )
 
 # ==============================================================================
@@ -32,6 +33,16 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+@st.cache_resource(show_spinner=False)
+def inicializar_banco_uma_vez():
+    """Garante automaticamente que as novas colunas existam no Neon sem alterar dados."""
+    sincronizar_colunas_banco()
+    return True
+
+
+inicializar_banco_uma_vez()
 
 
 # ==============================================================================
@@ -74,7 +85,7 @@ def calcular_proximo_codigo_viagem(viagens_lista):
 
 
 # ==============================================================================
-# CACHE DE DADOS PARA NAVEGAÇÃO INSTANTÂNEA (< 0,1s ENTRE ABAS)
+# CACHE DE DADOS PARA NAVEGAÇÃO INSTANTÂNEA
 # ==============================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_listas_base():
@@ -110,18 +121,24 @@ def carregar_listas_base():
             {
                 "id_cliente": c.id_cliente,
                 "razao_social": c.razao_social,
+                "nome_fantasia": c.nome_fantasia,
                 "cnpj_cpf": c.cnpj_cpf,
                 "inscricao_estadual": c.inscricao_estadual,
                 "responsavel_comercial": c.responsavel_comercial,
                 "telefone_comercial": c.telefone_comercial,
                 "email_financeiro": c.email_financeiro,
                 "prazo_pagamento_dias": c.prazo_pagamento_dias,
+                "cep": c.cep,
+                "endereco_completo": c.endereco_completo,
+                "cidade": c.cidade,
+                "uf": c.uf,
             }
             for c in session.query(Cliente).order_by(Cliente.razao_social).all()
         ]
         locais = [
             {
                 "id_local": l.id_local,
+                "id_cliente": l.id_cliente,
                 "nome_local": l.nome_local,
                 "tipo_instalacao": l.tipo_instalacao,
                 "cep": l.cep,
@@ -136,6 +153,7 @@ def carregar_listas_base():
         fornecedores = [
             {
                 "id_fornecedor": f.id_fornecedor,
+                "razao_social": f.razao_social,
                 "nome_fantasia": f.nome_fantasia,
                 "cnpj": f.cnpj,
                 "categoria_servico": f.categoria_servico,
@@ -156,7 +174,6 @@ def carregar_listas_base():
                     "rota_resumo": vg.rota_resumo,
                 }
             )
-        # Ordena do maior código sequencial para o menor (mantendo retroativos na ordem certa)
         viagens.sort(key=lambda x: (x["seq_num"], x["id_viagem"]), reverse=True)
 
     return motoristas, veiculos, clientes, locais, fornecedores, viagens
@@ -194,7 +211,6 @@ def obter_caminho_logo():
 
 @st.cache_data(show_spinner=False)
 def carregar_logo_base64():
-    """Converte o logotipo oficial em base64 para alinhamento harmônico com o nome na sidebar."""
     path = obter_caminho_logo()
     if path:
         ext = os.path.splitext(path)[1].lower().replace(".", "")
@@ -226,6 +242,14 @@ st.markdown(
             height: 0.4rem;
         }
         #MainMenu, footer {visibility: hidden;}
+
+        /* Remove completamente "Press Enter to submit form" / "Press Enter to apply" */
+        div[data-testid="InputInstructions"],
+        [data-testid="stForm"] small,
+        .stTextInput small,
+        .stNumberInput small {
+            display: none !important;
+        }
 
         .stApp, [data-testid="stAppViewContainer"] {
             background-color: #E9E9E9 !important;
@@ -642,6 +666,40 @@ st.markdown(
             gap: 0.45rem;
         }
 
+        .confirm-box-del {
+            background-color: #FEF2F2;
+            border: 1px solid #EF4444;
+            border-left: 4px solid #DC2626;
+            color: #7F1D1D;
+            font-size: 0.76rem;
+            font-weight: 700;
+            padding: 0.45rem 0.7rem;
+            border-radius: 0.35rem;
+            margin: 0.25rem 0 0.4rem 0;
+        }
+        .confirm-box-edit {
+            background-color: #EFF6FF;
+            border: 1px solid #3B82F6;
+            border-left: 4px solid #0D263C;
+            color: #0D263C;
+            font-size: 0.76rem;
+            font-weight: 700;
+            padding: 0.45rem 0.7rem;
+            border-radius: 0.35rem;
+            margin: 0.25rem 0 0.4rem 0;
+        }
+
+        .cliente-coleta-banner {
+            background-color: rgba(171, 206, 225, 0.22);
+            border: 1px solid #ABCEE1;
+            border-left: 4px solid #0D263C;
+            border-radius: 0.45rem;
+            padding: 0.65rem 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.82rem;
+            color: #0D263C;
+        }
+
         .faeg-recebimento-banner {
             background-color: rgba(171, 206, 225, 0.25);
             border: 1px solid #ABCEE1;
@@ -737,7 +795,6 @@ st.markdown(
 # GERADOR DE PDF NATIVO ZERO-DEPENDÊNCIA (PADRÃO VISUAL FAEG)
 # ==============================================================================
 def _pdf_esc(txt):
-    """Escapa parênteses/barras e converte acentos para WinAnsi (Latin-1)."""
     if txt is None:
         return "-"
     s = str(txt).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
@@ -745,7 +802,6 @@ def _pdf_esc(txt):
 
 
 def gerar_pdf_relatorio(dados_resumo, despesas_lista):
-    """Gera arquivo PDF binário válido A4 com identidade visual FAEG sem pacotes externos."""
     cmds = []
 
     def rect(x, y_top, w, h, rgb):
@@ -782,14 +838,16 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
 
     pares_info = [
         ("Cliente:", dados_resumo["cliente"][:36], "Status:", dados_resumo["status"]),
-        ("Motorista:", dados_resumo["motorista"][:36], "Veiculo:", dados_resumo["veiculo"][:30]),
-        ("Rota:", dados_resumo["rota"][:38], "KM Rodado:", f"{dados_resumo['km_rodado']} km"),
-        ("Coleta:", dados_resumo["coleta"][:36], "Entrega:", dados_resumo["entrega"][:30]),
+        ("Modalidade:", dados_resumo["modalidade"][:36], "Veiculo:", dados_resumo["veiculo"][:30]),
+        ("Motorista:", dados_resumo["motorista"][:36], "KM Rodado:", f"{dados_resumo['km_rodado']} km"),
+        ("Rota:", dados_resumo["rota"][:38], "Data Coleta:", dados_resumo["data_coleta"]),
+        ("Coleta:", dados_resumo["coleta"][:36], "Data Entrega:", dados_resumo["data_entrega"]),
+        ("Entrega:", dados_resumo["entrega"][:36], "CIOT:", dados_resumo["ciot"]),
         (
             "NF-e / CT-e:",
             f"{dados_resumo['nfe']} / {dados_resumo['cte']}",
-            "MDF-e / CIOT:",
-            f"{dados_resumo['mdfe']} / {dados_resumo['ciot']}",
+            "MDF-e:",
+            dados_resumo["mdfe"],
         ),
     ]
 
@@ -797,7 +855,7 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
         text(36, y, lbl1, size=8.5, bold=True, rgb=(100, 116, 139))
         text(105, y, val1, size=8.5, bold=False, rgb=(13, 38, 60))
         text(315, y, lbl2, size=8.5, bold=True, rgb=(100, 116, 139))
-        text(385, y, val2, size=8.5, bold=False, rgb=(13, 38, 60))
+        text(390, y, val2, size=8.5, bold=False, rgb=(13, 38, 60))
         y += 17
 
     y += 12
@@ -870,22 +928,21 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
     stream_bytes = "\n".join(cmds).encode("latin-1", "replace")
     compressed = zlib.compress(stream_bytes)
 
-    objects = []
-    objects.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
-    objects.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
-    objects.append(
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-        b"/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>\nendobj\n"
-    )
-    objects.append(b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n")
-    objects.append(
-        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n"
-    )
-    objects.append(
-        f"6 0 obj\n<< /Length {len(compressed)} /Filter /FlateDecode >>\nstream\n".encode("ascii")
-        + compressed
-        + b"\nendstream\nendobj\n"
-    )
+    objects = [
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        (
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            b"/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>\nendobj\n"
+        ),
+        b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n",
+        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n",
+        (
+            f"6 0 obj\n<< /Length {len(compressed)} /Filter /FlateDecode >>\nstream\n".encode("ascii")
+            + compressed
+            + b"\nendstream\nendobj\n"
+        ),
+    ]
 
     out = io.BytesIO()
     out.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
@@ -922,19 +979,97 @@ def fmt_brl(val):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def formatar_rotulo_cliente(c):
+    """Formata o cliente exibindo Razão Social, Nome Fantasia e Endereço/Cidade para evitar ambiguidade."""
+    partes_nome = [c["razao_social"]]
+    if c.get("nome_fantasia") and c["nome_fantasia"].strip().lower() != c["razao_social"].strip().lower():
+        partes_nome.append(f"({c['nome_fantasia']})")
+    titulo = " ".join(partes_nome)
+
+    detalhes_local = []
+    if c.get("endereco_completo"):
+        detalhes_local.append(c["endereco_completo"])
+    if c.get("cidade") or c.get("uf"):
+        detalhes_local.append(f"{c.get('cidade') or ''}/{c.get('uf') or ''}".strip("/"))
+
+    sufixo = f" — {', '.join(detalhes_local)}" if detalhes_local else f" — Doc: {c['cnpj_cpf']}"
+    return f"{titulo}{sufixo}"
+
+
+def formatar_rotulo_local(l, cli_map):
+    """Formata o local exibindo nome, endereço completo, cidade/UF e cliente vinculado."""
+    end_parts = []
+    if l.get("endereco_completo"):
+        end_parts.append(l["endereco_completo"])
+    cid_uf = f"{l.get('cidade') or ''}/{l.get('uf') or ''}".strip("/")
+    if cid_uf:
+        end_parts.append(cid_uf)
+    end_txt = f" — {', '.join(end_parts)}" if end_parts else ""
+
+    cli_vinculado = cli_map.get(l.get("id_cliente"))
+    cli_txt = ""
+    if cli_vinculado:
+        nome_c = cli_vinculado.get("nome_fantasia") or cli_vinculado["razao_social"]
+        cli_txt = f" [Cliente: {nome_c}]"
+
+    return f"{l['nome_local']}{end_txt}{cli_txt}"
+
+
 def get_campo(chave, padrao=None):
-    """Lê o campo do armazenamento persistente, garantindo que nunca se perca ao trocar de aba."""
     if "form_data" not in st.session_state:
         st.session_state["form_data"] = {}
     return st.session_state["form_data"].get(chave, padrao)
 
 
 def sync_campo(chave_widget, chave_dado):
-    """Sincroniza alterações de qualquer widget para o dicionário persistente."""
     if "form_data" not in st.session_state:
         st.session_state["form_data"] = {}
     if chave_widget in st.session_state:
         st.session_state["form_data"][chave_dado] = st.session_state[chave_widget]
+
+
+def on_tipo_frete_change():
+    """Sincroniza Tipo de Frete (Individual/Ciclo) e bloqueia/limpa o número do ciclo quando Individual."""
+    sync_campo("w_tipo_frete", "tipo_frete")
+    if get_campo("tipo_frete") == "Individual":
+        st.session_state["form_data"]["ciclo_nome"] = ""
+    if "w_ciclo_nome" in st.session_state:
+        del st.session_state["w_ciclo_nome"]
+
+
+def on_cliente_change(clientes_lista, locais_lista):
+    """Sincroniza o cliente escolhido e puxa automaticamente o local de coleta correspondente."""
+    sync_campo("w_cli_id", "cli_id")
+    cli_id_novo = get_campo("cli_id", 0)
+    if not cli_id_novo:
+        return
+
+    cli_obj = next((c for c in clientes_lista if c["id_cliente"] == cli_id_novo), None)
+    if not cli_obj:
+        return
+
+    local_match = next((l for l in locais_lista if l.get("id_cliente") == cli_id_novo), None)
+
+    if not local_match:
+        nomes_busca = {
+            (cli_obj.get("razao_social") or "").strip().lower(),
+            (cli_obj.get("nome_fantasia") or "").strip().lower(),
+        }
+        nomes_busca.discard("")
+        candidatos = [l for l in locais_lista if (l.get("nome_local") or "").strip().lower() in nomes_busca]
+        if len(candidatos) == 1:
+            local_match = candidatos[0]
+        elif len(candidatos) > 1 and cli_obj.get("cidade"):
+            cid_cli = cli_obj["cidade"].strip().lower()
+            local_match = next(
+                (l for l in candidatos if (l.get("cidade") or "").strip().lower() == cid_cli),
+                candidatos[0],
+            )
+
+    if local_match:
+        st.session_state["form_data"]["col_id"] = local_match["id_local"]
+        if "w_col_id" in st.session_state:
+            del st.session_state["w_col_id"]
 
 
 def render_cabecalho_aba(icone, titulo, passo_num):
@@ -975,14 +1110,12 @@ def render_navegacao_rodape(idx_atual, menu_itens):
 
 
 def limpar_widgets_viagem():
-    """Remove chaves temporárias w_* ao trocar de viagem para evitar valores residuais."""
     for k in list(st.session_state.keys()):
         if k.startswith("w_"):
             del st.session_state[k]
 
 
 def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
-    """Carrega dados da viagem selecionada (ou gera o próximo ID progressivo se for Nova Viagem)."""
     if st.session_state.get("loaded_viagem_id") == id_viagem_escolhida and "form_data" in st.session_state:
         return
 
@@ -998,8 +1131,8 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
             "vei_id": 0,
             "id_frete": "",
             "data_frete": date.today(),
-            "ciclo_nome": "",
             "tipo_frete": "Individual",
+            "ciclo_nome": "",
             "rota": "",
             "km_rota": 0.0,
             "tipo_mat": "",
@@ -1040,6 +1173,14 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
         c = v.ciclo
         fin = c.financeiro if c else None
 
+        tipo_frete_norm = (
+            "Ciclo" if v.tipo_frete in ["Ciclo", "Dedicado"] else "Individual"
+        )
+        ciclo_nome_norm = ""
+        if tipo_frete_norm == "Ciclo" and c and c.nome_operacao:
+            if not str(c.nome_operacao).startswith("Individual"):
+                ciclo_nome_norm = c.nome_operacao
+
         st.session_state["form_data"] = {
             "id_viagem_label": resolver_codigo_viagem(v, c),
             "status_viagem": v.status_viagem or "Em Andamento",
@@ -1047,8 +1188,8 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
             "vei_id": v.id_veiculo or 0,
             "id_frete": v.id_frete_externo or "",
             "data_frete": v.data_coleta or (c.data_abertura if c and c.data_abertura else date.today()),
-            "ciclo_nome": c.nome_operacao if c and c.nome_operacao else f"Ciclo #{v.id_ciclo}",
-            "tipo_frete": v.tipo_frete if v.tipo_frete in ["Individual", "Dedicado"] else "Individual",
+            "tipo_frete": tipo_frete_norm,
+            "ciclo_nome": ciclo_nome_norm,
             "rota": v.rota_resumo or "",
             "km_rota": to_float(v.km_rota_planejado),
             "tipo_mat": v.tipo_material or "",
@@ -1092,12 +1233,16 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
     cli_id = get_campo("cli_id", 0)
     col_id = get_campo("col_id", 0)
     ent_id = get_campo("ent_id", 0)
+    tipo_frete_val = get_campo("tipo_frete", "Individual")
+    ciclo_num_val = (get_campo("ciclo_nome") or "").strip()
 
     faltando = []
     if not mot_id:
         faltando.append("Motorista (Etapa 1)")
     if not vei_id:
         faltando.append("Veículo (Etapa 1)")
+    if tipo_frete_val == "Ciclo" and not ciclo_num_val:
+        faltando.append("Nº do Ciclo Operacional (Etapa 2)")
     if not cli_id:
         faltando.append("Cliente (Etapa 3)")
     if not col_id:
@@ -1106,7 +1251,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
         faltando.append("Local de Entrega (Etapa 6)")
 
     if faltando:
-        st.sidebar.error("Selecione antes de salvar:\n- " + "\n- ".join(faltando))
+        st.sidebar.error("Preencha / selecione antes de salvar:\n- " + "\n- ".join(faltando))
         return
 
     km_ini = to_int(get_campo("km_ini", 0))
@@ -1116,6 +1261,10 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
     codigo_viagem_editado = (get_campo("id_viagem_label") or "").strip()
     if not codigo_viagem_editado:
         codigo_viagem_editado = calcular_proximo_codigo_viagem(viagens_lista)
+
+    nome_operacao_final = (
+        ciclo_num_val if tipo_frete_val == "Ciclo" else f"Individual - {codigo_viagem_editado}"
+    )
 
     status_escolhido = get_campo("status_viagem", "Nova Operação")
     if status_escolhido == "Nova Operação":
@@ -1127,7 +1276,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
         if id_viagem_atual == 0:
             novo_ciclo = CicloOperacional(
                 id_cliente=cli_id,
-                nome_operacao=get_campo("ciclo_nome") or f"Operação {date.today().strftime('%d/%m/%Y')}",
+                nome_operacao=nome_operacao_final,
                 data_abertura=get_campo("data_frete") or date.today(),
                 status_ciclo=f"COD::{codigo_viagem_editado}",
             )
@@ -1153,7 +1302,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 id_motorista=mot_id,
                 id_veiculo=vei_id,
                 id_frete_externo=get_campo("id_frete", ""),
-                tipo_frete=get_campo("tipo_frete", "Individual"),
+                tipo_frete=tipo_frete_val,
                 rota_resumo=get_campo("rota", ""),
                 km_rota_planejado=get_campo("km_rota", 0.0),
                 id_local_coleta=col_id,
@@ -1207,7 +1356,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 return
             c = v.ciclo
             c.id_cliente = cli_id
-            c.nome_operacao = get_campo("ciclo_nome") or c.nome_operacao
+            c.nome_operacao = nome_operacao_final
             c.data_abertura = get_campo("data_frete") or c.data_abertura
             c.status_ciclo = f"COD::{codigo_viagem_editado}"
 
@@ -1229,7 +1378,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
             v.id_motorista = mot_id
             v.id_veiculo = vei_id
             v.id_frete_externo = get_campo("id_frete", "")
-            v.tipo_frete = get_campo("tipo_frete", "Individual")
+            v.tipo_frete = tipo_frete_val
             v.rota_resumo = get_campo("rota", "")
             v.km_rota_planejado = get_campo("km_rota", 0.0)
             v.id_local_coleta = col_id
@@ -1350,9 +1499,12 @@ with st.sidebar:
 # ==============================================================================
 # BARRA SUPERIOR DE CONTEXTO EXECUTIVO
 # ==============================================================================
-cli_nome_ctx = next(
-    (c["razao_social"] for c in clientes_db if c["id_cliente"] == get_campo("cli_id", 0)),
-    "Não selecionado",
+cli_obj_ctx = next((c for c in clientes_db if c["id_cliente"] == get_campo("cli_id", 0)), None)
+cli_nome_ctx = (
+    f"{cli_obj_ctx['razao_social']}"
+    + (f" ({cli_obj_ctx['nome_fantasia']})" if cli_obj_ctx.get("nome_fantasia") else "")
+    if cli_obj_ctx
+    else "Não selecionado"
 )
 mot_nome_ctx = next(
     (m["nome_completo"] for m in motoristas_db if m["id_motorista"] == get_campo("mot_id", 0)),
@@ -1478,12 +1630,12 @@ with st.container(border=True):
         render_navegacao_rodape(0, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 2: FRETE, CARGA E DOCUMENTOS
+    # TAB 2: FRETE, CARGA E DOCUMENTOS (TIPO DE FRETE -> CICLO OPERACIONAL)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[1]:
         render_cabecalho_aba("fa-solid fa-file-invoice", "Frete, Carga e Documentos", 2)
 
-        c1, c2, c3, c4 = st.columns([2.2, 2.5, 4.8, 2.5])
+        c1, c2, c3, c4 = st.columns([2.2, 2.5, 2.5, 4.8])
         c1.text_input(
             "ID Frete",
             value=get_campo("id_frete", ""),
@@ -1495,27 +1647,31 @@ with st.container(border=True):
         c2.date_input(
             "Data Operação",
             value=get_campo("data_frete", date.today()),
+            format="DD/MM/YYYY",
             key="w_data_frete",
             on_change=sync_campo,
             args=("w_data_frete", "data_frete"),
         )
-        c3.text_input(
-            "Ciclo Operacional",
-            value=get_campo("ciclo_nome", ""),
-            placeholder="Ex: Operação Nov/2026",
+        tipos_frete = ["Individual", "Ciclo"]
+        tf_val = get_campo("tipo_frete", "Individual")
+        if tf_val not in tipos_frete:
+            tf_val = "Ciclo" if tf_val == "Dedicado" else "Individual"
+        tipo_frete_sel = c3.selectbox(
+            "Tipo de Frete",
+            tipos_frete,
+            index=tipos_frete.index(tf_val),
+            key="w_tipo_frete",
+            on_change=on_tipo_frete_change,
+        )
+        eh_individual = tipo_frete_sel == "Individual"
+        c4.text_input(
+            "Nº do Ciclo Operacional",
+            value="" if eh_individual else get_campo("ciclo_nome", ""),
+            placeholder="Bloqueado (Frete Individual)" if eh_individual else "Digite o nº do ciclo (Ex: 2026-01)",
+            disabled=eh_individual,
             key="w_ciclo_nome",
             on_change=sync_campo,
             args=("w_ciclo_nome", "ciclo_nome"),
-        )
-        tipos_frete = ["Individual", "Dedicado"]
-        tf_val = get_campo("tipo_frete", "Individual")
-        c4.selectbox(
-            "Tipo de Frete",
-            tipos_frete,
-            index=tipos_frete.index(tf_val) if tf_val in tipos_frete else 0,
-            key="w_tipo_frete",
-            on_change=sync_campo,
-            args=("w_tipo_frete", "tipo_frete"),
         )
 
         c5, c6 = st.columns([9.5, 2.5])
@@ -1613,7 +1769,7 @@ with st.container(border=True):
         render_navegacao_rodape(1, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 3: CLIENTE / CONTRATANTE
+    # TAB 3: CLIENTE / CONTRATANTE (COM CORRESPONDÊNCIA AUTOMÁTICA PARA COLETA)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[2]:
         render_cabecalho_aba("fa-solid fa-building", "Cliente / Contratante", 3)
@@ -1621,26 +1777,54 @@ with st.container(border=True):
         cli_opcoes = {0: "Selecione um cliente cadastrado..."}
         cli_map = {c["id_cliente"]: c for c in clientes_db}
         for c in clientes_db:
-            cli_opcoes[c["id_cliente"]] = c["razao_social"]
+            cli_opcoes[c["id_cliente"]] = formatar_rotulo_cliente(c)
 
         cli_atual_id = get_campo("cli_id", 0)
         if cli_atual_id not in cli_opcoes:
             cli_atual_id = 0
 
-        cc0, cc1, cc2 = st.columns([6, 3.5, 2.5])
-        sel_cli = cc0.selectbox(
-            "Empresa Cliente",
+        sel_cli = st.selectbox(
+            "Empresa Cliente (Razão Social / Nome Fantasia — Endereço)",
             options=list(cli_opcoes.keys()),
             index=list(cli_opcoes.keys()).index(cli_atual_id),
             format_func=lambda x: cli_opcoes[x],
             key="w_cli_id",
-            on_change=sync_campo,
-            args=("w_cli_id", "cli_id"),
+            on_change=on_cliente_change,
+            args=(clientes_db, locais_db),
         )
         c_atual = cli_map.get(sel_cli)
 
-        cc1.text_input("Responsável Comercial", value=c_atual["responsavel_comercial"] if c_atual else "", disabled=True)
-        cc2.text_input("Telefone / Contato", value=c_atual["telefone_comercial"] if c_atual else "", disabled=True)
+        cc1, cc2, cc3 = st.columns([4.5, 4.5, 3.0])
+        cc1.text_input("Razão Social", value=c_atual["razao_social"] if c_atual else "", disabled=True)
+        cc2.text_input("Nome Fantasia", value=(c_atual.get("nome_fantasia") or "") if c_atual else "", disabled=True)
+        cc3.text_input("CNPJ / CPF", value=c_atual["cnpj_cpf"] if c_atual else "", disabled=True)
+
+        cc4, cc5, cc6 = st.columns([4.0, 4.0, 4.0])
+        cc4.text_input("Responsável", value=(c_atual["responsavel_comercial"] or "") if c_atual else "", disabled=True)
+        cc5.text_input("Telefone / Contato", value=(c_atual["telefone_comercial"] or "") if c_atual else "", disabled=True)
+        cc6.text_input("E-mail", value=(c_atual["email_financeiro"] or "") if c_atual else "", disabled=True)
+
+        end_cli_txt = ""
+        if c_atual:
+            partes_e = [
+                p
+                for p in [
+                    c_atual.get("endereco_completo"),
+                    f"{c_atual.get('cidade') or ''}/{c_atual.get('uf') or ''}".strip("/"),
+                    f"CEP: {c_atual['cep']}" if c_atual.get("cep") else "",
+                ]
+                if p
+            ]
+            end_cli_txt = " — ".join(partes_e)
+        st.text_input("Endereço do Cliente", value=end_cli_txt, disabled=True)
+
+        if c_atual:
+            col_corresp = next((l for l in locais_db if l["id_local"] == get_campo("col_id", 0)), None)
+            if col_corresp:
+                st.success(
+                    f"📍 Local de Coleta vinculado automaticamente: **{col_corresp['nome_local']}** "
+                    f"({col_corresp.get('endereco_completo') or '-'}, {col_corresp.get('cidade') or ''}/{col_corresp.get('uf') or ''})"
+                )
 
         render_navegacao_rodape(2, MENU_ITENS)
 
@@ -1695,6 +1879,7 @@ with st.container(border=True):
         a2.date_input(
             "Data Adiantamento",
             value=get_campo("data_adiant", date.today()),
+            format="DD/MM/YYYY",
             key="w_data_adiant",
             on_change=sync_campo,
             args=("w_data_adiant", "data_adiant"),
@@ -1724,6 +1909,7 @@ with st.container(border=True):
         s2.date_input(
             "Data Saldo",
             value=get_campo("data_saldo", date.today()),
+            format="DD/MM/YYYY",
             key="w_data_saldo",
             on_change=sync_campo,
             args=("w_data_saldo", "data_saldo"),
@@ -1770,10 +1956,32 @@ with st.container(border=True):
     elif aba_ativa == MENU_ITENS[4]:
         render_cabecalho_aba("fa-solid fa-location-arrow", "Local de Coleta (Origem)", 5)
 
+        cli_map_local = {c["id_cliente"]: c for c in clientes_db}
+        cli_sel_atual = cli_map_local.get(get_campo("cli_id", 0))
+        if cli_sel_atual:
+            end_cli_b = ", ".join(
+                p
+                for p in [
+                    cli_sel_atual.get("endereco_completo"),
+                    f"{cli_sel_atual.get('cidade') or ''}/{cli_sel_atual.get('uf') or ''}".strip("/"),
+                ]
+                if p
+            )
+            st.markdown(
+                f"""
+                <div class="cliente-coleta-banner">
+                    <strong>Cliente / Transportadora Selecionada:</strong> {cli_sel_atual['razao_social']}
+                    {f" ({cli_sel_atual['nome_fantasia']})" if cli_sel_atual.get('nome_fantasia') else ""}
+                    {f" &nbsp;|&nbsp; <strong>Endereço do Cadastro:</strong> {end_cli_b}" if end_cli_b else ""}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
         loc_opcoes = {0: "Selecione um local cadastrado..."}
         loc_map = {l["id_local"]: l for l in locais_db}
         for l in locais_db:
-            loc_opcoes[l["id_local"]] = f"{l['nome_local']} ({l['cidade'] or ''}/{l['uf'] or ''})"
+            loc_opcoes[l["id_local"]] = formatar_rotulo_local(l, cli_map_local)
 
         col_atual_id = get_campo("col_id", 0)
         if col_atual_id not in loc_opcoes:
@@ -1781,7 +1989,7 @@ with st.container(border=True):
 
         lc0, lc1, lc3, lc4 = st.columns([6.0, 2.0, 2.8, 1.2])
         sel_col = lc0.selectbox(
-            "Base / Empresa Cadastrada",
+            "Base / Empresa Cadastrada (Endereço e Cliente)",
             options=list(loc_opcoes.keys()),
             index=list(loc_opcoes.keys()).index(col_atual_id),
             format_func=lambda x: loc_opcoes[x],
@@ -1806,6 +2014,7 @@ with st.container(border=True):
         hc1.date_input(
             "Data Coleta",
             value=get_campo("data_col", date.today()),
+            format="DD/MM/YYYY",
             key="w_data_col",
             on_change=sync_campo,
             args=("w_data_col", "data_col"),
@@ -1833,10 +2042,11 @@ with st.container(border=True):
     elif aba_ativa == MENU_ITENS[5]:
         render_cabecalho_aba("fa-solid fa-map-pin", "Local de Entrega (Destino)", 6)
 
+        cli_map_local = {c["id_cliente"]: c for c in clientes_db}
         loc_opcoes = {0: "Selecione um local cadastrado..."}
         loc_map = {l["id_local"]: l for l in locais_db}
         for l in locais_db:
-            loc_opcoes[l["id_local"]] = f"{l['nome_local']} ({l['cidade'] or ''}/{l['uf'] or ''})"
+            loc_opcoes[l["id_local"]] = formatar_rotulo_local(l, cli_map_local)
 
         ent_atual_id = get_campo("ent_id", 0)
         if ent_atual_id not in loc_opcoes:
@@ -1844,7 +2054,7 @@ with st.container(border=True):
 
         le0, le1, le3, le4 = st.columns([6.0, 2.0, 2.8, 1.2])
         sel_ent = le0.selectbox(
-            "Base / Empresa Cadastrada",
+            "Base / Empresa Cadastrada (Endereço e Cliente)",
             options=list(loc_opcoes.keys()),
             index=list(loc_opcoes.keys()).index(ent_atual_id),
             format_func=lambda x: loc_opcoes[x],
@@ -1869,6 +2079,7 @@ with st.container(border=True):
         he1.date_input(
             "Data Entrega",
             value=get_campo("data_ent", date.today()),
+            format="DD/MM/YYYY",
             key="w_data_ent",
             on_change=sync_campo,
             args=("w_data_ent", "data_ent"),
@@ -1891,7 +2102,7 @@ with st.container(border=True):
         render_navegacao_rodape(5, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 7: DESPESAS DE VIAGEM (INCLUSÃO E EDIÇÃO COMPLETA)
+    # TAB 7: DESPESAS DE VIAGEM (COM VERIFICAÇÃO EM 2 ETAPAS)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[6]:
         render_cabecalho_aba("fa-solid fa-receipt", "Despesas de Viagem", 7)
@@ -2068,6 +2279,7 @@ with st.container(border=True):
             )
             if viagem_sel_id != 0:
                 for d in lista_desp:
+                    did = d["id_despesa"]
                     r1, r2, r3, r4, r5, r6, r7 = st.columns([1.3, 2.2, 0.7, 1.0, 1.0, 0.45, 0.45])
                     r1.write(d["tipo_despesa"])
                     r2.write(d["descricao_detalhe"] or "-")
@@ -2081,17 +2293,47 @@ with st.container(border=True):
                         f"<div style='text-align:right;font-weight:700;color:#F34D25;'>{fmt_brl(d['valor_total'])}</div>",
                         unsafe_allow_html=True,
                     )
-                    if r6.button("✏️", key=f"ed_d_{d['id_despesa']}", help="Editar"):
-                        st.session_state["edit_desp_id"] = d["id_despesa"]
+                    if r6.button("✏️", key=f"ed_d_{did}", help="Editar"):
+                        st.session_state["confirm_edit_desp"] = did
+                        st.session_state["confirm_del_desp"] = None
                         st.rerun()
-                    if r7.button("🗑️", key=f"del_d_{d['id_despesa']}", help="Remover"):
-                        with SessionLocal() as db:
-                            obj_del = db.query(ViagemDespesa).filter_by(id_despesa=d["id_despesa"]).first()
-                            if obj_del:
-                                db.delete(obj_del)
-                                db.commit()
-                        carregar_despesas_viagem.clear()
+                    if r7.button("🗑️", key=f"del_d_{did}", help="Remover"):
+                        st.session_state["confirm_del_desp"] = did
+                        st.session_state["confirm_edit_desp"] = None
                         st.rerun()
+
+                    if st.session_state.get("confirm_edit_desp") == did:
+                        st.markdown(
+                            f"<div class='confirm-box-edit'>⚠️ Confirmar edição da despesa <strong>{d['tipo_despesa']} — {d['descricao_detalhe']}</strong>?</div>",
+                            unsafe_allow_html=True,
+                        )
+                        ce1, ce2, _ = st.columns([1.2, 1.2, 4])
+                        if ce1.button("✅ Sim, Editar", key=f"ok_ed_d_{did}", use_container_width=True):
+                            st.session_state["edit_desp_id"] = did
+                            st.session_state["confirm_edit_desp"] = None
+                            st.rerun()
+                        if ce2.button("❌ Cancelar", key=f"no_ed_d_{did}", use_container_width=True):
+                            st.session_state["confirm_edit_desp"] = None
+                            st.rerun()
+
+                    if st.session_state.get("confirm_del_desp") == did:
+                        st.markdown(
+                            f"<div class='confirm-box-del'>🚨 Tem certeza que deseja EXCLUIR permanentemente a despesa <strong>{d['tipo_despesa']} — {d['descricao_detalhe']}</strong>?</div>",
+                            unsafe_allow_html=True,
+                        )
+                        cd1, cd2, _ = st.columns([1.2, 1.2, 4])
+                        if cd1.button("🗑️ Sim, Excluir", key=f"ok_dl_d_{did}", use_container_width=True):
+                            with SessionLocal() as db:
+                                obj_del = db.query(ViagemDespesa).filter_by(id_despesa=did).first()
+                                if obj_del:
+                                    db.delete(obj_del)
+                                    db.commit()
+                            st.session_state["confirm_del_desp"] = None
+                            carregar_despesas_viagem.clear()
+                            st.rerun()
+                        if cd2.button("❌ Cancelar", key=f"no_dl_d_{did}", use_container_width=True):
+                            st.session_state["confirm_del_desp"] = None
+                            st.rerun()
             else:
                 for idx_tmp, d in enumerate(lista_desp):
                     r1, r2, r3, r4, r5, r6, r7 = st.columns([1.3, 2.2, 0.7, 1.0, 1.0, 0.45, 0.45])
@@ -2108,13 +2350,43 @@ with st.container(border=True):
                         unsafe_allow_html=True,
                     )
                     if r6.button("✏️", key=f"ed_tmp_{idx_tmp}", help="Editar"):
-                        st.session_state["edit_desp_tmp_idx"] = idx_tmp
+                        st.session_state["confirm_edit_desp_tmp"] = idx_tmp
+                        st.session_state["confirm_del_desp_tmp"] = None
                         st.rerun()
                     if r7.button("🗑️", key=f"del_tmp_{idx_tmp}", help="Remover"):
-                        lista_desp.pop(idx_tmp)
-                        st.session_state["despesas_temp"] = lista_desp
-                        st.session_state["edit_desp_tmp_idx"] = None
+                        st.session_state["confirm_del_desp_tmp"] = idx_tmp
+                        st.session_state["confirm_edit_desp_tmp"] = None
                         st.rerun()
+
+                    if st.session_state.get("confirm_edit_desp_tmp") == idx_tmp:
+                        st.markdown(
+                            f"<div class='confirm-box-edit'>⚠️ Confirmar edição da despesa <strong>{d['tipo_despesa']}</strong>?</div>",
+                            unsafe_allow_html=True,
+                        )
+                        ce1, ce2, _ = st.columns([1.2, 1.2, 4])
+                        if ce1.button("✅ Sim, Editar", key=f"ok_ed_tmp_{idx_tmp}", use_container_width=True):
+                            st.session_state["edit_desp_tmp_idx"] = idx_tmp
+                            st.session_state["confirm_edit_desp_tmp"] = None
+                            st.rerun()
+                        if ce2.button("❌ Cancelar", key=f"no_ed_tmp_{idx_tmp}", use_container_width=True):
+                            st.session_state["confirm_edit_desp_tmp"] = None
+                            st.rerun()
+
+                    if st.session_state.get("confirm_del_desp_tmp") == idx_tmp:
+                        st.markdown(
+                            f"<div class='confirm-box-del'>🚨 Confirmar remoção da despesa <strong>{d['tipo_despesa']}</strong>?</div>",
+                            unsafe_allow_html=True,
+                        )
+                        cd1, cd2, _ = st.columns([1.2, 1.2, 4])
+                        if cd1.button("🗑️ Sim, Excluir", key=f"ok_dl_tmp_{idx_tmp}", use_container_width=True):
+                            lista_desp.pop(idx_tmp)
+                            st.session_state["despesas_temp"] = lista_desp
+                            st.session_state["edit_desp_tmp_idx"] = None
+                            st.session_state["confirm_del_desp_tmp"] = None
+                            st.rerun()
+                        if cd2.button("❌ Cancelar", key=f"no_dl_tmp_{idx_tmp}", use_container_width=True):
+                            st.session_state["confirm_del_desp_tmp"] = None
+                            st.rerun()
 
             st.markdown(
                 f"""
@@ -2230,12 +2502,17 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
+        tf_rel = get_campo("tipo_frete", "Individual")
+        ciclo_rel = (get_campo("ciclo_nome") or "").strip()
+        mod_rel = f"Ciclo ({ciclo_rel})" if (tf_rel == "Ciclo" and ciclo_rel) else "Individual"
+
         buffer_xlsx = io.BytesIO()
         df_exp_desp = pd.DataFrame(lista_export_desp)
         df_exp_dre = pd.DataFrame(
             [
                 {
                     "Viagem": id_label_ctx,
+                    "Modalidade": mod_rel,
                     "Cliente": cli_nome_ctx,
                     "Motorista": mot_nome_ctx,
                     "Rota": rota_ctx,
@@ -2263,17 +2540,22 @@ with st.container(border=True):
         vei_obj = next((v for v in veiculos_db if v["id_veiculo"] == get_campo("vei_id", 0)), None)
         col_obj = next((l for l in locais_db if l["id_local"] == get_campo("col_id", 0)), None)
         ent_obj = next((l for l in locais_db if l["id_local"] == get_campo("ent_id", 0)), None)
+        dt_col_val = get_campo("data_col")
+        dt_ent_val = get_campo("data_ent")
 
         dados_pdf = {
             "codigo": id_label_ctx,
             "status": status_ctx,
+            "modalidade": mod_rel,
             "cliente": cli_nome_ctx,
             "motorista": mot_nome_ctx,
             "veiculo": f"{vei_obj['descricao_marca']} ({vei_obj['placa']})" if vei_obj else "Não selecionado",
             "rota": rota_ctx,
             "km_rodado": km_real_rel,
             "coleta": f"{col_obj['nome_local']} ({col_obj['cidade']}/{col_obj['uf']})" if col_obj else "-",
+            "data_coleta": dt_col_val.strftime("%d/%m/%Y") if dt_col_val else "-",
             "entrega": f"{ent_obj['nome_local']} ({ent_obj['cidade']}/{ent_obj['uf']})" if ent_obj else "-",
+            "data_entrega": dt_ent_val.strftime("%d/%m/%Y") if dt_ent_val else "-",
             "nfe": get_campo("nfe") or "-",
             "cte": get_campo("cte") or "-",
             "mdfe": get_campo("mdfe") or "-",
@@ -2364,7 +2646,7 @@ with st.container(border=True):
         render_navegacao_rodape(8, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 10: GESTÃO DE CADASTROS (EDIÇÃO COMPLETA DE TODAS AS 5 BASES)
+    # TAB 10: GESTÃO DE CADASTROS (VERIFICAÇÃO EM 2 ETAPAS + TODOS OS AJUSTES)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[9]:
         render_cabecalho_aba("fa-solid fa-address-book", "Gestão de Cadastros (Bases de Dados)", 10)
@@ -2430,8 +2712,9 @@ with st.container(border=True):
                     m_val = m6.date_input(
                         "Validade CNH",
                         value=mot_edit["cnh_validade"] if (mot_edit and mot_edit.get("cnh_validade")) else date.today(),
+                        format="DD/MM/YYYY",
                     )
-                    vinc_opts = ["Frota Própria (CLT)", "Agregado", "Terceiro (TAC)"]
+                    vinc_opts = ["Frota Própria (CLT)", "Agregado", "Terceiro (TAC)", "Outros"]
                     idx_vinc = (
                         vinc_opts.index(mot_edit["vinculo"])
                         if (mot_edit and mot_edit.get("vinculo") in vinc_opts)
@@ -2507,10 +2790,11 @@ with st.container(border=True):
                     or busca_mot in (m["cnh_numero"] or "").lower()
                 ]
 
-                with st.container(height=250, border=True):
+                with st.container(height=270, border=True):
                     if not mot_filtrados:
                         st.caption("Nenhum motorista encontrado.")
                     for m in mot_filtrados:
+                        mid = m["id_motorista"]
                         r_a, r_b, r_ed, r_del = st.columns([2.1, 1.9, 0.45, 0.45])
                         r_a.markdown(
                             f"**{m['nome_completo']}**  \n<span style='font-size:0.75rem;color:#475569;'>Vínculo: {m['vinculo'] or '-'}</span>",
@@ -2520,22 +2804,52 @@ with st.container(border=True):
                             f"<span style='font-size:0.75rem;color:#475569;'>CNH: {m['cnh_numero']} (Cat: {m['cnh_categoria']})<br>CPF: {m['cpf']}</span>",
                             unsafe_allow_html=True,
                         )
-                        if r_ed.button("✏️", key=f"ed_mot_{m['id_motorista']}", help="Editar motorista"):
-                            st.session_state["edit_mot_id"] = m["id_motorista"]
+                        if r_ed.button("✏️", key=f"ed_mot_{mid}", help="Editar motorista"):
+                            st.session_state["confirm_edit_mot"] = mid
+                            st.session_state["confirm_del_mot"] = None
                             st.rerun()
-                        if r_del.button("✕", key=f"rm_mot_{m['id_motorista']}", help="Remover motorista"):
-                            try:
-                                with SessionLocal() as db:
-                                    obj = db.query(Motorista).filter_by(id_motorista=m["id_motorista"]).first()
-                                    if obj:
-                                        db.delete(obj)
-                                        db.commit()
-                                if st.session_state.get("edit_mot_id") == m["id_motorista"]:
-                                    st.session_state["edit_mot_id"] = None
-                                carregar_listas_base.clear()
+                        if r_del.button("✕", key=f"rm_mot_{mid}", help="Remover motorista"):
+                            st.session_state["confirm_del_mot"] = mid
+                            st.session_state["confirm_edit_mot"] = None
+                            st.rerun()
+
+                        if st.session_state.get("confirm_edit_mot") == mid:
+                            st.markdown(
+                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição do motorista <strong>{m['nome_completo']}</strong>?</div>",
+                                unsafe_allow_html=True,
+                            )
+                            ce1, ce2, _ = st.columns([1.4, 1.4, 2])
+                            if ce1.button("✅ Sim, Editar", key=f"ok_ed_mot_{mid}", use_container_width=True):
+                                st.session_state["edit_mot_id"] = mid
+                                st.session_state["confirm_edit_mot"] = None
                                 st.rerun()
-                            except IntegrityError:
-                                st.error("Motorista vinculado a viagens.")
+                            if ce2.button("❌ Cancelar", key=f"no_ed_mot_{mid}", use_container_width=True):
+                                st.session_state["confirm_edit_mot"] = None
+                                st.rerun()
+
+                        if st.session_state.get("confirm_del_mot") == mid:
+                            st.markdown(
+                                f"<div class='confirm-box-del'>🚨 Tem certeza que deseja EXCLUIR <strong>{m['nome_completo']}</strong>? Esta ação não pode ser desfeita.</div>",
+                                unsafe_allow_html=True,
+                            )
+                            cd1, cd2, _ = st.columns([1.4, 1.4, 2])
+                            if cd1.button("🗑️ Sim, Excluir", key=f"ok_rm_mot_{mid}", use_container_width=True):
+                                try:
+                                    with SessionLocal() as db:
+                                        obj = db.query(Motorista).filter_by(id_motorista=mid).first()
+                                        if obj:
+                                            db.delete(obj)
+                                            db.commit()
+                                    if st.session_state.get("edit_mot_id") == mid:
+                                        st.session_state["edit_mot_id"] = None
+                                    st.session_state["confirm_del_mot"] = None
+                                    carregar_listas_base.clear()
+                                    st.rerun()
+                                except IntegrityError:
+                                    st.error("Motorista vinculado a viagens.")
+                            if cd2.button("❌ Cancelar", key=f"no_rm_mot_{mid}", use_container_width=True):
+                                st.session_state["confirm_del_mot"] = None
+                                st.rerun()
 
         # ======================================================================
         # 2. VEÍCULOS (FROTA)
@@ -2674,32 +2988,63 @@ with st.container(border=True):
                     or busca_vei in (v["tipo_veiculo"] or "").lower()
                 ]
 
-                with st.container(height=250, border=True):
+                with st.container(height=270, border=True):
                     if not vei_filtrados:
                         st.caption("Nenhum veículo encontrado.")
                     for v in vei_filtrados:
+                        vid = v["id_veiculo"]
                         r_a, r_b, r_ed, r_del = st.columns([2.4, 1.1, 0.45, 0.45])
                         r_a.markdown(
                             f"**{v['descricao_marca']}**  \n<span style='font-size:0.75rem;color:#475569;'>{v['tipo_veiculo']} | Cap: {to_float(v['capacidade_carga_kg']):g}KG</span>",
                             unsafe_allow_html=True,
                         )
                         r_b.markdown(f"**{v['placa']}**")
-                        if r_ed.button("✏️", key=f"ed_vei_{v['id_veiculo']}", help="Editar veículo"):
-                            st.session_state["edit_vei_id"] = v["id_veiculo"]
+                        if r_ed.button("✏️", key=f"ed_vei_{vid}", help="Editar veículo"):
+                            st.session_state["confirm_edit_vei"] = vid
+                            st.session_state["confirm_del_vei"] = None
                             st.rerun()
-                        if r_del.button("✕", key=f"rm_vei_{v['id_veiculo']}", help="Remover veículo"):
-                            try:
-                                with SessionLocal() as db:
-                                    obj = db.query(Veiculo).filter_by(id_veiculo=v["id_veiculo"]).first()
-                                    if obj:
-                                        db.delete(obj)
-                                        db.commit()
-                                if st.session_state.get("edit_vei_id") == v["id_veiculo"]:
-                                    st.session_state["edit_vei_id"] = None
-                                carregar_listas_base.clear()
+                        if r_del.button("✕", key=f"rm_vei_{vid}", help="Remover veículo"):
+                            st.session_state["confirm_del_vei"] = vid
+                            st.session_state["confirm_edit_vei"] = None
+                            st.rerun()
+
+                        if st.session_state.get("confirm_edit_vei") == vid:
+                            st.markdown(
+                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição do veículo <strong>{v['descricao_marca']} ({v['placa']})</strong>?</div>",
+                                unsafe_allow_html=True,
+                            )
+                            ce1, ce2, _ = st.columns([1.4, 1.4, 2])
+                            if ce1.button("✅ Sim, Editar", key=f"ok_ed_vei_{vid}", use_container_width=True):
+                                st.session_state["edit_vei_id"] = vid
+                                st.session_state["confirm_edit_vei"] = None
                                 st.rerun()
-                            except IntegrityError:
-                                st.error("Veículo vinculado a viagens.")
+                            if ce2.button("❌ Cancelar", key=f"no_ed_vei_{vid}", use_container_width=True):
+                                st.session_state["confirm_edit_vei"] = None
+                                st.rerun()
+
+                        if st.session_state.get("confirm_del_vei") == vid:
+                            st.markdown(
+                                f"<div class='confirm-box-del'>🚨 Tem certeza que deseja EXCLUIR o veículo <strong>{v['descricao_marca']} ({v['placa']})</strong>? Esta ação não pode ser desfeita.</div>",
+                                unsafe_allow_html=True,
+                            )
+                            cd1, cd2, _ = st.columns([1.4, 1.4, 2])
+                            if cd1.button("🗑️ Sim, Excluir", key=f"ok_rm_vei_{vid}", use_container_width=True):
+                                try:
+                                    with SessionLocal() as db:
+                                        obj = db.query(Veiculo).filter_by(id_veiculo=vid).first()
+                                        if obj:
+                                            db.delete(obj)
+                                            db.commit()
+                                    if st.session_state.get("edit_vei_id") == vid:
+                                        st.session_state["edit_vei_id"] = None
+                                    st.session_state["confirm_del_vei"] = None
+                                    carregar_listas_base.clear()
+                                    st.rerun()
+                                except IntegrityError:
+                                    st.error("Veículo vinculado a viagens.")
+                            if cd2.button("❌ Cancelar", key=f"no_rm_vei_{vid}", use_container_width=True):
+                                st.session_state["confirm_del_vei"] = None
+                                st.rerun()
 
         st.write("")
         col_esq2, col_dir2 = st.columns(2)
@@ -2728,12 +3073,19 @@ with st.container(border=True):
                     )
 
                 with st.form(f"form_cad_cli_{edit_cli_id or 'new'}", clear_on_submit=(edit_cli_id is None)):
-                    c1, c2, c3 = st.columns([5.8, 3.6, 2.6])
-                    cl_emp = c1.text_input(
-                        "Razão Social / Fantasia",
+                    c_rz, c_ft = st.columns([6.0, 6.0])
+                    cl_razao = c_rz.text_input(
+                        "Razão Social",
                         value=cli_edit["razao_social"] if cli_edit else "",
-                        placeholder="Ex: Indústria Suzano Ltda",
+                        placeholder="Ex: Indústria Suzano Papel e Celulose S.A.",
                     )
+                    cl_fantasia = c_ft.text_input(
+                        "Nome Fantasia",
+                        value=(cli_edit.get("nome_fantasia") or "") if cli_edit else "",
+                        placeholder="Ex: Suzano Unidade II",
+                    )
+
+                    c2, c3, c4 = st.columns([4.2, 3.2, 4.6])
                     cl_cnpj = c2.text_input(
                         "CNPJ / CPF",
                         value=cli_edit["cnpj_cpf"] if cli_edit else "",
@@ -2744,29 +3096,50 @@ with st.container(border=True):
                         value=(cli_edit["inscricao_estadual"] or "") if cli_edit else "",
                         placeholder="Isento ou Nº",
                     )
-
-                    c4, c5 = st.columns([7.0, 5.0])
                     cl_resp = c4.text_input(
-                        "Responsável Comercial",
+                        "Responsável",
                         value=(cli_edit["responsavel_comercial"] or "") if cli_edit else "",
-                        placeholder="Nome do contato",
+                        placeholder="Nome do responsável",
                     )
+
+                    c5, c6, c7 = st.columns([3.8, 5.6, 2.6])
                     cl_tel = c5.text_input(
                         "Telefone",
                         value=(cli_edit["telefone_comercial"] or "") if cli_edit else "",
                         placeholder="(11) 0000-0000",
                     )
-
-                    c6, c7 = st.columns([8.5, 3.5])
                     cl_mail = c6.text_input(
-                        "E-mail Financeiro",
+                        "E-mail",
                         value=(cli_edit["email_financeiro"] or "") if cli_edit else "",
-                        placeholder="financeiro@empresa.com.br",
+                        placeholder="contato@empresa.com.br",
                     )
                     cl_prz = c7.number_input(
                         "Prazo (Dias)",
                         min_value=0,
                         value=to_int(cli_edit["prazo_pagamento_dias"], 30) if cli_edit else 30,
+                    )
+
+                    ce1, ce2, ce3, ce4 = st.columns([2.4, 5.4, 2.8, 1.4])
+                    cl_cep = ce1.text_input(
+                        "CEP",
+                        value=(cli_edit.get("cep") or "") if cli_edit else "",
+                        placeholder="00000-000",
+                    )
+                    cl_end = ce2.text_input(
+                        "Endereço Completo",
+                        value=(cli_edit.get("endereco_completo") or "") if cli_edit else "",
+                        placeholder="Rua, Número, Bairro",
+                    )
+                    cl_cid = ce3.text_input(
+                        "Cidade",
+                        value=(cli_edit.get("cidade") or "") if cli_edit else "",
+                        placeholder="Ex: Suzano",
+                    )
+                    cl_uf = ce4.text_input(
+                        "UF",
+                        value=(cli_edit.get("uf") or "") if cli_edit else "",
+                        placeholder="SP",
+                        max_chars=2,
                     )
 
                     if cli_edit:
@@ -2782,21 +3155,26 @@ with st.container(border=True):
                         st.rerun()
 
                     if salvar_cli:
-                        if not cl_emp.strip():
-                            st.warning("Preencha pelo menos a Razão Social/Fantasia.")
+                        if not cl_razao.strip():
+                            st.warning("Preencha pelo menos a Razão Social.")
                         else:
                             try:
                                 with SessionLocal() as db:
                                     if cli_edit:
                                         obj = db.query(Cliente).filter_by(id_cliente=edit_cli_id).first()
                                         if obj:
-                                            obj.razao_social = cl_emp.strip()
+                                            obj.razao_social = cl_razao.strip()
+                                            obj.nome_fantasia = cl_fantasia.strip()
                                             obj.cnpj_cpf = cl_cnpj.strip() or obj.cnpj_cpf
                                             obj.inscricao_estadual = cl_ie.strip()
                                             obj.responsavel_comercial = cl_resp.strip()
                                             obj.telefone_comercial = cl_tel.strip()
                                             obj.email_financeiro = cl_mail.strip()
                                             obj.prazo_pagamento_dias = cl_prz
+                                            obj.cep = cl_cep.strip()
+                                            obj.endereco_completo = cl_end.strip()
+                                            obj.cidade = cl_cid.strip()
+                                            obj.uf = cl_uf.strip().upper()
                                         db.commit()
                                         st.session_state["edit_cli_id"] = None
                                         carregar_listas_base.clear()
@@ -2805,13 +3183,18 @@ with st.container(border=True):
                                     else:
                                         db.add(
                                             Cliente(
-                                                razao_social=cl_emp.strip(),
-                                                cnpj_cpf=cl_cnpj.strip() or f"DOC-{cl_emp.strip()[:12]}",
+                                                razao_social=cl_razao.strip(),
+                                                nome_fantasia=cl_fantasia.strip(),
+                                                cnpj_cpf=cl_cnpj.strip() or f"DOC-{cl_razao.strip()[:12]}",
                                                 inscricao_estadual=cl_ie.strip(),
                                                 responsavel_comercial=cl_resp.strip(),
                                                 telefone_comercial=cl_tel.strip(),
                                                 email_financeiro=cl_mail.strip(),
                                                 prazo_pagamento_dias=cl_prz,
+                                                cep=cl_cep.strip(),
+                                                endereco_completo=cl_end.strip(),
+                                                cidade=cl_cid.strip(),
+                                                uf=cl_uf.strip().upper(),
                                             )
                                         )
                                         db.commit()
@@ -2823,7 +3206,7 @@ with st.container(border=True):
 
                 busca_cli = st.text_input(
                     "Filtrar clientes",
-                    placeholder="🔍 Buscar cliente por razão social ou CNPJ...",
+                    placeholder="🔍 Buscar cliente por razão social, fantasia, CNPJ ou cidade...",
                     label_visibility="collapsed",
                     key="filtro_cli_lista",
                 ).strip().lower()
@@ -2833,38 +3216,78 @@ with st.container(border=True):
                     for c in clientes_db
                     if not busca_cli
                     or busca_cli in (c["razao_social"] or "").lower()
+                    or busca_cli in (c.get("nome_fantasia") or "").lower()
                     or busca_cli in (c["cnpj_cpf"] or "").lower()
+                    or busca_cli in (c.get("cidade") or "").lower()
                 ]
 
-                with st.container(height=250, border=True):
+                with st.container(height=270, border=True):
                     if not cli_filtrados:
                         st.caption("Nenhum cliente encontrado.")
                     for c in cli_filtrados:
-                        r_a, r_b, r_ed, r_del = st.columns([2.1, 1.9, 0.45, 0.45])
+                        cid = c["id_cliente"]
+                        r_a, r_b, r_ed, r_del = st.columns([2.2, 1.8, 0.45, 0.45])
+                        fant_txt = f" ({c['nome_fantasia']})" if c.get("nome_fantasia") else ""
+                        end_c = (
+                            f"{c['endereco_completo']} - {c.get('cidade') or ''}/{c.get('uf') or ''}"
+                            if c.get("endereco_completo")
+                            else f"{c.get('cidade') or ''}/{c.get('uf') or ''}".strip("/")
+                        )
                         r_a.markdown(
-                            f"**{c['razao_social']}**  \n<span style='font-size:0.75rem;color:#475569;'>CNPJ: {c['cnpj_cpf']}</span>",
+                            f"**{c['razao_social']}{fant_txt}**  \n"
+                            f"<span style='font-size:0.75rem;color:#475569;'>CNPJ: {c['cnpj_cpf']}{f' | {end_c}' if end_c else ''}</span>",
                             unsafe_allow_html=True,
                         )
                         r_b.markdown(
-                            f"<span style='font-size:0.75rem;color:#475569;'>Contato: {c['telefone_comercial'] or '-'}<br>Prazo Pgto: {c['prazo_pagamento_dias'] or 30} dias</span>",
+                            f"<span style='font-size:0.75rem;color:#475569;'>Resp.: {c['responsavel_comercial'] or '-'}<br>Tel: {c['telefone_comercial'] or '-'}</span>",
                             unsafe_allow_html=True,
                         )
-                        if r_ed.button("✏️", key=f"ed_cli_{c['id_cliente']}", help="Editar cliente"):
-                            st.session_state["edit_cli_id"] = c["id_cliente"]
+                        if r_ed.button("✏️", key=f"ed_cli_{cid}", help="Editar cliente"):
+                            st.session_state["confirm_edit_cli"] = cid
+                            st.session_state["confirm_del_cli"] = None
                             st.rerun()
-                        if r_del.button("✕", key=f"rm_cli_{c['id_cliente']}", help="Remover cliente"):
-                            try:
-                                with SessionLocal() as db:
-                                    obj = db.query(Cliente).filter_by(id_cliente=c["id_cliente"]).first()
-                                    if obj:
-                                        db.delete(obj)
-                                        db.commit()
-                                if st.session_state.get("edit_cli_id") == c["id_cliente"]:
-                                    st.session_state["edit_cli_id"] = None
-                                carregar_listas_base.clear()
+                        if r_del.button("✕", key=f"rm_cli_{cid}", help="Remover cliente"):
+                            st.session_state["confirm_del_cli"] = cid
+                            st.session_state["confirm_edit_cli"] = None
+                            st.rerun()
+
+                        if st.session_state.get("confirm_edit_cli") == cid:
+                            st.markdown(
+                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição do cliente <strong>{c['razao_social']}</strong>?</div>",
+                                unsafe_allow_html=True,
+                            )
+                            ce1, ce2, _ = st.columns([1.4, 1.4, 2])
+                            if ce1.button("✅ Sim, Editar", key=f"ok_ed_cli_{cid}", use_container_width=True):
+                                st.session_state["edit_cli_id"] = cid
+                                st.session_state["confirm_edit_cli"] = None
                                 st.rerun()
-                            except IntegrityError:
-                                st.error("Cliente possui ciclos vinculados.")
+                            if ce2.button("❌ Cancelar", key=f"no_ed_cli_{cid}", use_container_width=True):
+                                st.session_state["confirm_edit_cli"] = None
+                                st.rerun()
+
+                        if st.session_state.get("confirm_del_cli") == cid:
+                            st.markdown(
+                                f"<div class='confirm-box-del'>🚨 Tem certeza que deseja EXCLUIR <strong>{c['razao_social']}</strong>? Esta ação não pode ser desfeita.</div>",
+                                unsafe_allow_html=True,
+                            )
+                            cd1, cd2, _ = st.columns([1.4, 1.4, 2])
+                            if cd1.button("🗑️ Sim, Excluir", key=f"ok_rm_cli_{cid}", use_container_width=True):
+                                try:
+                                    with SessionLocal() as db:
+                                        obj = db.query(Cliente).filter_by(id_cliente=cid).first()
+                                        if obj:
+                                            db.delete(obj)
+                                            db.commit()
+                                    if st.session_state.get("edit_cli_id") == cid:
+                                        st.session_state["edit_cli_id"] = None
+                                    st.session_state["confirm_del_cli"] = None
+                                    carregar_listas_base.clear()
+                                    st.rerun()
+                                except IntegrityError:
+                                    st.error("Cliente possui ciclos vinculados.")
+                            if cd2.button("❌ Cancelar", key=f"no_rm_cli_{cid}", use_container_width=True):
+                                st.session_state["confirm_del_cli"] = None
+                                st.rerun()
 
         # ======================================================================
         # 4. LOCAIS DE COLETA E ENTREGA
@@ -2889,112 +3312,165 @@ with st.container(border=True):
                         unsafe_allow_html=True,
                     )
 
-                with st.form(f"form_cad_loc_{edit_loc_id or 'new'}", clear_on_submit=(edit_loc_id is None)):
-                    l1, l2, l3 = st.columns([5.8, 3.6, 2.6])
-                    lo_nome = l1.text_input(
-                        "Nome do Local / CD",
-                        value=loc_edit["nome_local"] if loc_edit else "",
-                        placeholder="Ex: Planta Industrial Suzano",
-                    )
-                    tipos_loc = ["Fábrica", "CD / Armazém", "Loja / Varejo", "Porto / Aeroporto", "Cliente Final"]
-                    idx_tl = (
-                        tipos_loc.index(loc_edit["tipo_instalacao"])
-                        if (loc_edit and loc_edit.get("tipo_instalacao") in tipos_loc)
-                        else 0
-                    )
-                    lo_tipo = l2.selectbox("Tipo", tipos_loc, index=idx_tl)
-                    lo_cep = l3.text_input(
-                        "CEP",
-                        value=(loc_edit["cep"] or "") if loc_edit else "",
-                        placeholder="00000-000",
+                suf_loc = f"ed_{edit_loc_id}" if loc_edit else "new"
+
+                cli_vinc_opts = {0: "Sem vínculo específico (Uso Geral)"}
+                cli_map_cad = {c["id_cliente"]: c for c in clientes_db}
+                for c in clientes_db:
+                    cli_vinc_opts[c["id_cliente"]] = formatar_rotulo_cliente(c)
+
+                idx_cli_vinc = (
+                    list(cli_vinc_opts.keys()).index(loc_edit["id_cliente"])
+                    if (loc_edit and loc_edit.get("id_cliente") in cli_vinc_opts)
+                    else 0
+                )
+                lo_cli_id = st.selectbox(
+                    "Cliente / Transportadora Correspondente",
+                    options=list(cli_vinc_opts.keys()),
+                    index=idx_cli_vinc,
+                    format_func=lambda x: cli_vinc_opts[x],
+                    key=f"inp_loc_cli_{suf_loc}",
+                )
+
+                l1, l2, l3 = st.columns([5.8, 3.6, 2.6])
+                lo_nome = l1.text_input(
+                    "Nome do Local / CD",
+                    value=loc_edit["nome_local"] if loc_edit else "",
+                    placeholder="Ex: Planta Industrial Suzano",
+                    key=f"inp_loc_nome_{suf_loc}",
+                )
+                tipos_loc = ["Fábrica", "CD / Armazém", "Loja / Varejo", "Porto / Aeroporto", "Cliente Final"]
+                idx_tl = (
+                    tipos_loc.index(loc_edit["tipo_instalacao"])
+                    if (loc_edit and loc_edit.get("tipo_instalacao") in tipos_loc)
+                    else 0
+                )
+                lo_tipo = l2.selectbox("Tipo", tipos_loc, index=idx_tl, key=f"inp_loc_tipo_{suf_loc}")
+                lo_cep = l3.text_input(
+                    "CEP",
+                    value=(loc_edit["cep"] or "") if loc_edit else "",
+                    placeholder="00000-000",
+                    key=f"inp_loc_cep_{suf_loc}",
+                )
+
+                l4, l5, l6 = st.columns([6.8, 3.6, 1.6])
+                lo_end = l4.text_input(
+                    "Endereço Completo",
+                    value=(loc_edit["endereco_completo"] or "") if loc_edit else "",
+                    placeholder="Rua, Número, Bairro",
+                    key=f"inp_loc_end_{suf_loc}",
+                )
+                lo_cid = l5.text_input(
+                    "Cidade",
+                    value=(loc_edit["cidade"] or "") if loc_edit else "",
+                    placeholder="Ex: Suzano",
+                    key=f"inp_loc_cid_{suf_loc}",
+                )
+                lo_uf = l6.text_input(
+                    "UF",
+                    value=(loc_edit["uf"] or "") if loc_edit else "",
+                    placeholder="SP",
+                    max_chars=2,
+                    key=f"inp_loc_uf_{suf_loc}",
+                )
+
+                l7, l8 = st.columns([5.5, 6.5])
+                lo_cont = l7.text_input(
+                    "Contato no Local",
+                    value=(loc_edit["contato_portaria"] or "") if loc_edit else "",
+                    placeholder="Portaria / Recebedor",
+                    key=f"inp_loc_cont_{suf_loc}",
+                )
+
+                rest_opts = ["Não há restrição", "Horário comercial", "Outros"]
+                val_rest_salvo = (loc_edit.get("restricao_horario") or "") if loc_edit else ""
+                if val_rest_salvo in ["Não há restrição", ""]:
+                    idx_rest = 0
+                    manual_init = ""
+                elif val_rest_salvo.lower() in ["horário comercial", "somente horário comercial"]:
+                    idx_rest = 1
+                    manual_init = ""
+                else:
+                    idx_rest = 2
+                    manual_init = val_rest_salvo.replace("Outros: ", "", 1)
+
+                lo_rest = l8.selectbox(
+                    "Restrição de Horário",
+                    rest_opts,
+                    index=idx_rest,
+                    key=f"inp_loc_rest_{suf_loc}",
+                )
+
+                lo_rest_manual = ""
+                if lo_rest == "Outros":
+                    lo_rest_manual = st.text_input(
+                        "Horário Manual (Restrição)",
+                        value=manual_init,
+                        placeholder="Digite o horário manualmente (Ex: 07:00 às 16:00)",
+                        key=f"inp_loc_rest_man_{suf_loc}",
                     )
 
-                    l4, l5, l6 = st.columns([6.8, 3.6, 1.6])
-                    lo_end = l4.text_input(
-                        "Endereço Completo",
-                        value=(loc_edit["endereco_completo"] or "") if loc_edit else "",
-                        placeholder="Rua, Número, Bairro",
-                    )
-                    lo_cid = l5.text_input(
-                        "Cidade",
-                        value=(loc_edit["cidade"] or "") if loc_edit else "",
-                        placeholder="Ex: Suzano",
-                    )
-                    lo_uf = l6.text_input(
-                        "UF",
-                        value=(loc_edit["uf"] or "") if loc_edit else "",
-                        placeholder="SP",
-                        max_chars=2,
-                    )
+                if loc_edit:
+                    b_ok, b_canc = st.columns([2, 1])
+                    salvar_loc = b_ok.button("Atualizar Local", key=f"btn_upd_loc_{suf_loc}", use_container_width=True)
+                    cancelar_loc = b_canc.button("Cancelar", key=f"btn_can_loc_{suf_loc}", use_container_width=True)
+                else:
+                    salvar_loc = st.button("Salvar Local", key="btn_save_loc_new", use_container_width=True)
+                    cancelar_loc = False
 
-                    l7, l8 = st.columns([5.8, 6.2])
-                    lo_cont = l7.text_input(
-                        "Contato no Local",
-                        value=(loc_edit["contato_portaria"] or "") if loc_edit else "",
-                        placeholder="Portaria / Recebedor",
-                    )
-                    rest_opts = ["Não há restrição", "Somente Horário Comercial", "Somente Noturno"]
-                    idx_rest = (
-                        rest_opts.index(loc_edit["restricao_horario"])
-                        if (loc_edit and loc_edit.get("restricao_horario") in rest_opts)
-                        else 0
-                    )
-                    lo_rest = l8.selectbox("Restrição de Horário", rest_opts, index=idx_rest)
+                if cancelar_loc:
+                    st.session_state["edit_loc_id"] = None
+                    st.rerun()
 
-                    if loc_edit:
-                        b_ok, b_canc = st.columns([2, 1])
-                        salvar_loc = b_ok.form_submit_button("Atualizar Local", use_container_width=True)
-                        cancelar_loc = b_canc.form_submit_button("Cancelar", use_container_width=True)
+                if salvar_loc:
+                    if not lo_nome.strip():
+                        st.warning("Preencha pelo menos o Nome do Local/CD.")
+                    elif lo_rest == "Outros" and not lo_rest_manual.strip():
+                        st.warning("Digite o horário manualmente no campo de restrição.")
                     else:
-                        salvar_loc = st.form_submit_button("Salvar Local", use_container_width=True)
-                        cancelar_loc = False
-
-                    if cancelar_loc:
-                        st.session_state["edit_loc_id"] = None
-                        st.rerun()
-
-                    if salvar_loc:
-                        if not lo_nome.strip():
-                            st.warning("Preencha pelo menos o Nome do Local/CD.")
-                        else:
-                            with SessionLocal() as db:
-                                if loc_edit:
-                                    obj = db.query(Local).filter_by(id_local=edit_loc_id).first()
-                                    if obj:
-                                        obj.nome_local = lo_nome.strip()
-                                        obj.tipo_instalacao = lo_tipo
-                                        obj.cep = lo_cep.strip()
-                                        obj.endereco_completo = lo_end.strip()
-                                        obj.cidade = lo_cid.strip()
-                                        obj.uf = lo_uf.strip().upper()
-                                        obj.contato_portaria = lo_cont.strip()
-                                        obj.restricao_horario = lo_rest
-                                    db.commit()
-                                    st.session_state["edit_loc_id"] = None
-                                    carregar_listas_base.clear()
-                                    st.toast("Local atualizado com sucesso!", icon="✅")
-                                    st.rerun()
-                                else:
-                                    db.add(
-                                        Local(
-                                            nome_local=lo_nome.strip(),
-                                            tipo_instalacao=lo_tipo,
-                                            cep=lo_cep.strip(),
-                                            endereco_completo=lo_end.strip(),
-                                            cidade=lo_cid.strip(),
-                                            uf=lo_uf.strip().upper(),
-                                            contato_portaria=lo_cont.strip(),
-                                            restricao_horario=lo_rest,
-                                        )
+                        restricao_final = (
+                            f"Outros: {lo_rest_manual.strip()}" if lo_rest == "Outros" else lo_rest
+                        )
+                        with SessionLocal() as db:
+                            if loc_edit:
+                                obj = db.query(Local).filter_by(id_local=edit_loc_id).first()
+                                if obj:
+                                    obj.id_cliente = lo_cli_id if lo_cli_id != 0 else None
+                                    obj.nome_local = lo_nome.strip()
+                                    obj.tipo_instalacao = lo_tipo
+                                    obj.cep = lo_cep.strip()
+                                    obj.endereco_completo = lo_end.strip()
+                                    obj.cidade = lo_cid.strip()
+                                    obj.uf = lo_uf.strip().upper()
+                                    obj.contato_portaria = lo_cont.strip()
+                                    obj.restricao_horario = restricao_final
+                                db.commit()
+                                st.session_state["edit_loc_id"] = None
+                                carregar_listas_base.clear()
+                                st.toast("Local atualizado com sucesso!", icon="✅")
+                                st.rerun()
+                            else:
+                                db.add(
+                                    Local(
+                                        id_cliente=lo_cli_id if lo_cli_id != 0 else None,
+                                        nome_local=lo_nome.strip(),
+                                        tipo_instalacao=lo_tipo,
+                                        cep=lo_cep.strip(),
+                                        endereco_completo=lo_end.strip(),
+                                        cidade=lo_cid.strip(),
+                                        uf=lo_uf.strip().upper(),
+                                        contato_portaria=lo_cont.strip(),
+                                        restricao_horario=restricao_final,
                                     )
-                                    db.commit()
-                                    carregar_listas_base.clear()
-                                    st.toast("Local cadastrado com sucesso!", icon="✅")
-                                    st.rerun()
+                                )
+                                db.commit()
+                                carregar_listas_base.clear()
+                                st.toast("Local cadastrado com sucesso!", icon="✅")
+                                st.rerun()
 
                 busca_loc = st.text_input(
                     "Filtrar locais",
-                    placeholder="🔍 Buscar local por nome, cidade ou UF...",
+                    placeholder="🔍 Buscar local por nome, endereço, cidade ou cliente...",
                     label_visibility="collapsed",
                     key="filtro_loc_lista",
                 ).strip().lower()
@@ -3004,46 +3480,89 @@ with st.container(border=True):
                     for l in locais_db
                     if not busca_loc
                     or busca_loc in (l["nome_local"] or "").lower()
+                    or busca_loc in (l["endereco_completo"] or "").lower()
                     or busca_loc in (l["cidade"] or "").lower()
                     or busca_loc in (l["uf"] or "").lower()
+                    or (
+                        l.get("id_cliente")
+                        and cli_map_cad.get(l["id_cliente"])
+                        and busca_loc in (cli_map_cad[l["id_cliente"]]["razao_social"] or "").lower()
+                    )
                 ]
 
-                with st.container(height=250, border=True):
+                with st.container(height=270, border=True):
                     if not loc_filtrados:
                         st.caption("Nenhum local encontrado.")
                     for l in loc_filtrados:
-                        r_a, r_b, r_ed, r_del = st.columns([2.1, 1.9, 0.45, 0.45])
+                        lid = l["id_local"]
+                        cli_v = cli_map_cad.get(l.get("id_cliente"))
+                        cli_badge = (
+                            f"<br><span style='font-size:0.72rem;color:#0D263C;font-weight:700;'>Cliente: {cli_v['razao_social']}</span>"
+                            if cli_v
+                            else ""
+                        )
+                        r_a, r_b, r_ed, r_del = st.columns([2.2, 1.8, 0.45, 0.45])
                         r_a.markdown(
                             f"**{l['nome_local']}** <span style='font-size:0.68rem;background:#ABCEE1;color:#0D263C;padding:2px 6px;border-radius:4px;font-weight:700;'>{l['tipo_instalacao'] or ''}</span>  \n"
-                            f"<span style='font-size:0.75rem;color:#475569;'>{l['endereco_completo'] or '-'}</span>",
+                            f"<span style='font-size:0.75rem;color:#475569;'>{l['endereco_completo'] or '-'}</span>{cli_badge}",
                             unsafe_allow_html=True,
                         )
                         r_b.markdown(
                             f"<span style='font-size:0.75rem;color:#475569;'>{l['cidade'] or ''}/{l['uf'] or ''}<br>Restrição: {l['restricao_horario'] or '-'}</span>",
                             unsafe_allow_html=True,
                         )
-                        if r_ed.button("✏️", key=f"ed_loc_{l['id_local']}", help="Editar local"):
-                            st.session_state["edit_loc_id"] = l["id_local"]
+                        if r_ed.button("✏️", key=f"ed_loc_{lid}", help="Editar local"):
+                            st.session_state["confirm_edit_loc"] = lid
+                            st.session_state["confirm_del_loc"] = None
                             st.rerun()
-                        if r_del.button("✕", key=f"rm_loc_{l['id_local']}", help="Remover local"):
-                            try:
-                                with SessionLocal() as db:
-                                    obj = db.query(Local).filter_by(id_local=l["id_local"]).first()
-                                    if obj:
-                                        db.delete(obj)
-                                        db.commit()
-                                if st.session_state.get("edit_loc_id") == l["id_local"]:
-                                    st.session_state["edit_loc_id"] = None
-                                carregar_listas_base.clear()
+                        if r_del.button("✕", key=f"rm_loc_{lid}", help="Remover local"):
+                            st.session_state["confirm_del_loc"] = lid
+                            st.session_state["confirm_edit_loc"] = None
+                            st.rerun()
+
+                        if st.session_state.get("confirm_edit_loc") == lid:
+                            st.markdown(
+                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição do local <strong>{l['nome_local']}</strong>?</div>",
+                                unsafe_allow_html=True,
+                            )
+                            ce1, ce2, _ = st.columns([1.4, 1.4, 2])
+                            if ce1.button("✅ Sim, Editar", key=f"ok_ed_loc_{lid}", use_container_width=True):
+                                st.session_state["edit_loc_id"] = lid
+                                st.session_state["confirm_edit_loc"] = None
                                 st.rerun()
-                            except IntegrityError:
-                                st.error("Local vinculado a viagens.")
+                            if ce2.button("❌ Cancelar", key=f"no_ed_loc_{lid}", use_container_width=True):
+                                st.session_state["confirm_edit_loc"] = None
+                                st.rerun()
+
+                        if st.session_state.get("confirm_del_loc") == lid:
+                            st.markdown(
+                                f"<div class='confirm-box-del'>🚨 Tem certeza que deseja EXCLUIR o local <strong>{l['nome_local']}</strong>? Esta ação não pode ser desfeita.</div>",
+                                unsafe_allow_html=True,
+                            )
+                            cd1, cd2, _ = st.columns([1.4, 1.4, 2])
+                            if cd1.button("🗑️ Sim, Excluir", key=f"ok_rm_loc_{lid}", use_container_width=True):
+                                try:
+                                    with SessionLocal() as db:
+                                        obj = db.query(Local).filter_by(id_local=lid).first()
+                                        if obj:
+                                            db.delete(obj)
+                                            db.commit()
+                                    if st.session_state.get("edit_loc_id") == lid:
+                                        st.session_state["edit_loc_id"] = None
+                                    st.session_state["confirm_del_loc"] = None
+                                    carregar_listas_base.clear()
+                                    st.rerun()
+                                except IntegrityError:
+                                    st.error("Local vinculado a viagens.")
+                            if cd2.button("❌ Cancelar", key=f"no_rm_loc_{lid}", use_container_width=True):
+                                st.session_state["confirm_del_loc"] = None
+                                st.rerun()
 
         st.write("")
         col_esq3, _ = st.columns(2)
 
         # ======================================================================
-        # 5. FORNECEDORES E POSTOS (DESPESAS)
+        # 5. FORNECEDORES E POSTOS
         # ======================================================================
         with col_esq3:
             with st.container(border=True):
@@ -3066,12 +3585,19 @@ with st.container(border=True):
                     )
 
                 with st.form(f"form_cad_forn_{edit_forn_id or 'new'}", clear_on_submit=(edit_forn_id is None)):
-                    f1, f2, f3 = st.columns([5.2, 3.4, 3.4])
-                    fo_nome = f1.text_input(
-                        "Nome Fantasia / Rede",
+                    f_rz, f_ft = st.columns([6.0, 6.0])
+                    fo_razao = f_rz.text_input(
+                        "Razão Social",
+                        value=(forn_edit.get("razao_social") or "") if forn_edit else "",
+                        placeholder="Ex: Auto Posto Rodovia Dutra Ltda",
+                    )
+                    fo_fantasia = f_ft.text_input(
+                        "Nome Fantasia",
                         value=forn_edit["nome_fantasia"] if forn_edit else "",
                         placeholder="Ex: Rede Graal Dutra",
                     )
+
+                    f2, f3 = st.columns([5.5, 6.5])
                     fo_cnpj = f2.text_input(
                         "CNPJ",
                         value=(forn_edit["cnpj"] or "") if forn_edit else "",
@@ -3083,6 +3609,9 @@ with st.container(border=True):
                         "Borracharia",
                         "Hospedagem",
                         "Concessionária Pedágio",
+                        "Auxiliar",
+                        "Alimentação",
+                        "Lava-jato",
                     ]
                     idx_cf = (
                         cats_forn.index(forn_edit["categoria_servico"])
@@ -3117,15 +3646,16 @@ with st.container(border=True):
                         st.rerun()
 
                     if salvar_forn:
-                        if not fo_nome.strip():
-                            st.warning("Preencha o Nome Fantasia.")
+                        if not fo_fantasia.strip():
+                            st.warning("Preencha pelo menos o Nome Fantasia.")
                         else:
                             try:
                                 with SessionLocal() as db:
                                     if forn_edit:
                                         obj = db.query(Fornecedor).filter_by(id_fornecedor=edit_forn_id).first()
                                         if obj:
-                                            obj.nome_fantasia = fo_nome.strip()
+                                            obj.razao_social = fo_razao.strip()
+                                            obj.nome_fantasia = fo_fantasia.strip()
                                             obj.cnpj = fo_cnpj.strip() or None
                                             obj.categoria_servico = fo_cat
                                             obj.cidade = fo_cid.strip()
@@ -3138,7 +3668,8 @@ with st.container(border=True):
                                     else:
                                         db.add(
                                             Fornecedor(
-                                                nome_fantasia=fo_nome.strip(),
+                                                razao_social=fo_razao.strip(),
+                                                nome_fantasia=fo_fantasia.strip(),
                                                 cnpj=fo_cnpj.strip() or None,
                                                 categoria_servico=fo_cat,
                                                 cidade=fo_cid.strip(),
@@ -3154,7 +3685,7 @@ with st.container(border=True):
 
                 busca_forn = st.text_input(
                     "Filtrar fornecedores",
-                    placeholder="🔍 Buscar posto/fornecedor por nome, cidade ou CNPJ...",
+                    placeholder="🔍 Buscar posto/fornecedor por razão social, fantasia, cidade ou CNPJ...",
                     label_visibility="collapsed",
                     key="filtro_forn_lista",
                 ).strip().lower()
@@ -3163,39 +3694,72 @@ with st.container(border=True):
                     f
                     for f in fornecedores_db
                     if not busca_forn
+                    or busca_forn in (f.get("razao_social") or "").lower()
                     or busca_forn in (f["nome_fantasia"] or "").lower()
                     or busca_forn in (f["cidade"] or "").lower()
                     or busca_forn in (f["cnpj"] or "").lower()
                 ]
 
-                with st.container(height=250, border=True):
+                with st.container(height=270, border=True):
                     if not forn_filtrados:
                         st.caption("Nenhum fornecedor encontrado.")
                     for f in forn_filtrados:
-                        r_a, r_b, r_ed, r_del = st.columns([2.1, 1.9, 0.45, 0.45])
+                        fid = f["id_fornecedor"]
+                        rz_sub = f" ({f['razao_social']})" if f.get("razao_social") else ""
+                        r_a, r_b, r_ed, r_del = st.columns([2.2, 1.8, 0.45, 0.45])
                         r_a.markdown(
-                            f"**{f['nome_fantasia']}**  \n<span style='font-size:0.75rem;color:#475569;'>{f['categoria_servico'] or '-'}</span>",
+                            f"**{f['nome_fantasia']}{rz_sub}**  \n<span style='font-size:0.75rem;color:#475569;'>{f['categoria_servico'] or '-'}</span>",
                             unsafe_allow_html=True,
                         )
                         r_b.markdown(
                             f"<span style='font-size:0.75rem;color:#475569;'>Local: {f['cidade'] or ''}/{f['uf'] or ''}<br>CNPJ: {f['cnpj'] or '-'}</span>",
                             unsafe_allow_html=True,
                         )
-                        if r_ed.button("✏️", key=f"ed_for_{f['id_fornecedor']}", help="Editar fornecedor"):
-                            st.session_state["edit_forn_id"] = f["id_fornecedor"]
+                        if r_ed.button("✏️", key=f"ed_for_{fid}", help="Editar fornecedor"):
+                            st.session_state["confirm_edit_forn"] = fid
+                            st.session_state["confirm_del_forn"] = None
                             st.rerun()
-                        if r_del.button("✕", key=f"rm_for_{f['id_fornecedor']}", help="Remover fornecedor"):
-                            try:
-                                with SessionLocal() as db:
-                                    obj = db.query(Fornecedor).filter_by(id_fornecedor=f["id_fornecedor"]).first()
-                                    if obj:
-                                        db.delete(obj)
-                                        db.commit()
-                                if st.session_state.get("edit_forn_id") == f["id_fornecedor"]:
-                                    st.session_state["edit_forn_id"] = None
-                                carregar_listas_base.clear()
+                        if r_del.button("✕", key=f"rm_for_{fid}", help="Remover fornecedor"):
+                            st.session_state["confirm_del_forn"] = fid
+                            st.session_state["confirm_edit_forn"] = None
+                            st.rerun()
+
+                        if st.session_state.get("confirm_edit_forn") == fid:
+                            st.markdown(
+                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{f['nome_fantasia']}</strong>?</div>",
+                                unsafe_allow_html=True,
+                            )
+                            ce1, ce2, _ = st.columns([1.4, 1.4, 2])
+                            if ce1.button("✅ Sim, Editar", key=f"ok_ed_for_{fid}", use_container_width=True):
+                                st.session_state["edit_forn_id"] = fid
+                                st.session_state["confirm_edit_forn"] = None
                                 st.rerun()
-                            except IntegrityError:
-                                st.error("Fornecedor vinculado a despesas.")
+                            if ce2.button("❌ Cancelar", key=f"no_ed_for_{fid}", use_container_width=True):
+                                st.session_state["confirm_edit_forn"] = None
+                                st.rerun()
+
+                        if st.session_state.get("confirm_del_forn") == fid:
+                            st.markdown(
+                                f"<div class='confirm-box-del'>🚨 Tem certeza que deseja EXCLUIR <strong>{f['nome_fantasia']}</strong>? Esta ação não pode ser desfeita.</div>",
+                                unsafe_allow_html=True,
+                            )
+                            cd1, cd2, _ = st.columns([1.4, 1.4, 2])
+                            if cd1.button("🗑️ Sim, Excluir", key=f"ok_rm_for_{fid}", use_container_width=True):
+                                try:
+                                    with SessionLocal() as db:
+                                        obj = db.query(Fornecedor).filter_by(id_fornecedor=fid).first()
+                                        if obj:
+                                            db.delete(obj)
+                                            db.commit()
+                                    if st.session_state.get("edit_forn_id") == fid:
+                                        st.session_state["edit_forn_id"] = None
+                                    st.session_state["confirm_del_forn"] = None
+                                    carregar_listas_base.clear()
+                                    st.rerun()
+                                except IntegrityError:
+                                    st.error("Fornecedor vinculado a despesas.")
+                            if cd2.button("❌ Cancelar", key=f"no_rm_for_{fid}", use_container_width=True):
+                                st.session_state["confirm_del_forn"] = None
+                                st.rerun()
 
         render_navegacao_rodape(9, MENU_ITENS)

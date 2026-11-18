@@ -15,14 +15,16 @@ from sqlalchemy import (
     String,
     Time,
     func,
+    text,
 )
 from sqlalchemy.orm import relationship
-from database.connection import Base, SessionLocal
+from database.connection import Base, SessionLocal, engine
 
 
 # ==============================================================================
 # 1. TABELAS DE DOMÍNIO (CADASTROS GERAIS / MASTER DATA)
 # ==============================================================================
+
 
 class Motorista(Base):
     __tablename__ = "motoristas"
@@ -37,7 +39,6 @@ class Motorista(Base):
     vinculo = Column(String(30))
     status_ativo = Column(Boolean, default=True)
 
-    # Relacionamento: Um motorista realiza várias viagens
     viagens = relationship("Viagem", back_populates="motorista")
 
 
@@ -54,7 +55,6 @@ class Veiculo(Base):
     capacidade_volume_m3 = Column(Numeric(10, 2))
     status_ativo = Column(Boolean, default=True)
 
-    # Relacionamento: Um veículo participa de várias viagens
     viagens = relationship("Viagem", back_populates="veiculo")
 
 
@@ -63,21 +63,27 @@ class Cliente(Base):
 
     id_cliente = Column(Integer, primary_key=True, index=True)
     razao_social = Column(String(150), nullable=False)
+    nome_fantasia = Column(String(150))
     cnpj_cpf = Column(String(20), unique=True, nullable=False)
     inscricao_estadual = Column(String(30))
     responsavel_comercial = Column(String(100))
     telefone_comercial = Column(String(20))
     email_financeiro = Column(String(100))
     prazo_pagamento_dias = Column(Integer, default=30)
+    cep = Column(String(10))
+    endereco_completo = Column(String(200))
+    cidade = Column(String(100))
+    uf = Column(String(2))
 
-    # Relacionamento: Um cliente contrata vários ciclos operacionais
     ciclos = relationship("CicloOperacional", back_populates="cliente")
+    locais = relationship("Local", back_populates="cliente")
 
 
 class Local(Base):
     __tablename__ = "locais"
 
     id_local = Column(Integer, primary_key=True, index=True)
+    id_cliente = Column(Integer, ForeignKey("clientes.id_cliente"), nullable=True)
     nome_local = Column(String(100), nullable=False)
     tipo_instalacao = Column(String(50))
     cep = Column(String(10))
@@ -85,26 +91,29 @@ class Local(Base):
     cidade = Column(String(100))
     uf = Column(String(2))
     contato_portaria = Column(String(100))
-    restricao_horario = Column(String(50))
+    restricao_horario = Column(String(120))
+
+    cliente = relationship("Cliente", back_populates="locais")
 
 
 class Fornecedor(Base):
     __tablename__ = "fornecedores"
 
     id_fornecedor = Column(Integer, primary_key=True, index=True)
+    razao_social = Column(String(150))
     nome_fantasia = Column(String(100), nullable=False)
     cnpj = Column(String(20), unique=True)
     categoria_servico = Column(String(50))
     cidade = Column(String(100))
     uf = Column(String(2))
 
-    # Relacionamento: Um fornecedor recebe várias despesas lançadas
     despesas = relationship("ViagemDespesa", back_populates="fornecedor")
 
 
 # ==============================================================================
 # 2. TABELAS AGRUPADORAS (O CICLO COMERCIAL E O FINANCEIRO)
 # ==============================================================================
+
 
 class CicloOperacional(Base):
     __tablename__ = "ciclos_operacionais"
@@ -116,7 +125,6 @@ class CicloOperacional(Base):
     data_fechamento = Column(Date)
     status_ciclo = Column(String(30), default="Em Andamento")
 
-    # Relacionamentos
     cliente = relationship("Cliente", back_populates="ciclos")
     financeiro = relationship(
         "CicloFinanceiro",
@@ -149,13 +157,13 @@ class CicloFinanceiro(Base):
     data_prevista_saldo = Column(Date)
     valor_saldo = Column(Numeric(10, 2))
 
-    # Relacionamento 1:1 com o Ciclo Operacional
     ciclo = relationship("CicloOperacional", back_populates="financeiro")
 
 
 # ==============================================================================
 # 3. TABELA TRANSACIONAL CENTRAL (A VIAGEM)
 # ==============================================================================
+
 
 class Viagem(Base):
     __tablename__ = "viagens"
@@ -172,12 +180,10 @@ class Viagem(Base):
     data_criacao = Column(DateTime, server_default=func.now())
     status_viagem = Column(String(30), default="Planejada")
 
-    # Operação
     tipo_frete = Column(String(50))
     rota_resumo = Column(String(100))
     km_rota_planejado = Column(Numeric(10, 2))
 
-    # Logística de Coleta e Entrega
     id_local_coleta = Column(Integer, ForeignKey("locais.id_local"), nullable=False)
     data_coleta = Column(Date)
     hora_planejada_coleta = Column(Time)
@@ -187,7 +193,6 @@ class Viagem(Base):
     hora_planejada_entrega = Column(Time)
     hora_real_entrega = Column(Time)
 
-    # Dados da Carga
     tipo_material = Column(String(100))
     qtde_volumes = Column(Integer)
     peso_bruto_kg = Column(Numeric(10, 2))
@@ -197,12 +202,10 @@ class Viagem(Base):
     mdfe_numero = Column(String(50))
     ciot_numero = Column(String(50))
 
-    # Odômetro
     odometro_inicial = Column(Integer)
     odometro_final = Column(Integer)
     km_real_rodado = Column(Integer)
 
-    # Relacionamentos
     ciclo = relationship("CicloOperacional", back_populates="viagens")
     motorista = relationship("Motorista", back_populates="viagens")
     veiculo = relationship("Veiculo", back_populates="viagens")
@@ -218,6 +221,7 @@ class Viagem(Base):
 # ==============================================================================
 # 4. TABELA DE DESPESAS (CUSTOS RASTREADOS NA VIAGEM)
 # ==============================================================================
+
 
 class ViagemDespesa(Base):
     __tablename__ = "viagens_despesas"
@@ -236,23 +240,41 @@ class ViagemDespesa(Base):
     valor_total = Column(Numeric(10, 2), nullable=False)
     data_despesa = Column(Date, server_default=func.current_date())
 
-    # Relacionamentos
     viagem = relationship("Viagem", back_populates="despesas")
     fornecedor = relationship("Fornecedor", back_populates="despesas")
 
 
 # ==============================================================================
-# TESTE RÁPIDO DO MAPEAMENTO ORM
+# MIGRAÇÃO SEGURA E IDEMPOTENTE DAS NOVAS COLUNAS NO NEON (POSTGRESQL)
 # ==============================================================================
+
+
+def sincronizar_colunas_banco():
+    """Adiciona novas colunas sem afetar registros existentes."""
+    comandos = [
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS nome_fantasia VARCHAR(150);",
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cep VARCHAR(10);",
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS endereco_completo VARCHAR(200);",
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cidade VARCHAR(100);",
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS uf VARCHAR(2);",
+        "ALTER TABLE locais ADD COLUMN IF NOT EXISTS id_cliente INTEGER REFERENCES clientes(id_cliente);",
+        "ALTER TABLE locais ALTER COLUMN restricao_horario TYPE VARCHAR(120);",
+        "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS razao_social VARCHAR(150);",
+    ]
+    with engine.begin() as conn:
+        for sql in comandos:
+            conn.execute(text(sql))
+
+
 if __name__ == "__main__":
+    sincronizar_colunas_banco()
     db = SessionLocal()
     try:
-        total_motoristas = db.query(Motorista).count()
-        total_ciclos = db.query(CicloOperacional).count()
-        total_viagens = db.query(Viagem).count()
-        print("Mapeamento ORM validado com sucesso!")
-        print(f"Registros atuais -> Motoristas: {total_motoristas} | Ciclos: {total_ciclos} | Viagens: {total_viagens}")
-    except Exception as e:
-        print("Erro ao consultar modelos:", e)
+        print("Schema e mapeamento ORM validados com sucesso!")
+        print(
+            f"Motoristas: {db.query(Motorista).count()} | "
+            f"Clientes: {db.query(Cliente).count()} | "
+            f"Viagens: {db.query(Viagem).count()}"
+        )
     finally:
         db.close()
