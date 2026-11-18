@@ -46,6 +46,35 @@ inicializar_banco_uma_vez(schema_v=2)
 
 
 # ==============================================================================
+# LISTAS PADRONIZADAS DO SISTEMA
+# ==============================================================================
+OPCOES_ORIGEM_FRETE = [
+    "Aplicativo de Fretes",
+    "Redes Sociais",
+    "Cliente Fixo",
+    "Cliente Recorrente",
+    "Cliente Eventual",
+    "Indicação",
+    "Prospecção",
+    "Transportadora Parceira",
+    "Outros",
+]
+
+CATEGORIAS_DESPESA_FORNECEDOR = [
+    "Posto de Combustível",
+    "Abast. ARLA",
+    "Oficina Mecânica",
+    "Borracharia",
+    "Hospedagem",
+    "Concessionária Pedágio",
+    "Auxiliar",
+    "Alimentação",
+    "Lava-jato",
+    "Outros",
+]
+
+
+# ==============================================================================
 # FUNÇÕES DE PROGRESSÃO E EXTRAÇÃO DO CÓDIGO DA VIAGEM
 # ==============================================================================
 def resolver_codigo_viagem(viagem_obj, ciclo_obj=None):
@@ -85,7 +114,7 @@ def calcular_proximo_codigo_viagem(viagens_lista):
 
 
 # ==============================================================================
-# CACHE DE DADOS PARA NAVEGAÇÃO INSTANTÂNEA
+# CACHE DE DADOS PARA NAVEGAÇÃO INSTANTÂNEA E CONSULTAS
 # ==============================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_listas_base():
@@ -177,6 +206,94 @@ def carregar_listas_base():
         viagens.sort(key=lambda x: (x["seq_num"], x["id_viagem"]), reverse=True)
 
     return motoristas, veiculos, clientes, locais, fornecedores, viagens
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_todas_viagens_consulta():
+    """Carrega visão consolidada de todas as viagens, ciclos, receitas e despesas para a tela de Consultas."""
+    with SessionLocal() as session:
+        viagens_raw = session.query(Viagem).order_by(Viagem.id_viagem.desc()).all()
+        despesas_all = session.query(ViagemDespesa).all()
+        desp_por_viagem = {}
+        for d in despesas_all:
+            desp_por_viagem[d.id_viagem] = desp_por_viagem.get(d.id_viagem, 0.0) + to_float(d.valor_total)
+
+        resultado = []
+        for vg in viagens_raw:
+            c = vg.ciclo
+            fin = c.financeiro if c else None
+            cod = resolver_codigo_viagem(vg, c)
+
+            raw_tv = getattr(vg, "tipo_viagem", None)
+            if raw_tv in ["Individual", "Ciclo"]:
+                tipo_v = raw_tv
+            elif vg.tipo_frete in ["Individual", "Ciclo"]:
+                tipo_v = vg.tipo_frete
+            elif c and c.nome_operacao and not str(c.nome_operacao).startswith("Individual"):
+                tipo_v = "Ciclo"
+            else:
+                tipo_v = "Individual"
+
+            ciclo_nome = (
+                c.nome_operacao
+                if (tipo_v == "Ciclo" and c and c.nome_operacao and not str(c.nome_operacao).startswith("Individual"))
+                else "-"
+            )
+
+            val_neg = to_float(fin.valor_negociado_total) if fin else 0.0
+            val_adiant = to_float(fin.valor_adiantamento) if fin else 0.0
+            val_saldo = to_float(fin.valor_saldo) if fin else 0.0
+            total_rec = val_adiant + val_saldo
+            receita_efetiva = val_neg if val_neg > 0 else total_rec
+            total_desp = desp_por_viagem.get(vg.id_viagem, 0.0)
+            lucro_liq = receita_efetiva - total_desp
+
+            cli_nome = "-"
+            if c and c.cliente:
+                cli_nome = c.cliente.razao_social
+                if c.cliente.nome_fantasia:
+                    cli_nome += f" ({c.cliente.nome_fantasia})"
+
+            mot_nome = vg.motorista.nome_completo if vg.motorista else "-"
+            vei_txt = f"{vg.veiculo.descricao_marca} ({vg.veiculo.placa})" if vg.veiculo else "-"
+            col_txt = vg.local_coleta.nome_local if vg.local_coleta else "-"
+            ent_txt = vg.local_entrega.nome_local if vg.local_entrega else "-"
+
+            resultado.append(
+                {
+                    "id_viagem": vg.id_viagem,
+                    "codigo_viagem": cod,
+                    "seq_num": extrair_numero_sequencial(cod, vg.id_viagem),
+                    "id_frete": vg.id_frete_externo or "-",
+                    "status": vg.status_viagem or "Em Andamento",
+                    "tipo_viagem": tipo_v,
+                    "ciclo": ciclo_nome,
+                    "tipo_frete": vg.tipo_frete or "-",
+                    "origem_frete": (fin.forma_contratacao if fin and fin.forma_contratacao else "-"),
+                    "data_coleta": vg.data_coleta,
+                    "data_entrega": vg.data_entrega,
+                    "cliente": cli_nome,
+                    "motorista": mot_nome,
+                    "veiculo": vei_txt,
+                    "rota": vg.rota_resumo or "-",
+                    "coleta": col_txt,
+                    "entrega": ent_txt,
+                    "nfe": vg.nfe_carga or "-",
+                    "cte": vg.cte_numero or "-",
+                    "mdfe": vg.mdfe_numero or "-",
+                    "ciot": vg.ciot_numero or "-",
+                    "valor_negociado": val_neg,
+                    "valor_adiantamento": val_adiant,
+                    "valor_saldo": val_saldo,
+                    "total_recebido": total_rec,
+                    "total_despesas": total_desp,
+                    "resultado_liquido": lucro_liq,
+                    "km_rodado": to_int(vg.km_real_rodado, 0),
+                }
+            )
+
+        resultado.sort(key=lambda x: (x["seq_num"], x["id_viagem"]), reverse=True)
+        return resultado
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -359,7 +476,7 @@ st.markdown(
         }
         section[data-testid="stSidebar"] div[role="radiogroup"] label {
             width: 100%;
-            padding: 0.6rem 1.25rem;
+            padding: 0.56rem 1.25rem;
             margin: 0;
             border-radius: 0;
             cursor: pointer;
@@ -379,7 +496,7 @@ st.markdown(
             font-weight: 700 !important;
         }
         section[data-testid="stSidebar"] div[role="radiogroup"] label p {
-            font-size: 0.82rem !important;
+            font-size: 0.81rem !important;
             color: #E9E9E9 !important;
             font-weight: 500;
             margin: 0;
@@ -724,6 +841,36 @@ st.markdown(
             font-weight: 900;
         }
 
+        .kpi-consulta-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.9rem;
+            margin: 0.9rem 0 1.2rem 0;
+        }
+        .kpi-consulta-card {
+            background: #F8FAFC;
+            border: 1px solid #CBD5E1;
+            border-top: 4px solid #0D263C;
+            border-radius: 0.45rem;
+            padding: 0.85rem 1rem;
+        }
+        .kpi-consulta-card.orange {
+            border-top-color: #F34D25;
+        }
+        .kpi-consulta-lbl {
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #64748B;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .kpi-consulta-val {
+            font-size: 1.25rem;
+            font-weight: 900;
+            color: #0D263C;
+            margin-top: 0.2rem;
+        }
+
         .dre-box {
             background-color: #0D263C;
             border-radius: 0.65rem;
@@ -760,7 +907,7 @@ st.markdown(
             margin-top: 0.9rem;
         }
 
-        /* Cards da Aba 10 */
+        /* Cards da Aba 11 */
         div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div > .card-faeg-azul) {
             background-color: #FFFFFF;
             border: 1px solid #D6D6D6;
@@ -961,21 +1108,8 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
 
 
 # ==============================================================================
-# FUNÇÕES AUXILIARES E PERSISTÊNCIA DE FORMULÁRIO ENTRE ABAS
+# FUNÇÕES AUXILIARES, CÁLCULOS AUTOMÁTICOS E PERSISTÊNCIA ENTRE ABAS
 # ==============================================================================
-OPCOES_ORIGEM_FRETE = [
-    "Aplicativo de Fretes",
-    "Redes Sociais",
-    "Cliente Fixo",
-    "Cliente Recorrente",
-    "Cliente Eventual",
-    "Indicação",
-    "Prospecção",
-    "Transportadora Parceira",
-    "Outros",
-]
-
-
 def to_float(val, default=0.0):
     return float(val) if val is not None else float(default)
 
@@ -990,7 +1124,6 @@ def fmt_brl(val):
 
 
 def formatar_rotulo_cliente(c):
-    """Formata o cliente exibindo Razão Social, Nome Fantasia e Endereço/Cidade para evitar ambiguidade."""
     partes_nome = [c["razao_social"]]
     if c.get("nome_fantasia") and c["nome_fantasia"].strip().lower() != c["razao_social"].strip().lower():
         partes_nome.append(f"({c['nome_fantasia']})")
@@ -1007,7 +1140,6 @@ def formatar_rotulo_cliente(c):
 
 
 def formatar_rotulo_local(l, cli_map):
-    """Formata o local exibindo nome, endereço completo, cidade/UF e cliente vinculado."""
     end_parts = []
     if l.get("endereco_completo"):
         end_parts.append(l["endereco_completo"])
@@ -1038,8 +1170,66 @@ def sync_campo(chave_widget, chave_dado):
         st.session_state["form_data"][chave_dado] = st.session_state[chave_widget]
 
 
+def _limpar_widgets_financeiros():
+    for wk in ["w_perc_adiant", "w_val_adiant", "w_perc_saldo", "w_val_saldo"]:
+        if wk in st.session_state:
+            del st.session_state[wk]
+
+
+def on_negociacao_change(origem_alterada):
+    """Recalcula automaticamente Adiantamento e Saldo em % e R$ sempre que qualquer campo financeiro muda."""
+    if origem_alterada == "val_negociado":
+        sync_campo("w_val_negociado", "val_negociado")
+    elif origem_alterada == "perc_adiant":
+        sync_campo("w_perc_adiant", "perc_adiant")
+    elif origem_alterada == "val_adiant":
+        sync_campo("w_val_adiant", "val_adiant")
+    elif origem_alterada == "perc_saldo":
+        sync_campo("w_perc_saldo", "perc_saldo")
+    elif origem_alterada == "val_saldo":
+        sync_campo("w_val_saldo", "val_saldo")
+
+    fd = st.session_state["form_data"]
+    val_neg = to_float(fd.get("val_negociado", 0.0))
+
+    if origem_alterada in ["val_negociado", "perc_adiant"]:
+        p_ad = min(100.0, max(0.0, to_float(fd.get("perc_adiant", 0.0))))
+        p_sd = round(max(0.0, 100.0 - p_ad), 2) if p_ad > 0 else to_float(fd.get("perc_saldo", 0.0))
+        v_ad = round(val_neg * (p_ad / 100.0), 2)
+        v_sd = round(max(0.0, val_neg - v_ad), 2) if p_ad > 0 else round(val_neg * (p_sd / 100.0), 2)
+        fd["perc_adiant"] = p_ad
+        fd["val_adiant"] = v_ad
+        fd["perc_saldo"] = p_sd
+        fd["val_saldo"] = v_sd
+        _limpar_widgets_financeiros()
+
+    elif origem_alterada == "val_adiant":
+        v_ad = max(0.0, to_float(fd.get("val_adiant", 0.0)))
+        if val_neg > 0:
+            p_ad = round(min(100.0, (v_ad / val_neg) * 100.0), 2)
+            p_sd = round(max(0.0, 100.0 - p_ad), 2)
+            v_sd = round(max(0.0, val_neg - v_ad), 2)
+            fd["perc_adiant"] = p_ad
+            fd["perc_saldo"] = p_sd
+            fd["val_saldo"] = v_sd
+        _limpar_widgets_financeiros()
+
+    elif origem_alterada == "perc_saldo":
+        p_sd = min(100.0, max(0.0, to_float(fd.get("perc_saldo", 0.0))))
+        v_sd = round(val_neg * (p_sd / 100.0), 2)
+        fd["perc_saldo"] = p_sd
+        fd["val_saldo"] = v_sd
+        _limpar_widgets_financeiros()
+
+    elif origem_alterada == "val_saldo":
+        v_sd = max(0.0, to_float(fd.get("val_saldo", 0.0)))
+        if val_neg > 0:
+            p_sd = round(min(100.0, (v_sd / val_neg) * 100.0), 2)
+            fd["perc_saldo"] = p_sd
+        _limpar_widgets_financeiros()
+
+
 def on_tipo_viagem_change():
-    """Sincroniza Tipo de Viagem (Individual/Ciclo) e bloqueia/limpa o número do ciclo quando Individual."""
     sync_campo("w_tipo_viagem", "tipo_viagem")
     if get_campo("tipo_viagem") == "Individual":
         st.session_state["form_data"]["ciclo_nome"] = ""
@@ -1048,7 +1238,6 @@ def on_tipo_viagem_change():
 
 
 def on_cliente_change(clientes_lista, locais_lista):
-    """Sincroniza o cliente escolhido e puxa automaticamente o local de coleta correspondente."""
     sync_campo("w_cli_id", "cli_id")
     cli_id_novo = get_campo("cli_id", 0)
     if not cli_id_novo:
@@ -1082,12 +1271,12 @@ def on_cliente_change(clientes_lista, locais_lista):
             del st.session_state["w_col_id"]
 
 
-def render_cabecalho_aba(icone, titulo, passo_num):
+def render_cabecalho_aba(icone, titulo, passo_num, total_passos=11):
     st.markdown(
         f"""
         <div class="tab-header-wrap">
             <div class="tab-title"><i class="{icone}"></i> {titulo}</div>
-            <span class="tab-step-pill">Etapa {passo_num} de 10</span>
+            <span class="tab-step-pill">Etapa {passo_num} de {total_passos}</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1096,6 +1285,12 @@ def render_cabecalho_aba(icone, titulo, passo_num):
 
 def _mudar_aba_callback(nova_aba):
     st.session_state["menu_operacional_radio"] = nova_aba
+
+
+def _abrir_viagem_para_edicao(id_v, destino_aba):
+    st.session_state["viagem_selecionada_id"] = id_v
+    st.session_state["loaded_viagem_id"] = None
+    st.session_state["menu_operacional_radio"] = destino_aba
 
 
 def render_navegacao_rodape(idx_atual, menu_itens):
@@ -1369,6 +1564,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 )
             db.commit()
             carregar_listas_base.clear()
+            carregar_todas_viagens_consulta.clear()
             carregar_despesas_viagem.clear()
             st.session_state["despesas_temp"] = []
             st.session_state["edit_desp_tmp_idx"] = None
@@ -1431,6 +1627,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 
             db.commit()
             carregar_listas_base.clear()
+            carregar_todas_viagens_consulta.clear()
             st.session_state["loaded_viagem_id"] = None
             st.toast(f"Viagem {codigo_viagem_editado} atualizada com sucesso!", icon="🟧")
             st.rerun()
@@ -1505,7 +1702,8 @@ with st.sidebar:
         "7. Despesas de Viagem",
         "8. Fechamento Final",
         "9. Relatórios / Exportar",
-        "10. Cadastros Gerais",
+        "10. Consultas Gerais",
+        "11. Cadastros Gerais",
     ]
     aba_ativa = st.radio(
         "Menu Operacional",
@@ -1576,7 +1774,7 @@ with st.container(border=True):
     st.markdown('<div class="main-card-marker"></div>', unsafe_allow_html=True)
 
     # --------------------------------------------------------------------------
-    # TAB 1: INFORMAÇÕES FAEG (ID PROGRESSIVO + EDITÁVEL PARA RETROATIVOS)
+    # TAB 1: INFORMAÇÕES FAEG
     # --------------------------------------------------------------------------
     if aba_ativa == MENU_ITENS[0]:
         render_cabecalho_aba("fa-solid fa-truck", "Informações FAEG", 1)
@@ -1657,7 +1855,7 @@ with st.container(border=True):
         render_navegacao_rodape(0, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 2: FRETE, CARGA E DOCUMENTOS (TIPO DE VIAGEM, CICLO E TIPO DE FRETE)
+    # TAB 2: FRETE, CARGA E DOCUMENTOS
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[1]:
         render_cabecalho_aba("fa-solid fa-file-invoice", "Frete, Carga e Documentos", 2)
@@ -1808,7 +2006,7 @@ with st.container(border=True):
         render_navegacao_rodape(1, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 3: CLIENTE / CONTRATANTE (COM CORRESPONDÊNCIA AUTOMÁTICA PARA COLETA)
+    # TAB 3: CLIENTE / CONTRATANTE
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[2]:
         render_cabecalho_aba("fa-solid fa-building", "Cliente / Contratante", 3)
@@ -1868,7 +2066,7 @@ with st.container(border=True):
         render_navegacao_rodape(2, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 4: NEGOCIAÇÃO E RECEBIMENTOS (ORIGEM DE FRETE)
+    # TAB 4: NEGOCIAÇÃO E RECEBIMENTOS (CÁLCULOS 100% AUTOMÁTICOS)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[3]:
         render_cabecalho_aba("fa-solid fa-handshake", "Negociação e Recebimentos", 4)
@@ -1898,21 +2096,21 @@ with st.container(border=True):
             min_value=0.0,
             step=50.0,
             key="w_val_negociado",
-            on_change=sync_campo,
-            args=("w_val_negociado", "val_negociado"),
+            on_change=on_negociacao_change,
+            args=("val_negociado",),
         )
 
         st.markdown('<div class="sec-subtitle">Adiantamento</div>', unsafe_allow_html=True)
         a1, a2, a3 = st.columns([3, 3.5, 5.5])
-        p_adiant = a1.number_input(
+        a1.number_input(
             "% Adiantamento",
             value=to_float(get_campo("perc_adiant", 0.0)),
             min_value=0.0,
             max_value=100.0,
             step=1.0,
             key="w_perc_adiant",
-            on_change=sync_campo,
-            args=("w_perc_adiant", "perc_adiant"),
+            on_change=on_negociacao_change,
+            args=("perc_adiant",),
         )
         a2.date_input(
             "Data Adiantamento",
@@ -1928,21 +2126,21 @@ with st.container(border=True):
             min_value=0.0,
             step=50.0,
             key="w_val_adiant",
-            on_change=sync_campo,
-            args=("w_val_adiant", "val_adiant"),
+            on_change=on_negociacao_change,
+            args=("val_adiant",),
         )
 
         st.markdown('<div class="sec-subtitle">Saldo a Receber</div>', unsafe_allow_html=True)
         s1, s2, s3 = st.columns([3, 3.5, 5.5])
-        p_saldo = s1.number_input(
+        s1.number_input(
             "% Saldo",
             value=to_float(get_campo("perc_saldo", 0.0)),
             min_value=0.0,
             max_value=100.0,
             step=1.0,
             key="w_perc_saldo",
-            on_change=sync_campo,
-            args=("w_perc_saldo", "perc_saldo"),
+            on_change=on_negociacao_change,
+            args=("perc_saldo",),
         )
         s2.date_input(
             "Data Saldo",
@@ -1958,16 +2156,9 @@ with st.container(border=True):
             min_value=0.0,
             step=50.0,
             key="w_val_saldo",
-            on_change=sync_campo,
-            args=("w_val_saldo", "val_saldo"),
+            on_change=on_negociacao_change,
+            args=("val_saldo",),
         )
-
-        if val_neg > 0 and (p_adiant > 0 or p_saldo > 0):
-            _, col_calc = st.columns([3.2, 1.3])
-            if col_calc.button("⚡ Aplicar % sobre Negociado", use_container_width=True):
-                st.session_state["form_data"]["val_adiant"] = round(val_neg * (p_adiant / 100.0), 2)
-                st.session_state["form_data"]["val_saldo"] = round(val_neg * (p_saldo / 100.0), 2)
-                st.rerun()
 
         total_recebido = to_float(get_campo("val_adiant", 0.0)) + to_float(get_campo("val_saldo", 0.0))
         st.markdown(
@@ -2140,7 +2331,7 @@ with st.container(border=True):
         render_navegacao_rodape(5, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 7: DESPESAS DE VIAGEM (COM VERIFICAÇÃO EM 2 ETAPAS)
+    # TAB 7: DESPESAS DE VIAGEM (MESMAS CATEGORIAS DE FORNECEDORES E POSTOS)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[6]:
         render_cabecalho_aba("fa-solid fa-receipt", "Despesas de Viagem", 7)
@@ -2169,21 +2360,15 @@ with st.container(border=True):
                 unsafe_allow_html=True,
             )
 
-            tipos_desp = [
-                "Abast. Diesel",
-                "Abast. ARLA",
-                "Pedágio",
-                "Alimentação",
-                "Hospedagem",
-                "Manutenção",
-                "Chapa / Ajudante",
-                "Outros",
-            ]
+            tipos_desp = list(CATEGORIAS_DESPESA_FORNECEDOR)
+            if desp_edit_obj and desp_edit_obj["tipo_despesa"] not in tipos_desp:
+                tipos_desp.append(desp_edit_obj["tipo_despesa"])
+
             forn_opcoes = {0: "Não informado"}
             for f in fornecedores_db:
                 forn_opcoes[f["id_fornecedor"]] = f["nome_fantasia"]
 
-            d1, d2, d3, d4, d5 = st.columns([2.2, 4.2, 2.6, 1.4, 1.6])
+            d1, d2, d3, d4, d5 = st.columns([2.5, 3.9, 2.6, 1.4, 1.6])
             idx_tp = (
                 tipos_desp.index(desp_edit_obj["tipo_despesa"])
                 if desp_edit_obj and desp_edit_obj["tipo_despesa"] in tipos_desp
@@ -2285,6 +2470,7 @@ with st.container(border=True):
                             )
                         db.commit()
                     carregar_despesas_viagem.clear()
+                    carregar_todas_viagens_consulta.clear()
                     st.toast("Despesa salva com sucesso!", icon="🧾")
                     st.rerun()
 
@@ -2368,6 +2554,7 @@ with st.container(border=True):
                                     db.commit()
                             st.session_state["confirm_del_desp"] = None
                             carregar_despesas_viagem.clear()
+                            carregar_todas_viagens_consulta.clear()
                             st.rerun()
                         if cd2.button("❌ Cancelar", key=f"no_dl_d_{did}", use_container_width=True):
                             st.session_state["confirm_del_desp"] = None
@@ -2690,10 +2877,179 @@ with st.container(border=True):
         render_navegacao_rodape(8, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 10: GESTÃO DE CADASTROS (VERIFICAÇÃO EM 2 ETAPAS + TODOS OS AJUSTES)
+    # TAB 10: CONSULTAS GERAIS (PESQUISA GLOBAL E ACESSO RÁPIDO PARA EDIÇÃO)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[9]:
-        render_cabecalho_aba("fa-solid fa-address-book", "Gestão de Cadastros (Bases de Dados)", 10)
+        render_cabecalho_aba("fa-solid fa-magnifying-glass", "Consultas Gerais — Viagens, Fretes e Ciclos", 10)
+
+        todas_viagens = carregar_todas_viagens_consulta()
+
+        f_col1, f_col2, f_col3, f_col4 = st.columns([4.2, 2.2, 2.2, 3.4])
+        termo_busca = f_col1.text_input(
+            "Pesquisar por Código, Frete, Ciclo, Cliente, Motorista ou Rota",
+            placeholder="Ex: FAEG-2026, Ciclo 01, Suzano, Placa...",
+            key="cons_termo_busca",
+        ).strip().lower()
+
+        filtro_tipo_v = f_col2.selectbox(
+            "Tipo de Viagem",
+            ["Todos", "Individual", "Ciclo"],
+            key="cons_tipo_viagem",
+        )
+
+        status_disponiveis = ["Todos"] + sorted(list({v["status"] for v in todas_viagens if v["status"]}))
+        filtro_status = f_col3.selectbox(
+            "Status",
+            status_disponiveis,
+            key="cons_status",
+        )
+
+        ciclos_disponiveis = ["Todos"] + sorted(
+            list({v["ciclo"] for v in todas_viagens if v["ciclo"] and v["ciclo"] != "-"})
+        )
+        filtro_ciclo = f_col4.selectbox(
+            "Filtrar por Ciclo",
+            ciclos_disponiveis,
+            key="cons_ciclo",
+        )
+
+        filtradas = []
+        for v in todas_viagens:
+            if filtro_tipo_v != "Todos" and v["tipo_viagem"] != filtro_tipo_v:
+                continue
+            if filtro_status != "Todos" and v["status"] != filtro_status:
+                continue
+            if filtro_ciclo != "Todos" and v["ciclo"] != filtro_ciclo:
+                continue
+            if termo_busca:
+                blob = " ".join(
+                    [
+                        str(v["codigo_viagem"]),
+                        str(v["id_frete"]),
+                        str(v["ciclo"]),
+                        str(v["cliente"]),
+                        str(v["motorista"]),
+                        str(v["veiculo"]),
+                        str(v["rota"]),
+                        str(v["tipo_frete"]),
+                        str(v["origem_frete"]),
+                        str(v["nfe"]),
+                        str(v["cte"]),
+                    ]
+                ).lower()
+                if termo_busca not in blob:
+                    continue
+            filtradas.append(v)
+
+        soma_neg = sum(v["valor_negociado"] for v in filtradas)
+        soma_rec = sum(v["total_recebido"] for v in filtradas)
+        soma_desp = sum(v["total_despesas"] for v in filtradas)
+        soma_liq = sum(v["resultado_liquido"] for v in filtradas)
+
+        st.markdown(
+            f"""
+            <div class="kpi-consulta-grid">
+                <div class="kpi-consulta-card">
+                    <div class="kpi-consulta-lbl">Operações Encontradas</div>
+                    <div class="kpi-consulta-val">{len(filtradas)}</div>
+                </div>
+                <div class="kpi-consulta-card">
+                    <div class="kpi-consulta-lbl">Total Negociado / Recebido</div>
+                    <div class="kpi-consulta-val">{fmt_brl(soma_neg)} <span style="font-size:0.78rem;color:#475569;">({fmt_brl(soma_rec)} rec.)</span></div>
+                </div>
+                <div class="kpi-consulta-card orange">
+                    <div class="kpi-consulta-lbl">Total Despesas</div>
+                    <div class="kpi-consulta-val" style="color:#F34D25;">{fmt_brl(soma_desp)}</div>
+                </div>
+                <div class="kpi-consulta-card">
+                    <div class="kpi-consulta-lbl">Resultado Líquido Consolidado</div>
+                    <div class="kpi-consulta-val">{fmt_brl(soma_liq)}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if not filtradas:
+            st.info("Nenhuma viagem, frete ou ciclo encontrado com os filtros selecionados.")
+        else:
+            st.markdown('<div class="sec-subtitle">Abrir Registro para Consulta Detalhada ou Edição</div>', unsafe_allow_html=True)
+            ac1, ac2, ac3 = st.columns([5.5, 3.0, 3.5])
+            opcoes_abrir = {
+                v["id_viagem"]: f"{v['codigo_viagem']} | {v['cliente']} | {v['rota']} ({fmt_brl(v['valor_negociado'])})"
+                for v in filtradas
+            }
+            id_escolhido_abrir = ac1.selectbox(
+                "Selecione a Viagem / Frete",
+                options=list(opcoes_abrir.keys()),
+                format_func=lambda x: opcoes_abrir[x],
+                key="cons_select_abrir",
+            )
+            destino_etapa = ac2.selectbox(
+                "Ir direto para a etapa",
+                [
+                    "4. Negociação / Pgto",
+                    "1. Frota FAEG",
+                    "2. Frete e Docs",
+                    "7. Despesas de Viagem",
+                    "8. Fechamento Final",
+                    "9. Relatórios / Exportar",
+                ],
+                key="cons_destino_etapa",
+            )
+            ac3.markdown("<div style='height: 1.65rem;'></div>", unsafe_allow_html=True)
+            ac3.button(
+                "✏️ Abrir e Editar Selecionada",
+                use_container_width=True,
+                on_click=_abrir_viagem_para_edicao,
+                args=(id_escolhido_abrir, destino_etapa),
+            )
+
+            st.markdown('<div class="sec-subtitle">Tabela Completa de Operações Registradas</div>', unsafe_allow_html=True)
+            df_consulta = pd.DataFrame(
+                [
+                    {
+                        "Código": v["codigo_viagem"],
+                        "ID Frete": v["id_frete"],
+                        "Status": v["status"],
+                        "Tipo Viagem": v["tipo_viagem"],
+                        "Ciclo": v["ciclo"],
+                        "Tipo Frete": v["tipo_frete"],
+                        "Origem Frete": v["origem_frete"],
+                        "Data Coleta": v["data_coleta"].strftime("%d/%m/%Y") if v["data_coleta"] else "-",
+                        "Cliente": v["cliente"],
+                        "Motorista": v["motorista"],
+                        "Veículo": v["veiculo"],
+                        "Rota": v["rota"],
+                        "Negociado": fmt_brl(v["valor_negociado"]),
+                        "Adiantamento": fmt_brl(v["valor_adiantamento"]),
+                        "Saldo": fmt_brl(v["valor_saldo"]),
+                        "Total Recebido": fmt_brl(v["total_recebido"]),
+                        "Despesas": fmt_brl(v["total_despesas"]),
+                        "Resultado Líq.": fmt_brl(v["resultado_liquido"]),
+                    }
+                    for v in filtradas
+                ]
+            )
+            st.dataframe(df_consulta, use_container_width=True, hide_index=True)
+
+            buf_cons = io.BytesIO()
+            with pd.ExcelWriter(buf_cons, engine="openpyxl") as writer:
+                df_consulta.to_excel(writer, sheet_name="Consulta_Viagens", index=False)
+            st.download_button(
+                label="📥 Exportar Consulta Filtrada (Excel)",
+                data=buf_cons.getvalue(),
+                file_name=f"FAEG_Consulta_Geral_{date.today().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+        render_navegacao_rodape(9, MENU_ITENS)
+
+    # --------------------------------------------------------------------------
+    # TAB 11: GESTÃO DE CADASTROS
+    # --------------------------------------------------------------------------
+    elif aba_ativa == MENU_ITENS[10]:
+        render_cabecalho_aba("fa-solid fa-address-book", "Gestão de Cadastros (Bases de Dados)", 11)
 
         col_esq, col_dir = st.columns(2)
 
@@ -2797,6 +3153,7 @@ with st.container(border=True):
                                         db.commit()
                                         st.session_state["edit_mot_id"] = None
                                         carregar_listas_base.clear()
+                                        carregar_todas_viagens_consulta.clear()
                                         st.toast("Motorista atualizado com sucesso!", icon="✅")
                                         st.rerun()
                                     else:
@@ -2995,6 +3352,7 @@ with st.container(border=True):
                                         db.commit()
                                         st.session_state["edit_vei_id"] = None
                                         carregar_listas_base.clear()
+                                        carregar_todas_viagens_consulta.clear()
                                         st.toast("Veículo atualizado com sucesso!", icon="✅")
                                         st.rerun()
                                     else:
@@ -3222,6 +3580,7 @@ with st.container(border=True):
                                         db.commit()
                                         st.session_state["edit_cli_id"] = None
                                         carregar_listas_base.clear()
+                                        carregar_todas_viagens_consulta.clear()
                                         st.toast("Cliente atualizado com sucesso!", icon="✅")
                                         st.rerun()
                                     else:
@@ -3491,6 +3850,7 @@ with st.container(border=True):
                                 db.commit()
                                 st.session_state["edit_loc_id"] = None
                                 carregar_listas_base.clear()
+                                carregar_todas_viagens_consulta.clear()
                                 st.toast("Local atualizado com sucesso!", icon="✅")
                                 st.rerun()
                             else:
@@ -3606,7 +3966,7 @@ with st.container(border=True):
         col_esq3, _ = st.columns(2)
 
         # ======================================================================
-        # 5. FORNECEDORES E POSTOS
+        # 5. FORNECEDORES E POSTOS (MESMA LISTA DE CATEGORIAS DAS DESPESAS)
         # ======================================================================
         with col_esq3:
             with st.container(border=True):
@@ -3647,16 +4007,9 @@ with st.container(border=True):
                         value=(forn_edit["cnpj"] or "") if forn_edit else "",
                         placeholder="00.000.000/0001-00",
                     )
-                    cats_forn = [
-                        "Posto de Combustível",
-                        "Oficina Mecânica",
-                        "Borracharia",
-                        "Hospedagem",
-                        "Concessionária Pedágio",
-                        "Auxiliar",
-                        "Alimentação",
-                        "Lava-jato",
-                    ]
+                    cats_forn = list(CATEGORIAS_DESPESA_FORNECEDOR)
+                    if forn_edit and forn_edit.get("categoria_servico") and forn_edit["categoria_servico"] not in cats_forn:
+                        cats_forn.append(forn_edit["categoria_servico"])
                     idx_cf = (
                         cats_forn.index(forn_edit["categoria_servico"])
                         if (forn_edit and forn_edit.get("categoria_servico") in cats_forn)
@@ -3806,4 +4159,4 @@ with st.container(border=True):
                                 st.session_state["confirm_del_forn"] = None
                                 st.rerun()
 
-        render_navegacao_rodape(9, MENU_ITENS)
+        render_navegacao_rodape(10, MENU_ITENS)
