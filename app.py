@@ -28,7 +28,7 @@ from database.models import (
 # CONFIGURAÇÃO DA PÁGINA E IDENTIDADE VISUAL OFICIAL FAEG (MANUAL 2026)
 # ==============================================================================
 st.set_page_config(
-    page_title="FAEG - Soluções Empresariais e Logísticas",
+    page_title="FAEG - Gestão Logística e Operacional",
     page_icon="🟧",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -37,7 +37,7 @@ st.set_page_config(
 
 @st.cache_resource(show_spinner=False)
 def inicializar_banco_uma_vez(schema_v=2):
-    """Garante automaticamente que as novas colunas existam no Neon sem alterar dados."""
+    """Garante automaticamente que as colunas necessárias existam no Neon sem alterar dados."""
     sincronizar_colunas_banco()
     return True
 
@@ -493,56 +493,33 @@ st.markdown(
         }
 
         .sidebar-brand {
-            padding: 1.4rem 1.35rem 1.2rem 1.35rem;
+            padding: 1.35rem 1.2rem 1.15rem 1.2rem;
             border-bottom: 1px solid rgba(171, 206, 225, 0.22);
             margin-bottom: 0.9rem;
             display: flex;
             align-items: center;
-            gap: 0.9rem;
+            justify-content: center;
         }
         .sidebar-logo-img {
-            height: 52px;
-            width: auto;
-            max-width: 72px;
+            width: 100%;
+            max-width: 205px;
+            max-height: 78px;
+            height: auto;
             object-fit: contain;
-            flex-shrink: 0;
+            display: block;
             filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
         }
-        .sidebar-monogram {
-            width: 46px;
-            height: 46px;
-            border-radius: 8px;
+        .sidebar-monogram-fallback {
+            width: 54px;
+            height: 54px;
+            border-radius: 10px;
             background-color: #F34D25;
             color: #FFFFFF;
             font-weight: 900;
-            font-size: 1.65rem;
+            font-size: 1.9rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-shrink: 0;
-        }
-        .sidebar-brand-text {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            min-width: 0;
-        }
-        .sidebar-brand-title {
-            font-size: 1.6rem;
-            font-weight: 900;
-            color: #FFFFFF;
-            letter-spacing: 0.05em;
-            margin: 0;
-            line-height: 1.02;
-        }
-        .sidebar-brand-sub {
-            font-size: 0.6rem;
-            color: #ABCEE1;
-            margin: 0.3rem 0 0 0;
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.06em;
-            line-height: 1.3;
         }
 
         /* Cartão Fixo da Viagem Ativa na Sidebar */
@@ -1282,6 +1259,24 @@ def sync_campo(chave_widget, chave_dado):
         st.session_state["form_data"][chave_dado] = st.session_state[chave_widget]
 
 
+def on_local_select_change(chave_widget, chave_dado, locais_lista):
+    """Sincroniza imediatamente o local escolhido e preenche a Rota se ambos os locais estiverem definidos."""
+    sync_campo(chave_widget, chave_dado)
+    col_id = get_campo("col_id", 0)
+    ent_id = get_campo("ent_id", 0)
+    if col_id and ent_id and not (get_campo("rota") or "").strip():
+        loc_map = {l["id_local"]: l for l in locais_lista}
+        l_c = loc_map.get(col_id)
+        l_e = loc_map.get(ent_id)
+        if l_c and l_e and (l_c.get("cidade") or l_e.get("cidade")):
+            orig = f"{l_c.get('cidade') or ''}/{l_c.get('uf') or ''}".strip("/")
+            dest = f"{l_e.get('cidade') or ''}/{l_e.get('uf') or ''}".strip("/")
+            if orig and dest:
+                st.session_state["form_data"]["rota"] = f"{orig} -> {dest}"
+                if "w_rota" in st.session_state:
+                    del st.session_state["w_rota"]
+
+
 def _limpar_widgets_financeiros():
     for wk in ["w_perc_adiant", "w_val_adiant", "w_perc_saldo", "w_val_saldo"]:
         if wk in st.session_state:
@@ -1766,7 +1761,6 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 # ==============================================================================
 motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db, viagens_db = carregar_listas_base()
 
-# Garante que toda nova sessão comece pronta para criar uma nova viagem com código fixo correspondente
 if "viagem_ativa_id" not in st.session_state:
     st.session_state["viagem_ativa_id"] = 0
 
@@ -1774,23 +1768,19 @@ viagem_sel_id = st.session_state["viagem_ativa_id"]
 carregar_estado_viagem(viagem_sel_id, viagens_db)
 
 # ==============================================================================
-# SIDEBAR INSTITUCIONAL FAEG
+# SIDEBAR INSTITUCIONAL FAEG (APENAS LOGO COM SLOGAN)
 # ==============================================================================
 with st.sidebar:
     logo_b64 = carregar_logo_base64()
     if logo_b64:
-        icone_marca_html = f'<img src="{logo_b64}" class="sidebar-logo-img" alt="Logo FAEG" />'
+        icone_marca_html = f'<img src="{logo_b64}" class="sidebar-logo-img" alt="FAEG" />'
     else:
-        icone_marca_html = '<div class="sidebar-monogram">F</div>'
+        icone_marca_html = '<div class="sidebar-monogram-fallback">FAEG</div>'
 
     st.markdown(
         f"""
         <div class="sidebar-brand">
             {icone_marca_html}
-            <div class="sidebar-brand-text">
-                <div class="sidebar-brand-title">FAEG</div>
-                <p class="sidebar-brand-sub">Soluções Empresariais e Logísticas</p>
-            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1931,9 +1921,6 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_status_viagem", "status_viagem"),
         )
-        st.caption(
-            "💡 O código segue automaticamente a sequência numérica da viagem atual, mas pode ser editado livremente para lançamentos retroativos."
-        )
 
         st.markdown('<div class="sec-subtitle">Dados do Motorista</div>', unsafe_allow_html=True)
         mot_opcoes = {0: "Selecione um motorista cadastrado..."}
@@ -1946,7 +1933,7 @@ with st.container(border=True):
             mot_atual_id = 0
 
         cm1, cm2, cm3 = st.columns([6, 3, 3])
-        sel_mot = cm1.selectbox(
+        cm1.selectbox(
             "Nome do Motorista",
             options=list(mot_opcoes.keys()),
             index=list(mot_opcoes.keys()).index(mot_atual_id),
@@ -1955,9 +1942,22 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_mot_id", "mot_id"),
         )
-        m_atual = mot_map.get(sel_mot)
-        cm2.text_input("Nº da CNH", value=m_atual["cnh_numero"] if m_atual else "", disabled=True)
-        cm3.text_input("Categoria CNH", value=m_atual["cnh_categoria"] if m_atual else "", disabled=True)
+        m_atual = mot_map.get(get_campo("mot_id", 0))
+        cm2.text_input("Nº da CNH", value=m_atual["cnh_numero"] if m_atual else "", disabled=True, key="prev_mot_cnh")
+        cm3.text_input(
+            "Categoria CNH", value=m_atual["cnh_categoria"] if m_atual else "", disabled=True, key="prev_mot_cat"
+        )
+
+        if m_atual and m_atual.get("cnh_validade"):
+            dias_cnh = (m_atual["cnh_validade"] - date.today()).days
+            if dias_cnh < 0:
+                st.error(
+                    f"🚨 Atenção: A CNH de **{m_atual['nome_completo']}** venceu em **{m_atual['cnh_validade'].strftime('%d/%m/%Y')}**!"
+                )
+            elif dias_cnh <= 30:
+                st.warning(
+                    f"⚠️ CNH de **{m_atual['nome_completo']}** vence em **{dias_cnh} dias** ({m_atual['cnh_validade'].strftime('%d/%m/%Y')})."
+                )
 
         st.markdown('<div class="sec-subtitle">Dados do Veículo</div>', unsafe_allow_html=True)
         vei_opcoes = {0: "Selecione o veículo cadastrado..."}
@@ -1970,7 +1970,7 @@ with st.container(border=True):
             vei_atual_id = 0
 
         cv1, cv2, cv3 = st.columns([6, 3, 3])
-        sel_vei = cv1.selectbox(
+        cv1.selectbox(
             "Veículo / Carro",
             options=list(vei_opcoes.keys()),
             index=list(vei_opcoes.keys()).index(vei_atual_id),
@@ -1979,9 +1979,13 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_vei_id", "vei_id"),
         )
-        v_atual = vei_map.get(sel_vei)
-        cv2.text_input("Placa", value=(v_atual["placa"] or "").upper() if v_atual else "", disabled=True)
-        cv3.text_input("Tipo de Veículo", value=v_atual["tipo_veiculo"] if v_atual else "", disabled=True)
+        v_atual = vei_map.get(get_campo("vei_id", 0))
+        cv2.text_input(
+            "Placa", value=(v_atual["placa"] or "").upper() if v_atual else "", disabled=True, key="prev_vei_placa"
+        )
+        cv3.text_input(
+            "Tipo de Veículo", value=v_atual["tipo_veiculo"] if v_atual else "", disabled=True, key="prev_vei_tipo"
+        )
 
         render_navegacao_rodape(0, MENU_ITENS)
 
@@ -2046,7 +2050,7 @@ with st.container(border=True):
         c6.text_input(
             "Rota (Origem -> Destino)",
             value=get_campo("rota", ""),
-            placeholder="Ex: Suzano/SP -> Rio de Janeiro/RJ",
+            placeholder="Ex: Suzano/SP -> Rio de Janeiro/RJ (preenche automaticamente ao escolher Coleta e Entrega)",
             key="w_rota",
             on_change=sync_campo,
             args=("w_rota", "rota"),
@@ -2080,7 +2084,7 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_qt_vol", "qt_vol"),
         )
-        c10.number_input(
+        vol_informado = c10.number_input(
             "Volume (m³)",
             value=to_float(get_campo("vol_m3", 0.0)),
             min_value=0.0,
@@ -2089,7 +2093,7 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_vol_m3", "vol_m3"),
         )
-        c11.number_input(
+        peso_informado = c11.number_input(
             "Peso Bruto (KG)",
             value=to_float(get_campo("peso_kg", 0.0)),
             min_value=0.0,
@@ -2098,6 +2102,22 @@ with st.container(border=True):
             on_change=sync_campo,
             args=("w_peso_kg", "peso_kg"),
         )
+
+        # Validação inteligente de capacidade do veículo selecionado na Etapa 1
+        vei_carga = next((v for v in veiculos_db if v["id_veiculo"] == get_campo("vei_id", 0)), None)
+        if vei_carga:
+            cap_kg = to_float(vei_carga.get("capacidade_carga_kg"), 0.0)
+            cap_m3 = to_float(vei_carga.get("capacidade_volume_m3"), 0.0)
+            if cap_kg > 0 and peso_informado > cap_kg:
+                st.warning(
+                    f"⚠️ O peso informado ({peso_informado:g} kg) excede a capacidade cadastrada do veículo "
+                    f"**{vei_carga['descricao_marca']}** ({cap_kg:g} kg)."
+                )
+            if cap_m3 > 0 and vol_informado > cap_m3:
+                st.warning(
+                    f"⚠️ O volume informado ({vol_informado:g} m³) excede a capacidade cúbica do veículo "
+                    f"**{vei_carga['descricao_marca']}** ({cap_m3:g} m³)."
+                )
 
         st.markdown('<div class="sec-subtitle">Documentos Fiscais</div>', unsafe_allow_html=True)
         d1, d2, d3, d4 = st.columns([3, 3, 3, 3])
@@ -2151,7 +2171,7 @@ with st.container(border=True):
         if cli_atual_id not in cli_opcoes:
             cli_atual_id = 0
 
-        sel_cli = st.selectbox(
+        st.selectbox(
             "Empresa Cliente (Razão Social / Nome Fantasia — Endereço)",
             options=list(cli_opcoes.keys()),
             index=list(cli_opcoes.keys()).index(cli_atual_id),
@@ -2160,17 +2180,31 @@ with st.container(border=True):
             on_change=on_cliente_change,
             args=(clientes_db, locais_db),
         )
-        c_atual = cli_map.get(sel_cli)
+        c_atual = cli_map.get(get_campo("cli_id", 0))
 
         cc1, cc2, cc3 = st.columns([4.5, 4.5, 3.0])
-        cc1.text_input("Razão Social", value=c_atual["razao_social"] if c_atual else "", disabled=True)
-        cc2.text_input("Nome Fantasia", value=(c_atual.get("nome_fantasia") or "") if c_atual else "", disabled=True)
-        cc3.text_input("CNPJ / CPF", value=c_atual["cnpj_cpf"] if c_atual else "", disabled=True)
+        cc1.text_input("Razão Social", value=c_atual["razao_social"] if c_atual else "", disabled=True, key="prev_cli_rz")
+        cc2.text_input(
+            "Nome Fantasia", value=(c_atual.get("nome_fantasia") or "") if c_atual else "", disabled=True, key="prev_cli_ft"
+        )
+        cc3.text_input("CNPJ / CPF", value=c_atual["cnpj_cpf"] if c_atual else "", disabled=True, key="prev_cli_doc")
 
         cc4, cc5, cc6 = st.columns([4.0, 4.0, 4.0])
-        cc4.text_input("Responsável", value=(c_atual["responsavel_comercial"] or "") if c_atual else "", disabled=True)
-        cc5.text_input("Telefone / Contato", value=(c_atual["telefone_comercial"] or "") if c_atual else "", disabled=True)
-        cc6.text_input("E-mail", value=(c_atual["email_financeiro"] or "") if c_atual else "", disabled=True)
+        cc4.text_input(
+            "Responsável",
+            value=(c_atual["responsavel_comercial"] or "") if c_atual else "",
+            disabled=True,
+            key="prev_cli_resp",
+        )
+        cc5.text_input(
+            "Telefone / Contato",
+            value=(c_atual["telefone_comercial"] or "") if c_atual else "",
+            disabled=True,
+            key="prev_cli_tel",
+        )
+        cc6.text_input(
+            "E-mail", value=(c_atual["email_financeiro"] or "") if c_atual else "", disabled=True, key="prev_cli_mail"
+        )
 
         end_cli_txt = ""
         if c_atual:
@@ -2184,7 +2218,7 @@ with st.container(border=True):
                 if p
             ]
             end_cli_txt = " — ".join(partes_e)
-        st.text_input("Endereço do Cliente", value=end_cli_txt, disabled=True)
+        st.text_input("Endereço do Cliente", value=end_cli_txt, disabled=True, key="prev_cli_end")
 
         if c_atual:
             col_corresp = next((l for l in locais_db if l["id_local"] == get_campo("col_id", 0)), None)
@@ -2311,7 +2345,7 @@ with st.container(border=True):
         render_navegacao_rodape(3, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 5: LOCAL DE COLETA (ORIGEM)
+    # TAB 5: LOCAL DE COLETA (ORIGEM) — ATUALIZAÇÃO INSTANTÂNEA
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[4]:
         render_cabecalho_aba("fa-solid fa-location-arrow", "Local de Coleta (Origem)", 5)
@@ -2348,25 +2382,38 @@ with st.container(border=True):
             col_atual_id = 0
 
         lc0, lc1, lc3, lc4 = st.columns([6.0, 2.0, 2.8, 1.2])
-        sel_col = lc0.selectbox(
+        lc0.selectbox(
             "Base / Empresa Cadastrada (Endereço e Cliente)",
             options=list(loc_opcoes.keys()),
             index=list(loc_opcoes.keys()).index(col_atual_id),
             format_func=lambda x: loc_opcoes[x],
             key="w_col_id",
-            on_change=sync_campo,
-            args=("w_col_id", "col_id"),
+            on_change=on_local_select_change,
+            args=("w_col_id", "col_id", locais_db),
         )
-        l_col = loc_map.get(sel_col)
-        lc1.text_input("CEP", value=l_col["cep"] if l_col else "", disabled=True, key="prev_col_cep")
-        lc3.text_input("Cidade", value=l_col["cidade"] if l_col else "", disabled=True, key="prev_col_cid")
-        lc4.text_input("UF", value=l_col["uf"] if l_col else "", disabled=True, key="prev_col_uf")
+        l_col = loc_map.get(get_campo("col_id", 0))
+        lc1.text_input("CEP", value=(l_col.get("cep") or "") if l_col else "", disabled=True, key="prev_col_cep")
+        lc3.text_input("Cidade", value=(l_col.get("cidade") or "") if l_col else "", disabled=True, key="prev_col_cid")
+        lc4.text_input("UF", value=(l_col.get("uf") or "") if l_col else "", disabled=True, key="prev_col_uf")
 
-        st.text_input(
+        lc_end, lc_cont, lc_rest = st.columns([6.0, 3.0, 3.0])
+        lc_end.text_input(
             "Endereço Completo",
-            value=l_col["endereco_completo"] if l_col else "",
+            value=(l_col.get("endereco_completo") or "") if l_col else "",
             disabled=True,
             key="prev_col_end",
+        )
+        lc_cont.text_input(
+            "Contato / Portaria",
+            value=(l_col.get("contato_portaria") or "") if l_col else "",
+            disabled=True,
+            key="prev_col_cont",
+        )
+        lc_rest.text_input(
+            "Restrição de Horário",
+            value=(l_col.get("restricao_horario") or "") if l_col else "",
+            disabled=True,
+            key="prev_col_rest",
         )
 
         st.markdown('<div class="sec-subtitle">Horários da Operação</div>', unsafe_allow_html=True)
@@ -2397,7 +2444,7 @@ with st.container(border=True):
         render_navegacao_rodape(4, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 6: LOCAL DE ENTREGA (DESTINO)
+    # TAB 6: LOCAL DE ENTREGA (DESTINO) — ATUALIZAÇÃO INSTANTÂNEA
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[5]:
         render_cabecalho_aba("fa-solid fa-map-pin", "Local de Entrega (Destino)", 6)
@@ -2413,25 +2460,38 @@ with st.container(border=True):
             ent_atual_id = 0
 
         le0, le1, le3, le4 = st.columns([6.0, 2.0, 2.8, 1.2])
-        sel_ent = le0.selectbox(
+        le0.selectbox(
             "Base / Empresa Cadastrada (Endereço e Cliente)",
             options=list(loc_opcoes.keys()),
             index=list(loc_opcoes.keys()).index(ent_atual_id),
             format_func=lambda x: loc_opcoes[x],
             key="w_ent_id",
-            on_change=sync_campo,
-            args=("w_ent_id", "ent_id"),
+            on_change=on_local_select_change,
+            args=("w_ent_id", "ent_id", locais_db),
         )
-        l_ent = loc_map.get(sel_ent)
-        le1.text_input("CEP", value=l_ent["cep"] if l_ent else "", disabled=True, key="prev_ent_cep")
-        le3.text_input("Cidade", value=l_ent["cidade"] if l_ent else "", disabled=True, key="prev_ent_cid")
-        le4.text_input("UF", value=l_ent["uf"] if l_ent else "", disabled=True, key="prev_ent_uf")
+        l_ent = loc_map.get(get_campo("ent_id", 0))
+        le1.text_input("CEP", value=(l_ent.get("cep") or "") if l_ent else "", disabled=True, key="prev_ent_cep")
+        le3.text_input("Cidade", value=(l_ent.get("cidade") or "") if l_ent else "", disabled=True, key="prev_ent_cid")
+        le4.text_input("UF", value=(l_ent.get("uf") or "") if l_ent else "", disabled=True, key="prev_ent_uf")
 
-        st.text_input(
+        le_end, le_cont, le_rest = st.columns([6.0, 3.0, 3.0])
+        le_end.text_input(
             "Endereço Completo",
-            value=l_ent["endereco_completo"] if l_ent else "",
+            value=(l_ent.get("endereco_completo") or "") if l_ent else "",
             disabled=True,
             key="prev_ent_end",
+        )
+        le_cont.text_input(
+            "Contato / Portaria",
+            value=(l_ent.get("contato_portaria") or "") if l_ent else "",
+            disabled=True,
+            key="prev_ent_cont",
+        )
+        le_rest.text_input(
+            "Restrição de Horário",
+            value=(l_ent.get("restricao_horario") or "") if l_ent else "",
+            disabled=True,
+            key="prev_ent_rest",
         )
 
         st.markdown('<div class="sec-subtitle">Horários da Operação</div>', unsafe_allow_html=True)
@@ -2781,7 +2841,7 @@ with st.container(border=True):
             args=("w_km_fin", "km_fin"),
         )
         km_rodado = max(0, km_fin_v - km_ini_v) if km_fin_v >= km_ini_v else 0
-        k3.text_input("KM Real Rodado", value=f"{km_rodado} km", disabled=True)
+        k3.text_input("KM Real Rodado", value=f"{km_rodado} km", disabled=True, key="prev_km_rodado")
 
         neg = to_float(get_campo("val_negociado", 0.0))
         recebido = to_float(get_campo("val_adiant", 0.0)) + to_float(get_campo("val_saldo", 0.0))
@@ -2826,7 +2886,6 @@ with st.container(border=True):
 
         todas_viagens_rel, todas_desp_rel = carregar_todas_viagens_consulta()
 
-        # Botão Global de Exportação da Base Completa (Viagens + Despesas + Todos os Cadastros)
         exp_c1, exp_c2 = st.columns([6.5, 5.5])
         exp_c1.markdown(
             "<div style='font-size:0.84rem;color:#475569;padding-top:0.35rem;'>"
@@ -3231,7 +3290,7 @@ with st.container(border=True):
         render_navegacao_rodape(8, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 10: CONSULTAS GERAIS (PESQUISA GLOBAL E ACESSO RÁPIDO PARA EDIÇÃO)
+    # TAB 10: CONSULTAS GERAIS (PESQUISA GLOBAL, EDIÇÃO E EXCLUSÃO SEGURA)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[9]:
         render_cabecalho_aba("fa-solid fa-magnifying-glass", "Consultas Gerais — Viagens, Fretes e Ciclos", 10)
@@ -3337,8 +3396,8 @@ with st.container(border=True):
         )
 
         if filtradas:
-            st.markdown('<div class="sec-subtitle">Abrir Registro para Consulta Detalhada ou Edição</div>', unsafe_allow_html=True)
-            ac1, ac2, ac3 = st.columns([5.5, 3.0, 3.5])
+            st.markdown('<div class="sec-subtitle">Abrir ou Excluir Registro Selecionado</div>', unsafe_allow_html=True)
+            ac1, ac2, ac3, ac4 = st.columns([4.8, 2.7, 2.6, 1.9])
             opcoes_abrir = {
                 v["id_viagem"]: f"{v['codigo_viagem']} | {v['cliente']} | {v['rota']} ({fmt_brl(v['valor_negociado'])})"
                 for v in filtradas
@@ -3363,11 +3422,46 @@ with st.container(border=True):
             )
             ac3.markdown("<div style='height: 1.65rem;'></div>", unsafe_allow_html=True)
             ac3.button(
-                "✏️ Abrir e Editar Selecionada",
+                "✏️ Abrir e Editar",
                 use_container_width=True,
                 on_click=_abrir_viagem_para_edicao,
                 args=(id_escolhido_abrir, destino_etapa),
             )
+            ac4.markdown("<div style='height: 1.65rem;'></div>", unsafe_allow_html=True)
+            if ac4.button("🗑️ Excluir", use_container_width=True, key="btn_req_del_viagem"):
+                st.session_state["confirm_del_viagem_id"] = id_escolhido_abrir
+                st.rerun()
+
+            if st.session_state.get("confirm_del_viagem_id") == id_escolhido_abrir:
+                vg_del_info = next((x for x in filtradas if x["id_viagem"] == id_escolhido_abrir), None)
+                cod_del = vg_del_info["codigo_viagem"] if vg_del_info else str(id_escolhido_abrir)
+                st.markdown(
+                    f"<div class='confirm-box-del'>🚨 Tem certeza que deseja EXCLUIR permanentemente a viagem <strong>{cod_del}</strong> e todas as suas despesas? Esta ação não pode ser desfeita.</div>",
+                    unsafe_allow_html=True,
+                )
+                dv1, dv2, _ = st.columns([1.4, 1.4, 4])
+                if dv1.button("🗑️ Sim, Excluir Viagem", key="btn_ok_del_viagem", use_container_width=True):
+                    with SessionLocal() as db:
+                        v_obj = db.query(Viagem).filter_by(id_viagem=id_escolhido_abrir).first()
+                        if v_obj:
+                            c_obj = v_obj.ciclo
+                            db.delete(v_obj)
+                            db.flush()
+                            if c_obj and not c_obj.viagens:
+                                db.delete(c_obj)
+                            db.commit()
+                    if st.session_state.get("viagem_ativa_id") == id_escolhido_abrir:
+                        st.session_state["viagem_ativa_id"] = 0
+                        st.session_state["loaded_viagem_id"] = None
+                    st.session_state["confirm_del_viagem_id"] = None
+                    carregar_listas_base.clear()
+                    carregar_todas_viagens_consulta.clear()
+                    carregar_despesas_viagem.clear()
+                    st.toast(f"Viagem {cod_del} excluída com sucesso.", icon="🗑️")
+                    st.rerun()
+                if dv2.button("❌ Cancelar", key="btn_no_del_viagem", use_container_width=True):
+                    st.session_state["confirm_del_viagem_id"] = None
+                    st.rerun()
 
             st.markdown('<div class="sec-subtitle">Tabela Completa de Operações Registradas</div>', unsafe_allow_html=True)
             df_consulta = pd.DataFrame(
