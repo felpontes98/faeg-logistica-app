@@ -839,12 +839,12 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
     pares_info = [
         ("Cliente:", dados_resumo["cliente"][:36], "Status:", dados_resumo["status"]),
         ("Tipo Viagem:", dados_resumo["tipo_viagem"][:36], "Tipo Frete:", dados_resumo["tipo_frete"][:30]),
-        ("Veiculo:", dados_resumo["veiculo"][:36], "KM Rodado:", f"{dados_resumo['km_rodado']} km"),
-        ("Motorista:", dados_resumo["motorista"][:36], "Data Coleta:", dados_resumo["data_coleta"]),
-        ("Rota:", dados_resumo["rota"][:38], "Data Entrega:", dados_resumo["data_entrega"]),
-        ("Coleta:", dados_resumo["coleta"][:36], "CIOT:", dados_resumo["ciot"]),
-        ("Entrega:", dados_resumo["entrega"][:36], "MDF-e:", dados_resumo["mdfe"]),
-        ("NF-e / CT-e:", f"{dados_resumo['nfe']} / {dados_resumo['cte']}", "", ""),
+        ("Origem Frete:", dados_resumo["origem_frete"][:36], "KM Rodado:", f"{dados_resumo['km_rodado']} km"),
+        ("Veiculo:", dados_resumo["veiculo"][:36], "Data Coleta:", dados_resumo["data_coleta"]),
+        ("Motorista:", dados_resumo["motorista"][:36], "Data Entrega:", dados_resumo["data_entrega"]),
+        ("Rota:", dados_resumo["rota"][:38], "CIOT:", dados_resumo["ciot"]),
+        ("Coleta:", dados_resumo["coleta"][:36], "MDF-e:", dados_resumo["mdfe"]),
+        ("Entrega:", dados_resumo["entrega"][:36], "NF-e / CT-e:", f"{dados_resumo['nfe']} / {dados_resumo['cte']}"),
     ]
 
     for lbl1, val1, lbl2, val2 in pares_info:
@@ -963,6 +963,19 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
 # ==============================================================================
 # FUNÇÕES AUXILIARES E PERSISTÊNCIA DE FORMULÁRIO ENTRE ABAS
 # ==============================================================================
+OPCOES_ORIGEM_FRETE = [
+    "Aplicativo de Fretes",
+    "Redes Sociais",
+    "Cliente Fixo",
+    "Cliente Recorrente",
+    "Cliente Eventual",
+    "Indicação",
+    "Prospecção",
+    "Transportadora Parceira",
+    "Outros",
+]
+
+
 def to_float(val, default=0.0):
     return float(val) if val is not None else float(default)
 
@@ -1142,7 +1155,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
             "mdfe": "",
             "ciot": "",
             "cli_id": 0,
-            "forma_contr": "Tonelada",
+            "forma_contr": "Aplicativo de Fretes",
             "val_divulgado": 0.0,
             "val_negociado": 0.0,
             "perc_adiant": 0.0,
@@ -1211,7 +1224,9 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
             "ciot": v.ciot_numero or "",
             "cli_id": c.id_cliente if c else 0,
             "forma_contr": (
-                fin.forma_contratacao if fin and fin.forma_contratacao in ["Tonelada", "Viagem Fechada"] else "Tonelada"
+                fin.forma_contratacao
+                if fin and fin.forma_contratacao in OPCOES_ORIGEM_FRETE
+                else "Aplicativo de Fretes"
             ),
             "val_divulgado": to_float(fin.valor_divulgado) if fin else 0.0,
             "val_negociado": to_float(fin.valor_negociado_total) if fin else 0.0,
@@ -1295,7 +1310,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 
             novo_fin = CicloFinanceiro(
                 id_ciclo=novo_ciclo.id_ciclo,
-                forma_contratacao=get_campo("forma_contr", "Tonelada"),
+                forma_contratacao=get_campo("forma_contr", "Aplicativo de Fretes"),
                 valor_divulgado=get_campo("val_divulgado", 0.0),
                 valor_negociado_total=get_campo("val_negociado", 0.0),
                 perc_adiantamento=get_campo("perc_adiant", 0.0),
@@ -1376,7 +1391,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 fin = CicloFinanceiro(id_ciclo=c.id_ciclo)
                 db.add(fin)
 
-            fin.forma_contratacao = get_campo("forma_contr", "Tonelada")
+            fin.forma_contratacao = get_campo("forma_contr", "Aplicativo de Fretes")
             fin.valor_divulgado = get_campo("val_divulgado", 0.0)
             fin.valor_negociado_total = get_campo("val_negociado", 0.0)
             fin.perc_adiantamento = get_campo("perc_adiant", 0.0)
@@ -1853,18 +1868,17 @@ with st.container(border=True):
         render_navegacao_rodape(2, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # TAB 4: NEGOCIAÇÃO E RECEBIMENTOS
+    # TAB 4: NEGOCIAÇÃO E RECEBIMENTOS (ORIGEM DE FRETE)
     # --------------------------------------------------------------------------
     elif aba_ativa == MENU_ITENS[3]:
         render_cabecalho_aba("fa-solid fa-handshake", "Negociação e Recebimentos", 4)
 
-        f1, f2, f3 = st.columns([3, 3.5, 5.5])
-        formas = ["Tonelada", "Viagem Fechada"]
-        fc_val = get_campo("forma_contr", "Tonelada")
+        f1, f2, f3 = st.columns([3.5, 3.2, 5.3])
+        fc_val = get_campo("forma_contr", "Aplicativo de Fretes")
         f1.selectbox(
-            "Forma de Contratação",
-            formas,
-            index=formas.index(fc_val) if fc_val in formas else 0,
+            "Origem de Frete",
+            OPCOES_ORIGEM_FRETE,
+            index=OPCOES_ORIGEM_FRETE.index(fc_val) if fc_val in OPCOES_ORIGEM_FRETE else 0,
             key="w_forma_contr",
             on_change=sync_campo,
             args=("w_forma_contr", "forma_contr"),
@@ -2530,6 +2544,7 @@ with st.container(border=True):
         ciclo_rel = (get_campo("ciclo_nome") or "").strip()
         tipo_viagem_fmt = f"Ciclo ({ciclo_rel})" if (tv_rel == "Ciclo" and ciclo_rel) else "Individual"
         tipo_frete_fmt = get_campo("tipo_frete", "Dedicado")
+        origem_frete_fmt = get_campo("forma_contr", "Aplicativo de Fretes")
 
         buffer_xlsx = io.BytesIO()
         df_exp_desp = pd.DataFrame(lista_export_desp)
@@ -2539,6 +2554,7 @@ with st.container(border=True):
                     "Viagem": id_label_ctx,
                     "Tipo de Viagem": tipo_viagem_fmt,
                     "Tipo de Frete": tipo_frete_fmt,
+                    "Origem de Frete": origem_frete_fmt,
                     "Cliente": cli_nome_ctx,
                     "Motorista": mot_nome_ctx,
                     "Rota": rota_ctx,
@@ -2574,6 +2590,7 @@ with st.container(border=True):
             "status": status_ctx,
             "tipo_viagem": tipo_viagem_fmt,
             "tipo_frete": tipo_frete_fmt,
+            "origem_frete": origem_frete_fmt,
             "cliente": cli_nome_ctx,
             "motorista": mot_nome_ctx,
             "veiculo": f"{vei_obj['descricao_marca']} ({vei_obj['placa']})" if vei_obj else "Não selecionado",
