@@ -81,6 +81,7 @@ OPCOES_SITUACAO_OPERACAO = [
     "Cancelada",
 ]
 
+
 # ==============================================================================
 # FUNÇÕES DE PROGRESSÃO E EXTRAÇÃO DO CÓDIGO ÚNICO DA VIAGEM (V1, V2, V3...)
 # ==============================================================================
@@ -136,632 +137,592 @@ def formatar_rota_exibicao(origem, destino, fallback_resumo=""):
 # ==============================================================================
 st.markdown(
     """
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<style>
-    html, body, [class*="css"], .stApp, button, input, select, textarea {
-        font-family: 'Montserrat', sans-serif !important;
-    }
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            color-scheme: light !important;
+        }
+        html, body, [class*="css"], .stApp, button, input, select, textarea {
+            font-family: 'Montserrat', sans-serif !important;
+        }
+        header[data-testid="stHeader"] {
+            background: transparent;
+            height: 0.4rem;
+        }
+        #MainMenu, footer { visibility: hidden; }
 
-    header[data-testid="stHeader"] {
-        background: transparent;
-        height: 0.4rem;
-    }
-    #MainMenu, footer {visibility: hidden;}
+        /* Remove completamente "Press Enter to submit form" / "Press Enter to apply" */
+        div[data-testid="InputInstructions"],
+        [data-testid="stForm"] small,
+        .stTextInput small,
+        .stNumberInput small {
+            display: none !important;
+        }
 
-    /* Remove completamente "Press Enter to submit form" / "Press Enter to apply" */
-    div[data-testid="InputInstructions"],
-    [data-testid="stForm"] small,
-    .stTextInput small,
-    .stNumberInput small {
-        display: none !important;
-    }
+        .stApp, [data-testid="stAppViewContainer"] {
+            background-color: #E9E9E9 !important;
+            color: #0D263C !important;
+        }
+        .block-container {
+            padding: 1.2rem 2.2rem 2.5rem 2.2rem;
+            max-width: 100%;
+        }
 
-    .stApp, [data-testid="stAppViewContainer"] {
-        background-color: #E9E9E9 !important;
-        color: #0D263C !important;
-    }
-    .block-container {
-        padding: 1.2rem 2.2rem 2.5rem 2.2rem;
-        max-width: 100%;
-    }
+        /* =====================================================================
+           SIDEBAR INSTITUCIONAL FAEG (AZUL ESTRUTURAL #0D263C)
+           ===================================================================== */
+        section[data-testid="stSidebar"] {
+            background-color: #0D263C !important;
+            border-right: 1px solid #081826;
+            min-width: 245px;
+            max-width: 560px;
+        }
+        section[data-testid="stSidebar"] > div:first-child {
+            padding-top: 0 !important;
+        }
+        div[data-testid="stSidebarResizeHandle"] {
+            background-color: rgba(171, 206, 225, 0.15) !important;
+            width: 4px !important;
+            transition: background-color 0.15s ease;
+        }
+        div[data-testid="stSidebarResizeHandle"]:hover {
+            background-color: #F34D25 !important;
+        }
+        .sidebar-brand {
+            padding: 1.35rem 1.1rem 1.15rem 1.1rem;
+            border-bottom: 1px solid rgba(171, 206, 225, 0.22);
+            margin-bottom: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sidebar-logo-img {
+            width: 100%;
+            max-width: 215px;
+            max-height: 86px;
+            height: auto;
+            object-fit: contain;
+            display: block;
+            filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
+        }
+        .sidebar-monogram-fallback {
+            width: 54px;
+            height: 54px;
+            border-radius: 10px;
+            background-color: #F34D25;
+            color: #FFFFFF;
+            font-weight: 900;
+            font-size: 1.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-    /* =====================================================================
-       SIDEBAR INSTITUCIONAL FAEG (AZUL ESTRUTURAL #0D263C)
-       ===================================================================== */
-    section[data-testid="stSidebar"] {
-        background-color: #0D263C !important;
-        border-right: 1px solid #081826;
-        min-width: 245px;
-        max-width: 560px;
-    }
-    section[data-testid="stSidebar"] > div:first-child {
-        padding-top: 0 !important;
-    }
+        /* Cartão Fixo da Viagem Ativa na Sidebar */
+        .sidebar-active-trip-card {
+            background-color: #143654;
+            border: 1px solid rgba(171, 206, 225, 0.38);
+            border-left: 4px solid #F34D25;
+            border-radius: 0.45rem;
+            padding: 0.65rem 0.85rem;
+            margin: 0 0.95rem 0.55rem 0.95rem;
+        }
+        .sidebar-active-trip-tag {
+            font-size: 0.62rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #ABCEE1;
+            letter-spacing: 0.06em;
+        }
+        .sidebar-active-trip-code {
+            font-size: 0.95rem;
+            font-weight: 900;
+            color: #FFFFFF;
+            margin-top: 0.15rem;
+            word-break: break-word;
+        }
 
-    div[data-testid="stSidebarResizeHandle"] {
-        background-color: rgba(171, 206, 225, 0.15) !important;
-        width: 4px !important;
-        transition: background-color 0.15s ease;
-    }
-    div[data-testid="stSidebarResizeHandle"]:hover {
-        background-color: #F34D25 !important;
-    }
+        /* Menu Lateral (st.radio) */
+        section[data-testid="stSidebar"] div[role="radiogroup"] {
+            gap: 2px;
+        }
+        section[data-testid="stSidebar"] div[role="radiogroup"] label {
+            width: 100%;
+            padding: 0.56rem 1.25rem;
+            margin: 0;
+            border-radius: 0;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border-right: 4px solid transparent;
+        }
+        section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+            background-color: rgba(171, 206, 225, 0.12);
+        }
+        section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"],
+        section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
+            background-color: rgba(171, 206, 225, 0.22) !important;
+            border-right: 4px solid #F34D25 !important;
+        }
+        section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p {
+            color: #FFFFFF !important;
+            font-weight: 700 !important;
+        }
+        section[data-testid="stSidebar"] div[role="radiogroup"] label p {
+            font-size: 0.81rem !important;
+            color: #E9E9E9 !important;
+            font-weight: 500;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        section[data-testid="stSidebar"] div[role="radiogroup"] label > div:first-child {
+            display: none !important;
+        }
 
-    .sidebar-brand {
-        padding: 1.35rem 1.1rem 1.15rem 1.1rem;
-        border-bottom: 1px solid rgba(171, 206, 225, 0.22);
-        margin-bottom: 0.9rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .sidebar-logo-img {
-        width: 100%;
-        max-width: 215px;
-        max-height: 86px;
-        height: auto;
-        object-fit: contain;
-        display: block;
-        filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
-    }
-    .sidebar-monogram-fallback {
-        width: 54px;
-        height: 54px;
-        border-radius: 10px;
-        background-color: #F34D25;
-        color: #FFFFFF;
-        font-weight: 900;
-        font-size: 1.9rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
+        /* Botão Secundário na Sidebar (+ Iniciar Nova Viagem) */
+        section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+            background-color: rgba(171, 206, 225, 0.14) !important;
+            color: #FFFFFF !important;
+            border: 1px solid rgba(171, 206, 225, 0.45) !important;
+            font-weight: 700 !important;
+            font-size: 0.75rem !important;
+            border-radius: 0.4rem !important;
+        }
+        section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+            background-color: rgba(171, 206, 225, 0.28) !important;
+        }
 
-    /* Cartão Fixo da Viagem Ativa na Sidebar */
-    .sidebar-active-trip-card {
-        background-color: #143654;
-        border: 1px solid rgba(171, 206, 225, 0.38);
-        border-left: 4px solid #F34D25;
-        border-radius: 0.45rem;
-        padding: 0.65rem 0.85rem;
-        margin: 0 0.95rem 0.55rem 0.95rem;
-    }
-    .sidebar-active-trip-tag {
-        font-size: 0.62rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        color: #ABCEE1;
-        letter-spacing: 0.06em;
-    }
-    .sidebar-active-trip-code {
-        font-size: 0.95rem;
-        font-weight: 900;
-        color: #FFFFFF;
-        margin-top: 0.15rem;
-        word-break: break-word;
-    }
+        /* Botão Principal CTA em Laranja Energia (#F34D25) */
+        section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+            background-color: #F34D25 !important;
+            color: #FFFFFF !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            font-size: 0.82rem !important;
+            border: none !important;
+            border-radius: 0.45rem !important;
+            padding: 0.75rem 1rem !important;
+            box-shadow: 0 4px 12px rgba(243, 77, 37, 0.35);
+        }
+        section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+            background-color: #D93E18 !important;
+        }
 
-    /* Menu Lateral (st.radio) */
-    section[data-testid="stSidebar"] div[role="radiogroup"] {
-        gap: 2px;
-    }
-    section[data-testid="stSidebar"] div[role="radiogroup"] label {
-        width: 100%;
-        padding: 0.56rem 1.25rem;
-        margin: 0;
-        border-radius: 0;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        border-right: 4px solid transparent;
-    }
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-        background-color: rgba(171, 206, 225, 0.12);
-    }
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"],
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
-        background-color: rgba(171, 206, 225, 0.22) !important;
-        border-right: 4px solid #F34D25 !important;
-    }
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p {
-        color: #FFFFFF !important;
-        font-weight: 700 !important;
-    }
-    section[data-testid="stSidebar"] div[role="radiogroup"] label p {
-        font-size: 0.81rem !important;
-        color: #E9E9E9 !important;
-        font-weight: 500;
-        margin: 0;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    section[data-testid="stSidebar"] div[role="radiogroup"] label > div:first-child {
-        display: none !important;
-    }
+        /* =====================================================================
+           PADRONIZAÇÃO TOTAL DE TODOS OS INPUTS, SELECTS, DATES E TIMES
+           ===================================================================== */
+        [data-testid="stAppViewContainer"] div[data-baseweb="input"],
+        [data-testid="stAppViewContainer"] div[data-baseweb="input"] > div,
+        [data-testid="stAppViewContainer"] div[data-baseweb="base-input"],
+        [data-testid="stAppViewContainer"] div[data-baseweb="select"] > div,
+        [data-testid="stAppViewContainer"] div[data-testid="stDateInput"] > div > div,
+        [data-testid="stAppViewContainer"] div[data-testid="stTimeInput"] > div > div {
+            background-color: #FFFFFF !important;
+            border: 1.5px solid #CBD5E1 !important;
+            border-radius: 0.45rem !important;
+            min-height: 42px !important;
+            color: #0D263C !important;
+            box-shadow: none !important;
+        }
+        [data-testid="stAppViewContainer"] div[data-baseweb="input"]:hover > div,
+        [data-testid="stAppViewContainer"] div[data-baseweb="select"] > div:hover {
+            border-color: #94A3B8 !important;
+        }
+        [data-testid="stAppViewContainer"] div[data-baseweb="input"]:focus-within > div,
+        [data-testid="stAppViewContainer"] div[data-baseweb="base-input"]:focus-within,
+        [data-testid="stAppViewContainer"] div[data-baseweb="select"] > div:focus-within {
+            border-color: #F34D25 !important;
+            box-shadow: 0 0 0 2px rgba(243, 77, 37, 0.16) !important;
+        }
+        [data-testid="stAppViewContainer"] div[data-baseweb="input"] input,
+        [data-testid="stAppViewContainer"] div[data-baseweb="select"] > div {
+            padding-left: 0.65rem !important;
+            padding-right: 0.65rem !important;
+        }
+        [data-testid="stAppViewContainer"] input,
+        [data-testid="stAppViewContainer"] textarea,
+        [data-testid="stAppViewContainer"] div[data-baseweb="select"] span,
+        [data-testid="stAppViewContainer"] div[data-baseweb="select"] div {
+            color: #0D263C !important;
+            -webkit-text-fill-color: #0D263C !important;
+            font-size: 0.86rem !important;
+            font-weight: 500 !important;
+        }
+        [data-testid="stAppViewContainer"] input::placeholder,
+        [data-testid="stAppViewContainer"] textarea::placeholder {
+            color: #64748B !important;
+            -webkit-text-fill-color: #64748B !important;
+            opacity: 1 !important;
+            font-size: 0.80rem !important;
+            font-weight: 400 !important;
+            text-overflow: ellipsis !important;
+        }
+        [data-testid="stAppViewContainer"] div[data-baseweb="select"] svg,
+        [data-testid="stAppViewContainer"] div[data-testid="stDateInput"] svg,
+        [data-testid="stAppViewContainer"] div[data-testid="stTimeInput"] svg {
+            fill: #0D263C !important;
+            color: #0D263C !important;
+        }
+        [data-testid="stAppViewContainer"] button[data-testid="stNumberInputStepDown"],
+        [data-testid="stAppViewContainer"] button[data-testid="stNumberInputStepUp"] {
+            background-color: #F8FAFC !important;
+            color: #0D263C !important;
+            border-left: 1px solid #E2E8F0 !important;
+        }
+        [data-testid="stAppViewContainer"] button[data-testid="stNumberInputStepDown"]:hover,
+        [data-testid="stAppViewContainer"] button[data-testid="stNumberInputStepUp"]:hover {
+            background-color: #ABCEE1 !important;
+            color: #0D263C !important;
+        }
 
-    /* Botão Secundário na Sidebar (+ Iniciar Nova Viagem) */
-    section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
-        background-color: rgba(171, 206, 225, 0.14) !important;
-        color: #FFFFFF !important;
-        border: 1px solid rgba(171, 206, 225, 0.45) !important;
-        font-weight: 700 !important;
-        font-size: 0.75rem !important;
-        border-radius: 0.4rem !important;
-    }
-    section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
-        background-color: rgba(171, 206, 225, 0.28) !important;
-    }
+        div[data-baseweb="popover"],
+        div[data-baseweb="popover"] > div,
+        ul[data-baseweb="menu"],
+        div[data-baseweb="calendar"] {
+            background-color: #FFFFFF !important;
+            color: #0D263C !important;
+            border: 1px solid #CBD5E1 !important;
+            box-shadow: 0 12px 28px rgba(13, 38, 60, 0.16) !important;
+        }
+        ul[data-baseweb="menu"] li,
+        div[data-baseweb="calendar"] * {
+            color: #0D263C !important;
+        }
+        ul[data-baseweb="menu"] li:hover,
+        ul[data-baseweb="menu"] li[aria-selected="true"] {
+            background-color: rgba(171, 206, 225, 0.4) !important;
+            color: #0D263C !important;
+            font-weight: 700 !important;
+        }
 
-    /* Botão Principal CTA em Laranja Energia (#F34D25) */
-    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-        background-color: #F34D25 !important;
-        color: #FFFFFF !important;
-        font-weight: 800 !important;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        font-size: 0.82rem !important;
-        border: none !important;
-        border-radius: 0.45rem !important;
-        padding: 0.75rem 1rem !important;
-        box-shadow: 0 4px 12px rgba(243, 77, 37, 0.35);
-    }
-    section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
-        background-color: #D93E18 !important;
-    }
+        [data-testid="stAppViewContainer"] div[data-baseweb="input"]:has(input:disabled),
+        [data-testid="stAppViewContainer"] div[data-baseweb="input"]:has(input:disabled) > div,
+        [data-testid="stAppViewContainer"] div[data-baseweb="base-input"]:has(input:disabled) {
+            background-color: #F1F5F9 !important;
+            border: 1.5px dashed #94A3B8 !important;
+        }
+        [data-testid="stAppViewContainer"] input:disabled {
+            background-color: #F1F5F9 !important;
+            color: #0D263C !important;
+            font-weight: 700 !important;
+            -webkit-text-fill-color: #0D263C !important;
+            opacity: 1 !important;
+        }
 
-    /* =====================================================================
-       PADRONIZAÇÃO TOTAL DE TODOS OS INPUTS, SELECTS, DATES E TIMES
-       ===================================================================== */
-    [data-testid="stAppViewContainer"] div[data-baseweb="input"],
-    [data-testid="stAppViewContainer"] div[data-baseweb="input"] > div,
-    [data-testid="stAppViewContainer"] div[data-baseweb="base-input"],
-    [data-testid="stAppViewContainer"] div[data-baseweb="select"] > div,
-    [data-testid="stAppViewContainer"] div[data-testid="stDateInput"] > div > div,
-    [data-testid="stAppViewContainer"] div[data-testid="stTimeInput"] > div > div {
-        background-color: #FFFFFF !important;
-        border: 1.5px solid #CBD5E1 !important;
-        border-radius: 0.45rem !important;
-        min-height: 42px !important;
-        color: #0D263C !important;
-        box-shadow: none !important;
-    }
+        /* Rótulos com quebra de linha controlada (elimina sobreposição entre colunas) */
+        div[data-testid="stWidgetLabel"],
+        .stTextInput label,
+        .stNumberInput label,
+        .stSelectbox label,
+        .stDateInput label,
+        .stTimeInput label,
+        .stTextArea label {
+            margin-bottom: 0.25rem !important;
+            min-height: 1.15rem !important;
+        }
+        div[data-testid="stWidgetLabel"] p,
+        .stTextInput label p,
+        .stNumberInput label p,
+        .stSelectbox label p,
+        .stDateInput label p,
+        .stTimeInput label p,
+        .stTextArea label p {
+            font-size: 0.71rem !important;
+            font-weight: 700 !important;
+            color: #0D263C !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.03em !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            overflow: visible !important;
+            text-overflow: unset !important;
+            line-height: 1.25 !important;
+        }
 
-    [data-testid="stAppViewContainer"] div[data-baseweb="input"]:hover > div,
-    [data-testid="stAppViewContainer"] div[data-baseweb="select"] > div:hover {
-        border-color: #94A3B8 !important;
-    }
-    [data-testid="stAppViewContainer"] div[data-baseweb="input"]:focus-within > div,
-    [data-testid="stAppViewContainer"] div[data-baseweb="base-input"]:focus-within,
-    [data-testid="stAppViewContainer"] div[data-baseweb="select"] > div:focus-within {
-        border-color: #F34D25 !important;
-        box-shadow: 0 0 0 2px rgba(243, 77, 37, 0.16) !important;
-    }
+        /* Abas internas (st.tabs) no padrão visual FAEG */
+        button[data-baseweb="tab"] {
+            font-weight: 700 !important;
+            font-size: 0.85rem !important;
+            color: #475569 !important;
+            padding: 0.65rem 1.1rem !important;
+            background-color: transparent !important;
+        }
+        button[data-baseweb="tab"]:hover {
+            color: #0D263C !important;
+            background-color: rgba(171, 206, 225, 0.16) !important;
+        }
+        button[data-baseweb="tab"][aria-selected="true"] {
+            color: #F34D25 !important;
+            font-weight: 800 !important;
+        }
+        div[data-baseweb="tab-highlight"] {
+            background-color: #F34D25 !important;
+            height: 3px !important;
+        }
 
-    [data-testid="stAppViewContainer"] div[data-baseweb="input"] input,
-    [data-testid="stAppViewContainer"] div[data-baseweb="select"] > div {
-        padding-left: 0.65rem !important;
-        padding-right: 0.65rem !important;
-    }
+        [data-testid="stAppViewContainer"] .stButton > button,
+        [data-testid="stAppViewContainer"] .stFormSubmitButton > button,
+        [data-testid="stAppViewContainer"] .stDownloadButton > button {
+            background-color: #0D263C !important;
+            color: #FFFFFF !important;
+            font-weight: 700 !important;
+            font-size: 0.8rem !important;
+            letter-spacing: 0.02em;
+            border: 1px solid #0D263C !important;
+            border-radius: 0.45rem !important;
+            min-height: 40px !important;
+            transition: all 0.15s ease;
+        }
+        [data-testid="stAppViewContainer"] .stButton > button:hover,
+        [data-testid="stAppViewContainer"] .stFormSubmitButton > button:hover,
+        [data-testid="stAppViewContainer"] .stDownloadButton > button:hover {
+            background-color: #F34D25 !important;
+            border-color: #F34D25 !important;
+            color: #FFFFFF !important;
+        }
 
-    [data-testid="stAppViewContainer"] input,
-    [data-testid="stAppViewContainer"] textarea,
-    [data-testid="stAppViewContainer"] div[data-baseweb="select"] span,
-    [data-testid="stAppViewContainer"] div[data-baseweb="select"] div {
-        color: #0D263C !important;
-        -webkit-text-fill-color: #0D263C !important;
-        font-size: 0.86rem !important;
-        font-weight: 500 !important;
-    }
+        /* =====================================================================
+           BARRA EXECUTIVA E CARTÃO PRINCIPAL
+           ===================================================================== */
+        .top-context-bar {
+            background-color: #FFFFFF;
+            border: 1px solid #D6D6D6;
+            border-left: 5px solid #F34D25;
+            border-radius: 0.55rem;
+            padding: 0.85rem 1.4rem;
+            margin-bottom: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 2px 6px rgba(13, 38, 60, 0.04);
+        }
+        .ctx-item { display: flex; flex-direction: column; }
+        .ctx-label {
+            font-size: 0.64rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #64748B;
+            letter-spacing: 0.05em;
+        }
+        .ctx-val { font-size: 0.9rem; font-weight: 800; color: #0D263C; }
+        .ctx-badge {
+            background-color: rgba(171, 206, 225, 0.35);
+            color: #0D263C;
+            border: 1px solid #ABCEE1;
+            padding: 0.32rem 0.8rem;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
 
-    [data-testid="stAppViewContainer"] input::placeholder,
-    [data-testid="stAppViewContainer"] textarea::placeholder {
-        color: #64748B !important;
-        -webkit-text-fill-color: #64748B !important;
-        opacity: 1 !important;
-        font-size: 0.80rem !important;
-        font-weight: 400 !important;
-        text-overflow: ellipsis !important;
-    }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div > .main-card-marker) {
+            background-color: #FFFFFF;
+            border-radius: 0.65rem;
+            border: 1px solid #D6D6D6;
+            padding: 1.85rem 2.2rem;
+            box-shadow: 0 4px 14px rgba(13, 38, 60, 0.05);
+        }
 
-    [data-testid="stAppViewContainer"] div[data-baseweb="select"] svg,
-    [data-testid="stAppViewContainer"] div[data-testid="stDateInput"] svg,
-    [data-testid="stAppViewContainer"] div[data-testid="stTimeInput"] svg {
-        fill: #0D263C !important;
-        color: #0D263C !important;
-    }
+        .tab-header-wrap {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #E9E9E9;
+            padding-bottom: 0.75rem;
+            margin-bottom: 1.35rem;
+        }
+        .tab-title {
+            font-size: 1.32rem;
+            font-weight: 800;
+            color: #0D263C;
+            letter-spacing: -0.01em;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+        .tab-title i { color: #F34D25; font-size: 1.22rem; }
+        .tab-step-pill {
+            background-color: #F1F5F9;
+            color: #475569;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 0.25rem 0.7rem;
+            border-radius: 999px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
 
-    [data-testid="stAppViewContainer"] button[data-testid="stNumberInputStepDown"],
-    [data-testid="stAppViewContainer"] button[data-testid="stNumberInputStepUp"] {
-        background-color: #F8FAFC !important;
-        color: #0D263C !important;
-        border-left: 1px solid #E2E8F0 !important;
-    }
-    [data-testid="stAppViewContainer"] button[data-testid="stNumberInputStepDown"]:hover,
-    [data-testid="stAppViewContainer"] button[data-testid="stNumberInputStepUp"]:hover {
-        background-color: #ABCEE1 !important;
-        color: #0D263C !important;
-    }
+        .sec-subtitle {
+            font-size: 0.75rem;
+            font-weight: 800;
+            color: #0D263C;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            border-top: 1px solid #E9E9E9;
+            padding-top: 1rem;
+            margin-top: 1rem;
+            margin-bottom: 0.65rem;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+        .sec-subtitle::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            background-color: #F34D25;
+        }
 
-    div[data-baseweb="popover"],
-    div[data-baseweb="popover"] > div,
-    ul[data-baseweb="menu"],
-    div[data-baseweb="calendar"] {
-        background-color: #FFFFFF !important;
-        color: #0D263C !important;
-        border: 1px solid #CBD5E1 !important;
-        box-shadow: 0 12px 28px rgba(13, 38, 60, 0.16) !important;
-    }
-    ul[data-baseweb="menu"] li,
-    div[data-baseweb="calendar"] * {
-        color: #0D263C !important;
-    }
-    ul[data-baseweb="menu"] li:hover,
-    ul[data-baseweb="menu"] li[aria-selected="true"] {
-        background-color: rgba(171, 206, 225, 0.4) !important;
-        color: #0D263C !important;
-        font-weight: 700 !important;
-    }
+        .edit-banner-pill {
+            background-color: rgba(243, 77, 37, 0.1);
+            border: 1px solid #F34D25;
+            color: #0D263C;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.4rem 0.75rem;
+            border-radius: 0.4rem;
+            margin-bottom: 0.7rem;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+        .confirm-box-del {
+            background-color: #FEF2F2;
+            border: 1px solid #EF4444;
+            border-left: 4px solid #DC2626;
+            color: #7F1D1D;
+            font-size: 0.76rem;
+            font-weight: 700;
+            padding: 0.45rem 0.7rem;
+            border-radius: 0.35rem;
+            margin: 0.25rem 0 0.4rem 0;
+        }
+        .confirm-box-edit {
+            background-color: #EFF6FF;
+            border: 1px solid #3B82F6;
+            border-left: 4px solid #0D263C;
+            color: #0D263C;
+            font-size: 0.76rem;
+            font-weight: 700;
+            padding: 0.45rem 0.7rem;
+            border-radius: 0.35rem;
+            margin: 0.25rem 0 0.4rem 0;
+        }
+        .cliente-coleta-banner {
+            background-color: rgba(171, 206, 225, 0.22);
+            border: 1px solid #ABCEE1;
+            border-left: 4px solid #0D263C;
+            border-radius: 0.45rem;
+            padding: 0.65rem 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.82rem;
+            color: #0D263C;
+        }
+        .faeg-recebimento-banner {
+            background-color: rgba(171, 206, 225, 0.25);
+            border: 1px solid #ABCEE1;
+            border-left: 5px solid #0D263C;
+            border-radius: 0.5rem;
+            padding: 1.05rem 1.4rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1.2rem;
+        }
+        .kpi-consulta-box {
+            background-color: #F8FAFC;
+            border: 1px solid #CBD5E1;
+            border-top: 4px solid #0D263C;
+            border-radius: 0.5rem;
+            padding: 0.85rem 1rem;
+        }
+        .kpi-consulta-lbl {
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #64748B;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .kpi-consulta-val {
+            font-size: 1.2rem;
+            font-weight: 900;
+            color: #0D263C;
+            margin-top: 0.2rem;
+        }
+        .dre-box {
+            background-color: #0D263C;
+            border-radius: 0.65rem;
+            padding: 1.8rem 2.2rem;
+            color: #FFFFFF;
+            margin-top: 1.3rem;
+            border-top: 5px solid #F34D25;
+            box-shadow: 0 8px 20px rgba(13, 38, 60, 0.18);
+        }
+        .dre-header {
+            text-align: center;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.09em;
+            color: #ABCEE1;
+            border-bottom: 1px solid rgba(171, 206, 225, 0.25);
+            padding-bottom: 0.7rem;
+            margin-bottom: 1.3rem;
+            font-size: 0.85rem;
+        }
+        .dre-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.9rem;
+            font-size: 1rem;
+        }
+        .dre-total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid rgba(171, 206, 225, 0.25);
+            padding-top: 1.1rem;
+            margin-top: 0.9rem;
+        }
 
-    [data-testid="stAppViewContainer"] div[data-baseweb="input"]:has(input:disabled),
-    [data-testid="stAppViewContainer"] div[data-baseweb="input"]:has(input:disabled) > div,
-    [data-testid="stAppViewContainer"] div[data-baseweb="base-input"]:has(input:disabled) {
-        background-color: #F1F5F9 !important;
-        border: 1.5px dashed #94A3B8 !important;
-    }
-    [data-testid="stAppViewContainer"] input:disabled {
-        background-color: #F1F5F9 !important;
-        color: #0D263C !important;
-        font-weight: 700 !important;
-        -webkit-text-fill-color: #0D263C !important;
-        opacity: 1 !important;
-    }
-
-    /* Rótulos com quebra de linha controlada (elimina sobreposição entre colunas) */
-    div[data-testid="stWidgetLabel"],
-    .stTextInput label,
-    .stNumberInput label,
-    .stSelectbox label,
-    .stDateInput label,
-    .stTimeInput label,
-    .stTextArea label {
-        margin-bottom: 0.25rem !important;
-        min-height: 1.15rem !important;
-    }
-    div[data-testid="stWidgetLabel"] p,
-    .stTextInput label p,
-    .stNumberInput label p,
-    .stSelectbox label p,
-    .stDateInput label p,
-    .stTimeInput label p,
-    .stTextArea label p {
-        font-size: 0.71rem !important;
-        font-weight: 700 !important;
-        color: #0D263C !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.03em !important;
-        white-space: normal !important;
-        word-break: break-word !important;
-        overflow: visible !important;
-        text-overflow: unset !important;
-        line-height: 1.25 !important;
-    }
-
-    /* Abas internas (st.tabs) no padrão visual FAEG */
-    button[data-baseweb="tab"] {
-        font-weight: 700 !important;
-        font-size: 0.85rem !important;
-        color: #475569 !important;
-        padding: 0.65rem 1.1rem !important;
-        background-color: transparent !important;
-    }
-    button[data-baseweb="tab"]:hover {
-        color: #0D263C !important;
-        background-color: rgba(171, 206, 225, 0.16) !important;
-    }
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #F34D25 !important;
-        font-weight: 800 !important;
-    }
-    div[data-baseweb="tab-highlight"] {
-        background-color: #F34D25 !important;
-        height: 3px !important;
-    }
-
-    [data-testid="stAppViewContainer"] .stButton > button,
-    [data-testid="stAppViewContainer"] .stFormSubmitButton > button,
-    [data-testid="stAppViewContainer"] .stDownloadButton > button {
-        background-color: #0D263C !important;
-        color: #FFFFFF !important;
-        font-weight: 700 !important;
-        font-size: 0.8rem !important;
-        letter-spacing: 0.02em;
-        border: 1px solid #0D263C !important;
-        border-radius: 0.45rem !important;
-        min-height: 40px !important;
-        transition: all 0.15s ease;
-    }
-    [data-testid="stAppViewContainer"] .stButton > button:hover,
-    [data-testid="stAppViewContainer"] .stFormSubmitButton > button:hover,
-    [data-testid="stAppViewContainer"] .stDownloadButton > button:hover {
-        background-color: #F34D25 !important;
-        border-color: #F34D25 !important;
-        color: #FFFFFF !important;
-    }
-
-    /* =====================================================================
-       BARRA EXECUTIVA E CARTÃO PRINCIPAL
-       ===================================================================== */
-    .top-context-bar {
-        background-color: #FFFFFF;
-        border: 1px solid #D6D6D6;
-        border-left: 5px solid #F34D25;
-        border-radius: 0.55rem;
-        padding: 0.85rem 1.4rem;
-        margin-bottom: 1rem;
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-        box-shadow: 0 2px 6px rgba(13, 38, 60, 0.04);
-    }
-    .ctx-item {
-        display: flex;
-        flex-direction: column;
-    }
-    .ctx-label {
-        font-size: 0.64rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: #64748B;
-        letter-spacing: 0.05em;
-    }
-    .ctx-val {
-        font-size: 0.9rem;
-        font-weight: 800;
-        color: #0D263C;
-    }
-    .ctx-badge {
-        background-color: rgba(171, 206, 225, 0.35);
-        color: #0D263C;
-        border: 1px solid #ABCEE1;
-        padding: 0.32rem 0.8rem;
-        border-radius: 999px;
-        font-size: 0.72rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div > .main-card-marker) {
-        background-color: #FFFFFF;
-        border-radius: 0.65rem;
-        border: 1px solid #D6D6D6;
-        padding: 1.85rem 2.2rem;
-        box-shadow: 0 4px 14px rgba(13, 38, 60, 0.05);
-    }
-
-    .tab-header-wrap {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 2px solid #E9E9E9;
-        padding-bottom: 0.75rem;
-        margin-bottom: 1.35rem;
-    }
-    .tab-title {
-        font-size: 1.32rem;
-        font-weight: 800;
-        color: #0D263C;
-        letter-spacing: -0.01em;
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-    }
-    .tab-title i {
-        color: #F34D25;
-        font-size: 1.22rem;
-    }
-    .tab-step-pill {
-        background-color: #F1F5F9;
-        color: #475569;
-        font-size: 0.72rem;
-        font-weight: 700;
-        padding: 0.25rem 0.7rem;
-        border-radius: 999px;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-
-    .sec-subtitle {
-        font-size: 0.75rem;
-        font-weight: 800;
-        color: #0D263C;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        border-top: 1px solid #E9E9E9;
-        padding-top: 1rem;
-        margin-top: 1rem;
-        margin-bottom: 0.65rem;
-        display: flex;
-        align-items: center;
-        gap: 0.45rem;
-    }
-    .sec-subtitle::before {
-        content: "";
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 2px;
-        background-color: #F34D25;
-    }
-
-    .edit-banner-pill {
-        background-color: rgba(243, 77, 37, 0.1);
-        border: 1px solid #F34D25;
-        color: #0D263C;
-        font-size: 0.75rem;
-        font-weight: 700;
-        padding: 0.4rem 0.75rem;
-        border-radius: 0.4rem;
-        margin-bottom: 0.7rem;
-        display: flex;
-        align-items: center;
-        gap: 0.45rem;
-    }
-
-    .confirm-box-del {
-        background-color: #FEF2F2;
-        border: 1px solid #EF4444;
-        border-left: 4px solid #DC2626;
-        color: #7F1D1D;
-        font-size: 0.76rem;
-        font-weight: 700;
-        padding: 0.45rem 0.7rem;
-        border-radius: 0.35rem;
-        margin: 0.25rem 0 0.4rem 0;
-    }
-    .confirm-box-edit {
-        background-color: #EFF6FF;
-        border: 1px solid #3B82F6;
-        border-left: 4px solid #0D263C;
-        color: #0D263C;
-        font-size: 0.76rem;
-        font-weight: 700;
-        padding: 0.45rem 0.7rem;
-        border-radius: 0.35rem;
-        margin: 0.25rem 0 0.4rem 0;
-    }
-
-    .cliente-coleta-banner {
-        background-color: rgba(171, 206, 225, 0.22);
-        border: 1px solid #ABCEE1;
-        border-left: 4px solid #0D263C;
-        border-radius: 0.45rem;
-        padding: 0.65rem 1rem;
-        margin-bottom: 1rem;
-        font-size: 0.82rem;
-        color: #0D263C;
-    }
-
-    .faeg-recebimento-banner {
-        background-color: rgba(171, 206, 225, 0.25);
-        border: 1px solid #ABCEE1;
-        border-left: 5px solid #0D263C;
-        border-radius: 0.5rem;
-        padding: 1.05rem 1.4rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 1.2rem;
-    }
-    .faeg-recebimento-label {
-        color: #0D263C;
-        font-weight: 700;
-        text-transform: uppercase;
-        font-size: 0.82rem;
-        letter-spacing: 0.03em;
-    }
-    .faeg-recebimento-val {
-        color: #0D263C;
-        font-size: 1.6rem;
-        font-weight: 900;
-    }
-
-    .kpi-consulta-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 0.9rem;
-        margin: 0.9rem 0 1.2rem 0;
-    }
-    .kpi-consulta-card {
-        background: #F8FAFC;
-        border: 1px solid #CBD5E1;
-        border-top: 4px solid #0D263C;
-        border-radius: 0.45rem;
-        padding: 0.85rem 1rem;
-    }
-    .kpi-consulta-card.orange {
-        border-top-color: #F34D25;
-    }
-    .kpi-consulta-lbl {
-        font-size: 0.68rem;
-        font-weight: 700;
-        color: #64748B;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-    .kpi-consulta-val {
-        font-size: 1.2rem;
-        font-weight: 900;
-        color: #0D263C;
-        margin-top: 0.2rem;
-    }
-
-    .dre-box {
-        background-color: #0D263C;
-        border-radius: 0.65rem;
-        padding: 1.8rem 2.2rem;
-        color: #FFFFFF;
-        margin-top: 1.3rem;
-        border-top: 5px solid #F34D25;
-        box-shadow: 0 8px 20px rgba(13, 38, 60, 0.18);
-    }
-    .dre-header {
-        text-align: center;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.09em;
-        color: #ABCEE1;
-        border-bottom: 1px solid rgba(171, 206, 225, 0.25);
-        padding-bottom: 0.7rem;
-        margin-bottom: 1.3rem;
-        font-size: 0.85rem;
-    }
-    .dre-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.9rem;
-        font-size: 1rem;
-    }
-    .dre-total-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-top: 1px solid rgba(171, 206, 225, 0.25);
-        padding-top: 1.1rem;
-        margin-top: 0.9rem;
-    }
-
-    /* Cards da Aba 11 */
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div > .card-faeg-azul) {
-        background-color: #FFFFFF;
-        border: 1px solid #D6D6D6;
-        border-top: 4px solid #0D263C;
-        border-radius: 0.55rem;
-        padding: 1.3rem;
-        box-shadow: 0 2px 8px rgba(13, 38, 60, 0.04);
-    }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div > .card-faeg-laranja) {
-        background-color: #FFFFFF;
-        border: 1px solid #D6D6D6;
-        border-top: 4px solid #F34D25;
-        border-radius: 0.55rem;
-        padding: 1.3rem;
-        box-shadow: 0 2px 8px rgba(13, 38, 60, 0.04);
-    }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div > .card-faeg-expansao) {
-        background-color: #FFFFFF;
-        border: 1px solid #D6D6D6;
-        border-top: 4px solid #ABCEE1;
-        border-radius: 0.55rem;
-        padding: 1.3rem;
-        box-shadow: 0 2px 8px rgba(13, 38, 60, 0.04);
-    }
-</style>
-""",
+        /* Cards da Aba 11 */
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div > .card-faeg-azul) {
+            background-color: #FFFFFF;
+            border: 1px solid #D6D6D6;
+            border-top: 4px solid #0D263C;
+            border-radius: 0.55rem;
+            padding: 1.3rem;
+            box-shadow: 0 2px 8px rgba(13, 38, 60, 0.04);
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div > .card-faeg-laranja) {
+            background-color: #FFFFFF;
+            border: 1px solid #D6D6D6;
+            border-top: 4px solid #F34D25;
+            border-radius: 0.55rem;
+            padding: 1.3rem;
+            box-shadow: 0 2px 8px rgba(13, 38, 60, 0.04);
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div > .card-faeg-expansao) {
+            background-color: #FFFFFF;
+            border: 1px solid #D6D6D6;
+            border-top: 4px solid #ABCEE1;
+            border-radius: 0.55rem;
+            padding: 1.3rem;
+            box-shadow: 0 2px 8px rgba(13, 38, 60, 0.04);
+        }
+    </style>
+    """,
     unsafe_allow_html=True,
 )
 
@@ -790,13 +751,11 @@ def formatar_rotulo_cliente(c):
     ):
         partes_nome.append(f"({c['nome_fantasia']})")
     titulo = " ".join(partes_nome)
-
     detalhes_local = []
     if c.get("endereco_completo"):
         detalhes_local.append(c["endereco_completo"])
     if c.get("cidade") or c.get("uf"):
         detalhes_local.append(f"{c.get('cidade') or ''}/{c.get('uf') or ''}".strip("/"))
-
     sufixo = f" — {', '.join(detalhes_local)}" if detalhes_local else f" — Doc: {c['cnpj_cpf']}"
     return f"{titulo}{sufixo}"
 
@@ -809,13 +768,11 @@ def formatar_rotulo_local(l, cli_map):
     if cid_uf:
         end_parts.append(cid_uf)
     end_txt = f" — {', '.join(end_parts)}" if end_parts else ""
-
     cli_vinculado = cli_map.get(l.get("id_cliente"))
     cli_txt = ""
     if cli_vinculado:
         nome_c = cli_vinculado.get("nome_fantasia") or cli_vinculado["razao_social"]
         cli_txt = f" [Cliente: {nome_c}]"
-
     return f"{l['nome_local']}{end_txt}{cli_txt}"
 
 
@@ -832,108 +789,94 @@ def sync_campo(chave_widget, chave_dado):
         st.session_state["form_data"][chave_dado] = st.session_state[chave_widget]
 
 
-def _atualizar_rota_automatica(locais_lista):
-    """Preenche automaticamente Origem e/ou Destino se estiverem em branco ao escolher os locais."""
-    loc_map = {l["id_local"]: l for l in locais_lista}
-    col_id = get_campo("col_id", 0)
-    ent_id = get_campo("ent_id", 0)
-
-    if col_id and not (get_campo("rota_origem") or "").strip():
-        l_c = loc_map.get(col_id)
-        if l_c and (l_c.get("cidade") or l_c.get("uf")):
-            orig = f"{l_c.get('cidade') or ''}/{l_c.get('uf') or ''}".strip("/")
-            if orig:
-                st.session_state["form_data"]["rota_origem"] = orig
-                if "w_rota_origem" in st.session_state:
-                    del st.session_state["w_rota_origem"]
-
-    if ent_id and not (get_campo("rota_destino") or "").strip():
-        l_e = loc_map.get(ent_id)
-        if l_e and (l_e.get("cidade") or l_e.get("uf")):
-            dest = f"{l_e.get('cidade') or ''}/{l_e.get('uf') or ''}".strip("/")
-            if dest:
-                st.session_state["form_data"]["rota_destino"] = dest
-                if "w_rota_destino" in st.session_state:
-                    del st.session_state["w_rota_destino"]
-
-
-def on_local_select_change(chave_widget, chave_dado, locais_lista):
-    """Sincroniza imediatamente o local escolhido e preenche Origem/Destino se ainda estiverem vazios."""
-    sync_campo(chave_widget, chave_dado)
-    _atualizar_rota_automatica(locais_lista)
-
-
-def _limpar_widgets_financeiros():
+def limpar_widgets_financeiros():
     for wk in ["w_perc_adiant", "w_val_adiant", "w_perc_saldo", "w_val_saldo"]:
         if wk in st.session_state:
             del st.session_state[wk]
 
 
 def on_valor_negociado_change():
+    """Atualiza apenas o lado que possui percentual informado, sem acoplar Adiantamento e Saldo."""
     sync_campo("w_val_negociado", "valor_negociado")
-    neg = to_float(get_campo("valor_negociado", 0.0))
-    p_adi = to_float(get_campo("perc_adiant", 0.0))
-    p_sal = to_float(get_campo("perc_saldo", 0.0))
+    neg = max(0.0, to_float(get_campo("valor_negociado", 0.0)))
+    p_adi = min(100.0, max(0.0, to_float(get_campo("perc_adiant", 0.0))))
+    p_sal = min(100.0, max(0.0, to_float(get_campo("perc_saldo", 0.0))))
+    v_adi = max(0.0, to_float(get_campo("valor_adiant", 0.0)))
+    v_sal = max(0.0, to_float(get_campo("valor_saldo", 0.0)))
+
     if neg > 0:
         if p_adi > 0:
             st.session_state["form_data"]["valor_adiant"] = round(neg * (p_adi / 100.0), 2)
+        elif v_adi > 0:
+            st.session_state["form_data"]["perc_adiant"] = round((v_adi / neg) * 100.0, 2)
+
         if p_sal > 0:
             st.session_state["form_data"]["valor_saldo"] = round(neg * (p_sal / 100.0), 2)
-        _limpar_widgets_financeiros()
+        elif v_sal > 0:
+            st.session_state["form_data"]["perc_saldo"] = round((v_sal / neg) * 100.0, 2)
+
+    limpar_widgets_financeiros()
 
 
 def on_perc_adiant_change():
+    """Calcula apenas o Valor do Adiantamento em R$ a partir de % Adiantamento, sem forçar Saldo."""
     sync_campo("w_perc_adiant", "perc_adiant")
-    neg = to_float(get_campo("valor_negociado", 0.0))
-    p_adi = to_float(get_campo("perc_adiant", 0.0))
-    if neg > 0:
-        st.session_state["form_data"]["valor_adiant"] = round(neg * (p_adi / 100.0), 2)
-        if 0 <= p_adi <= 100:
-            p_sal = round(100.0 - p_adi, 2)
-            st.session_state["form_data"]["perc_saldo"] = p_sal
-            st.session_state["form_data"]["valor_saldo"] = round(neg * (p_sal / 100.0), 2)
-        _limpar_widgets_financeiros()
+    neg = max(0.0, to_float(get_campo("valor_negociado", 0.0)))
+    p_adi = min(100.0, max(0.0, to_float(get_campo("perc_adiant", 0.0))))
+    st.session_state["form_data"]["perc_adiant"] = p_adi
+    st.session_state["form_data"]["valor_adiant"] = round(neg * (p_adi / 100.0), 2) if neg > 0 else 0.0
+    limpar_widgets_financeiros()
 
 
 def on_val_adiant_change():
+    """Calcula apenas o % Adiantamento a partir do Valor do Adiantamento em R$, sem alterar Saldo."""
     sync_campo("w_val_adiant", "valor_adiant")
-    neg = to_float(get_campo("valor_negociado", 0.0))
-    v_adi = to_float(get_campo("valor_adiant", 0.0))
-    if neg > 0:
-        p_adi = round((v_adi / neg) * 100.0, 2)
-        st.session_state["form_data"]["perc_adiant"] = p_adi
-        if 0 <= v_adi <= neg:
-            v_sal = round(neg - v_adi, 2)
-            st.session_state["form_data"]["valor_saldo"] = v_sal
-            st.session_state["form_data"]["perc_saldo"] = round((v_sal / neg) * 100.0, 2)
-        _limpar_widgets_financeiros()
+    neg = max(0.0, to_float(get_campo("valor_negociado", 0.0)))
+    v_adi = max(0.0, to_float(get_campo("valor_adiant", 0.0)))
+    st.session_state["form_data"]["valor_adiant"] = v_adi
+    st.session_state["form_data"]["perc_adiant"] = round((v_adi / neg) * 100.0, 2) if neg > 0 else 0.0
+    limpar_widgets_financeiros()
 
 
 def on_perc_saldo_change():
+    """Calcula apenas o Valor do Saldo em R$ a partir de % Saldo, sem alterar Adiantamento."""
     sync_campo("w_perc_saldo", "perc_saldo")
-    neg = to_float(get_campo("valor_negociado", 0.0))
-    p_sal = to_float(get_campo("perc_saldo", 0.0))
-    if neg > 0:
-        st.session_state["form_data"]["valor_saldo"] = round(neg * (p_sal / 100.0), 2)
-        if 0 <= p_sal <= 100:
-            p_adi = round(100.0 - p_sal, 2)
-            st.session_state["form_data"]["perc_adiant"] = p_adi
-            st.session_state["form_data"]["valor_adiant"] = round(neg * (p_adi / 100.0), 2)
-        _limpar_widgets_financeiros()
+    neg = max(0.0, to_float(get_campo("valor_negociado", 0.0)))
+    p_sal = min(100.0, max(0.0, to_float(get_campo("perc_saldo", 0.0))))
+    st.session_state["form_data"]["perc_saldo"] = p_sal
+    st.session_state["form_data"]["valor_saldo"] = round(neg * (p_sal / 100.0), 2) if neg > 0 else 0.0
+    limpar_widgets_financeiros()
 
 
 def on_val_saldo_change():
+    """Calcula apenas o % Saldo a partir do Valor do Saldo em R$, sem alterar Adiantamento."""
     sync_campo("w_val_saldo", "valor_saldo")
-    neg = to_float(get_campo("valor_negociado", 0.0))
-    v_sal = to_float(get_campo("valor_saldo", 0.0))
-    if neg > 0:
-        p_sal = round((v_sal / neg) * 100.0, 2)
-        st.session_state["form_data"]["perc_saldo"] = p_sal
-        if 0 <= v_sal <= neg:
-            v_adi = round(neg - v_sal, 2)
-            st.session_state["form_data"]["valor_adiant"] = v_adi
-            st.session_state["form_data"]["perc_adiant"] = round((v_adi / neg) * 100.0, 2)
-        _limpar_widgets_financeiros()
+    neg = max(0.0, to_float(get_campo("valor_negociado", 0.0)))
+    v_sal = max(0.0, to_float(get_campo("valor_saldo", 0.0)))
+    st.session_state["form_data"]["valor_saldo"] = v_sal
+    st.session_state["form_data"]["perc_saldo"] = round((v_sal / neg) * 100.0, 2) if neg > 0 else 0.0
+    limpar_widgets_financeiros()
+
+
+def atualizar_rota_automatica(locais_lista):
+    col_id = get_campo("col_id", 0)
+    ent_id = get_campo("ent_id", 0)
+    col_obj = next((l for l in locais_lista if l["id_local"] == col_id), None)
+    ent_obj = next((l for l in locais_lista if l["id_local"] == ent_id), None)
+
+    if col_obj and not (get_campo("rota_origem") or "").strip():
+        origem_txt = f"{col_obj.get('cidade') or ''}/{col_obj.get('uf') or ''}".strip("/")
+        if origem_txt:
+            st.session_state["form_data"]["rota_origem"] = origem_txt
+            if "w_rota_origem" in st.session_state:
+                del st.session_state["w_rota_origem"]
+
+    if ent_obj and not (get_campo("rota_destino") or "").strip():
+        destino_txt = f"{ent_obj.get('cidade') or ''}/{ent_obj.get('uf') or ''}".strip("/")
+        if destino_txt:
+            st.session_state["form_data"]["rota_destino"] = destino_txt
+            if "w_rota_destino" in st.session_state:
+                del st.session_state["w_rota_destino"]
 
 
 def on_cliente_select_change(locais_lista):
@@ -946,7 +889,12 @@ def on_cliente_select_change(locais_lista):
             st.session_state["form_data"]["col_id"] = local_match["id_local"]
             if "w_col_id" in st.session_state:
                 del st.session_state["w_col_id"]
-            _atualizar_rota_automatica(locais_lista)
+            atualizar_rota_automatica(locais_lista)
+
+
+def on_local_select_change(chave_widget, chave_dado, locais_lista):
+    sync_campo(chave_widget, chave_dado)
+    atualizar_rota_automatica(locais_lista)
 
 
 def on_tipo_viagem_change():
@@ -1036,6 +984,7 @@ def carregar_listas_base():
             }
             for f in session.query(Fornecedor).order_by(Fornecedor.nome_fantasia).all()
         ]
+
         viagens_raw = session.query(Viagem).order_by(Viagem.id_viagem.desc()).all()
         viagens = []
         for vg in viagens_raw:
@@ -1056,7 +1005,7 @@ def carregar_listas_base():
                 }
             )
         viagens.sort(key=lambda x: (x["seq_num"], x["id_viagem"]), reverse=True)
-    return motoristas, veiculos, clientes, locais, fornecedores, viagens
+        return motoristas, veiculos, clientes, locais, fornecedores, viagens
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -1093,8 +1042,8 @@ def carregar_todas_viagens_consulta():
             vei = vg.veiculo
             col = vg.local_coleta
             ent = vg.local_entrega
-
             cod_vg = cod_map.get(vg.id_viagem, f"V{vg.id_viagem}")
+
             v_div = to_float(fin.valor_divulgado) if fin else 0.0
             v_neg = to_float(fin.valor_negociado_total) if fin else 0.0
             v_adi = to_float(fin.valor_adiantamento) if fin else 0.0
@@ -1103,6 +1052,7 @@ def carregar_todas_viagens_consulta():
             receita_base = v_neg if v_neg > 0 else total_rec
             tot_desp = desp_por_viagem.get(vg.id_viagem, 0.0)
             res_liq = receita_base - tot_desp
+
             km_real = to_int(vg.km_real_rodado)
             if km_real == 0 and to_int(vg.odometro_final) > to_int(vg.odometro_inicial):
                 km_real = to_int(vg.odometro_final) - to_int(vg.odometro_inicial)
@@ -1113,16 +1063,14 @@ def carregar_todas_viagens_consulta():
                 vg.tipo_frete if vg.tipo_frete in ["Individual", "Ciclo"] else "Individual"
             )
             tipo_frete_atual = vg.tipo_frete if vg.tipo_frete not in ["Individual", "Ciclo"] else "Dedicado"
-            ciclo_nome_limpo = ciclo.nome_operacao if ciclo else "-"
-            if ciclo_nome_limpo.startswith("Individual - "):
-                ciclo_nome_limpo = "-"
+            ciclo_nome_limpo = ciclo.nome_operacao if (ciclo and tipo_viagem_atual == "Ciclo") else "-"
 
             origem_str = (getattr(vg, "rota_origem", None) or "").strip()
             destino_str = (getattr(vg, "rota_destino", None) or "").strip()
             if not origem_str and not destino_str and vg.rota_resumo and "->" in vg.rota_resumo:
-                partes_r = vg.rota_resumo.split("->", 1)
-                origem_str = partes_r[0].strip()
-                destino_str = partes_r[1].strip()
+                partes = vg.rota_resumo.split("->", 1)
+                origem_str = partes[0].strip()
+                destino_str = partes[1].strip()
             rota_exib = formatar_rota_exibicao(origem_str, destino_str, vg.rota_resumo)
 
             lista.append(
@@ -1165,7 +1113,7 @@ def carregar_todas_viagens_consulta():
                 }
             )
         lista.sort(key=lambda x: (x["seq_num"], x["id_viagem"]), reverse=True)
-    return lista, desp_detalhadas
+        return lista, desp_detalhadas
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -1194,7 +1142,6 @@ def carregar_despesas_viagem(id_viagem):
 def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores):
     """Gera arquivo Excel (.xlsx) completo com todas as viagens, despesas e cadastros do sistema."""
     buf = io.BytesIO()
-
     df_viagens = pd.DataFrame(
         [
             {
@@ -1233,7 +1180,6 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
             for v in todas_viagens
         ]
     )
-
     df_desp = pd.DataFrame(desp_detalhadas)
     df_mot = pd.DataFrame(motoristas)
     df_vei = pd.DataFrame(veiculos)
@@ -1249,7 +1195,6 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         df_cli.to_excel(writer, sheet_name="Cad_Clientes", index=False)
         df_loc.to_excel(writer, sheet_name="Cad_Locais", index=False)
         df_forn.to_excel(writer, sheet_name="Cad_Fornecedores", index=False)
-
     return buf.getvalue()
 
 
@@ -1284,14 +1229,14 @@ def carregar_logo_base64():
 # ==============================================================================
 # GERADOR DE PDF NATIVO ZERO-DEPENDÊNCIA (PADRÃO VISUAL FAEG)
 # ==============================================================================
-def _pdf_esc(txt):
+def pdf_esc(txt):
     if txt is None:
         return "-"
     s = str(txt).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
     return s.encode("latin-1", "replace").decode("latin-1")
 
 
-def _compilar_pdf_pagina_unica(cmds):
+def compilar_pdf_pagina_unica(cmds):
     stream_bytes = "\n".join(cmds).encode("latin-1", "replace")
     compressed = zlib.compress(stream_bytes)
 
@@ -1340,7 +1285,7 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
         y = 842 - y_top
         font = "/F2" if bold else "/F1"
         cmds.append(
-            f"BT {font} {size} Tf {r:.3f} {g:.3f} {b:.3f} rg {x:.1f} {y:.1f} Td ({_pdf_esc(txt)}) Tj ET"
+            f"BT {font} {size} Tf {r:.3f} {g:.3f} {b:.3f} rg {x:.1f} {y:.1f} Td ({pdf_esc(txt)}) Tj ET"
         )
 
     rect(0, 0, 595, 76, 0.051, 0.149, 0.235)
@@ -1391,13 +1336,13 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
     y += 26
     text(55, y + 4, "RESULTADO LIQUIDO:", size=11, bold=True, r=1, g=1, b=1)
     text(390, y + 4, dados_resumo["resultado_fmt"], size=13, bold=True, r=1, g=1, b=1)
-    y += 34
 
+    y += 34
     text(42, y, f"Custo por KM: {dados_resumo['custo_km_fmt']}", size=10, bold=True)
     text(250, y, f"Margem de Lucro: {dados_resumo['margem_fmt']}", size=10, bold=True)
     text(420, y, f"Recebido: {dados_resumo['recebido_fmt']}", size=9, bold=False)
-    y += 24
 
+    y += 24
     rect(40, y, 515, 22, 0.914, 0.914, 0.914)
     text(48, y + 15, "3. DETALHAMENTO DE DESPESAS DA VIAGEM", size=10, bold=True)
     y += 36
@@ -1425,7 +1370,7 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
             if y > 790:
                 break
 
-    return _compilar_pdf_pagina_unica(cmds)
+    return compilar_pdf_pagina_unica(cmds)
 
 
 def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_categorias):
@@ -1440,7 +1385,7 @@ def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_cat
         y = 842 - y_top
         font = "/F2" if bold else "/F1"
         cmds.append(
-            f"BT {font} {size} Tf {r:.3f} {g:.3f} {b:.3f} rg {x:.1f} {y:.1f} Td ({_pdf_esc(txt)}) Tj ET"
+            f"BT {font} {size} Tf {r:.3f} {g:.3f} {b:.3f} rg {x:.1f} {y:.1f} Td ({pdf_esc(txt)}) Tj ET"
         )
 
     rect(0, 0, 595, 76, 0.051, 0.149, 0.235)
@@ -1460,8 +1405,8 @@ def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_cat
 
     rect(40, 96, 515, 22, 0.914, 0.914, 0.914)
     text(48, 111, "1. INDICADORES GLOBAIS DA OPERACAO", size=10, bold=True)
-
     y = 136
+
     rect(40, y - 12, 515, 96, 0.051, 0.149, 0.235)
     text(55, y + 6, f"Total de Viagens: {resumo_geral['qtd_viagens']}", size=10, bold=True, r=0.671, g=0.808, b=0.882)
     text(310, y + 6, f"KM Total Rodado: {resumo_geral['km_total']} km", size=10, bold=True, r=0.671, g=0.808, b=0.882)
@@ -1526,23 +1471,23 @@ def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_cat
             if y > 795:
                 break
 
-    return _compilar_pdf_pagina_unica(cmds)
+    return compilar_pdf_pagina_unica(cmds)
 
 
 # ==============================================================================
 # NAVEGAÇÃO SEGURA VIA CALLBACK E ESTADO DA VIAGEM
 # ==============================================================================
-def _mudar_aba_callback(nova_aba):
+def mudar_aba_callback(nova_aba):
     st.session_state["menu_operacional_radio"] = nova_aba
 
 
-def _abrir_viagem_para_edicao(id_v, destino_aba):
+def abrir_viagem_para_edicao(id_v, destino_aba):
     st.session_state["viagem_ativa_id"] = id_v
     st.session_state["loaded_viagem_id"] = None
     st.session_state["menu_operacional_radio"] = destino_aba
 
 
-def _iniciar_nova_viagem():
+def iniciar_nova_viagem():
     st.session_state["viagem_ativa_id"] = 0
     st.session_state["loaded_viagem_id"] = None
     st.session_state["despesas_temp"] = []
@@ -1550,14 +1495,14 @@ def _iniciar_nova_viagem():
 
 
 def render_navegacao_rodape(idx_atual, menu_itens):
-    st.markdown("<hr style='margin: 1.6rem 0 1rem 0; border-color: #E9E9E9;'>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
     n1, _, n3 = st.columns([1.2, 3, 1.2])
     if idx_atual > 0:
         n1.button(
             "← Etapa Anterior",
             key=f"prev_step_{idx_atual}",
             use_container_width=True,
-            on_click=_mudar_aba_callback,
+            on_click=mudar_aba_callback,
             args=(menu_itens[idx_atual - 1],),
         )
     if idx_atual < len(menu_itens) - 1:
@@ -1565,7 +1510,7 @@ def render_navegacao_rodape(idx_atual, menu_itens):
             "Próxima Etapa →",
             key=f"next_step_{idx_atual}",
             use_container_width=True,
-            on_click=_mudar_aba_callback,
+            on_click=mudar_aba_callback,
             args=(menu_itens[idx_atual + 1],),
         )
 
@@ -1579,7 +1524,6 @@ def limpar_widgets_viagem():
 def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
     if st.session_state.get("loaded_viagem_id") == id_viagem_escolhida and "form_data" in st.session_state:
         return
-
     limpar_widgets_viagem()
     if id_viagem_escolhida == 0:
         prox_cod = calcular_proximo_codigo_viagem(viagens_lista)
@@ -1635,7 +1579,6 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
                 ciclo_exib = ciclo.nome_operacao if ciclo else ""
                 if ciclo_exib.startswith("Individual - "):
                     ciclo_exib = ""
-
                 tipo_vg_db = getattr(vg, "tipo_viagem", None) or (
                     vg.tipo_frete if vg.tipo_frete in ["Individual", "Ciclo"] else "Individual"
                 )
@@ -1692,8 +1635,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
                     "odo_fin": to_int(vg.odometro_final),
                     "status_viagem": vg.status_viagem or "Aguardando Adiantamento",
                 }
-        st.session_state["despesas_temp"] = []
-
+                st.session_state["despesas_temp"] = []
     st.session_state["loaded_viagem_id"] = id_viagem_escolhida
 
 
@@ -1722,13 +1664,13 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 
     if not all([mot_id, vei_id, cli_id, col_id, ent_id]):
         st.error(
-            "Para salvar a viagem, selecione obrigatoriamente: Motorista (1), Veículo (1), "
-            "Cliente (3), Local de Coleta (5) e Local de Entrega (6)."
+            "Para salvar a viagem, selecione obrigatoriamente: Motorista (Etapa 1), Veículo (Etapa 1), "
+            "Cliente (Etapa 3), Local de Coleta (Etapa 5) e Local de Entrega (Etapa 6)."
         )
         return
 
     if tipo_viagem_val == "Ciclo" and not ciclo_num_val:
-        st.error("Quando o Tipo de Viagem for 'Ciclo', preencha o 'Nº do Ciclo Operacional' na Etapa 1.")
+        st.error("Informe o Nº do Ciclo Operacional na Etapa 1 para viagens vinculadas a um Ciclo.")
         return
 
     odo_ini = to_int(get_campo("odo_ini", 0))
@@ -1742,29 +1684,56 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 
     try:
         with SessionLocal() as session:
-            if id_viagem_atual == 0:
-                ciclo = CicloOperacional(
+            status_ciclo_padrao = (
+                "Concluído"
+                if get_campo("status_viagem", "Aguardando Adiantamento") == "Quitada / Concluída"
+                else "Em Andamento"
+            )
+
+            def _obter_ou_criar_ciclo_operacional():
+                if tipo_viagem_val == "Ciclo":
+                    ciclos_cli = session.query(CicloOperacional).filter_by(id_cliente=cli_id).all()
+                    ciclo_existente = next(
+                        (
+                            c
+                            for c in ciclos_cli
+                            if (c.nome_operacao or "").strip().lower() == nome_ciclo.strip().lower()
+                        ),
+                        None,
+                    )
+                    if ciclo_existente:
+                        if not ciclo_existente.status_ciclo or str(ciclo_existente.status_ciclo).startswith("COD::"):
+                            ciclo_existente.status_ciclo = "Em Andamento"
+                        return ciclo_existente
+
+                novo_c = CicloOperacional(
                     id_cliente=cli_id,
                     nome_operacao=nome_ciclo,
                     data_abertura=get_campo("data_op", date.today()),
-                    status_ciclo=f"COD::{codigo_digitado}",
+                    status_ciclo="Em Andamento" if tipo_viagem_val == "Ciclo" else status_ciclo_padrao,
                 )
-                session.add(ciclo)
+                session.add(novo_c)
                 session.flush()
+                return novo_c
 
-                fin = CicloFinanceiro(
-                    id_ciclo=ciclo.id_ciclo,
-                    forma_contratacao=get_campo("forma_contrat", OPCOES_ORIGEM_FRETE[0]),
-                    valor_divulgado=to_float(get_campo("valor_divulgado", 0.0)),
-                    valor_negociado_total=to_float(get_campo("valor_negociado", 0.0)),
-                    perc_adiantamento=to_float(get_campo("perc_adiant", 0.0)),
-                    data_prevista_adiantamento=get_campo("data_adiant"),
-                    valor_adiantamento=to_float(get_campo("valor_adiant", 0.0)),
-                    perc_saldo=to_float(get_campo("perc_saldo", 0.0)),
-                    data_prevista_saldo=get_campo("data_saldo"),
-                    valor_saldo=to_float(get_campo("valor_saldo", 0.0)),
-                )
-                session.add(fin)
+            def _atualizar_financeiro_ciclo(ciclo_obj):
+                fin_obj = ciclo_obj.financeiro
+                if not fin_obj:
+                    fin_obj = CicloFinanceiro(id_ciclo=ciclo_obj.id_ciclo)
+                    session.add(fin_obj)
+                fin_obj.forma_contratacao = get_campo("forma_contrat", OPCOES_ORIGEM_FRETE[0])
+                fin_obj.valor_divulgado = to_float(get_campo("valor_divulgado", 0.0))
+                fin_obj.valor_negociado_total = to_float(get_campo("valor_negociado", 0.0))
+                fin_obj.perc_adiantamento = to_float(get_campo("perc_adiant", 0.0))
+                fin_obj.data_prevista_adiantamento = get_campo("data_adiant")
+                fin_obj.valor_adiantamento = to_float(get_campo("valor_adiant", 0.0))
+                fin_obj.perc_saldo = to_float(get_campo("perc_saldo", 0.0))
+                fin_obj.data_prevista_saldo = get_campo("data_saldo")
+                fin_obj.valor_saldo = to_float(get_campo("valor_saldo", 0.0))
+
+            if id_viagem_atual == 0:
+                ciclo = _obter_ou_criar_ciclo_operacional()
+                _atualizar_financeiro_ciclo(ciclo)
 
                 vg = Viagem(
                     id_ciclo=ciclo.id_ciclo,
@@ -1814,6 +1783,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                             valor_total=dt["valor_total"],
                         )
                     )
+
                 session.commit()
                 st.session_state["viagem_ativa_id"] = vg.id_viagem
                 st.session_state["loaded_viagem_id"] = None
@@ -1857,21 +1827,16 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     vg.odometro_final = odo_fin
                     vg.km_real_rodado = km_real
 
-                    if vg.ciclo:
+                    if tipo_viagem_val == "Ciclo":
+                        ciclo_alvo = _obter_ou_criar_ciclo_operacional()
+                        vg.id_ciclo = ciclo_alvo.id_ciclo
+                        _atualizar_financeiro_ciclo(ciclo_alvo)
+                    elif vg.ciclo:
                         vg.ciclo.id_cliente = cli_id
                         vg.ciclo.nome_operacao = nome_ciclo
-                        vg.ciclo.status_ciclo = f"COD::{codigo_digitado}"
-                        if vg.ciclo.financeiro:
-                            fin = vg.ciclo.financeiro
-                            fin.forma_contratacao = get_campo("forma_contrat", OPCOES_ORIGEM_FRETE[0])
-                            fin.valor_divulgado = to_float(get_campo("valor_divulgado", 0.0))
-                            fin.valor_negociado_total = to_float(get_campo("valor_negociado", 0.0))
-                            fin.perc_adiantamento = to_float(get_campo("perc_adiant", 0.0))
-                            fin.data_prevista_adiantamento = get_campo("data_adiant")
-                            fin.valor_adiantamento = to_float(get_campo("valor_adiant", 0.0))
-                            fin.perc_saldo = to_float(get_campo("perc_saldo", 0.0))
-                            fin.data_prevista_saldo = get_campo("data_saldo")
-                            fin.valor_saldo = to_float(get_campo("valor_saldo", 0.0))
+                        vg.ciclo.status_ciclo = status_ciclo_padrao
+                        _atualizar_financeiro_ciclo(vg.ciclo)
+
                     session.commit()
                     st.session_state["loaded_viagem_id"] = None
                     carregar_listas_base.clear()
@@ -1894,15 +1859,16 @@ if "viagem_ativa_id" not in st.session_state:
 viagem_sel_id = st.session_state["viagem_ativa_id"]
 carregar_estado_viagem(viagem_sel_id, viagens_db)
 
+
 # ==============================================================================
 # SIDEBAR INSTITUCIONAL FAEG (APENAS LOGO COM SLOGAN)
 # ==============================================================================
 with st.sidebar:
     logo_b64 = carregar_logo_base64()
     if logo_b64:
-        icone_marca_html = f'<img src="{logo_b64}" class="sidebar-logo-img" alt="FAEG" />'
+        icone_marca_html = f'<img src="{logo_b64}" class="sidebar-logo-img" alt="FAEG Logística" />'
     else:
-        icone_marca_html = '<div class="sidebar-monogram-fallback">FAEG</div>'
+        icone_marca_html = '<div class="sidebar-monogram-fallback">F</div>'
 
     st.markdown(
         f"""
@@ -1916,7 +1882,6 @@ with st.sidebar:
     prox_cod_sidebar = calcular_proximo_codigo_viagem(viagens_db)
     cod_ativo_sidebar = get_campo("id_viagem_label", prox_cod_sidebar)
     tag_modo_sidebar = "Criando Nova Viagem" if viagem_sel_id == 0 else "Editando Viagem Salva"
-
     st.markdown(
         f"""
         <div class="sidebar-active-trip-card">
@@ -1932,11 +1897,11 @@ with st.sidebar:
             "➕ Iniciar Nova Viagem",
             type="secondary",
             use_container_width=True,
-            on_click=_iniciar_nova_viagem,
+            on_click=iniciar_nova_viagem,
         )
 
     st.markdown(
-        "<hr style='margin: 0.7rem 0 0.6rem 0; border-color: rgba(171, 206, 225, 0.2);'>",
+        "<hr style='border-color: rgba(171,206,225,0.2); margin: 0.7rem 0;'>",
         unsafe_allow_html=True,
     )
 
@@ -1960,13 +1925,10 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    st.markdown(
-        "<hr style='margin: 0.9rem 0 0.9rem 0; border-color: rgba(171, 206, 225, 0.2);'>",
-        unsafe_allow_html=True,
-    )
-
+    st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
     if st.button("Salvar Viagem", type="primary", use_container_width=True):
         salvar_viagem_completa(viagem_sel_id, viagens_db)
+
 
 # ==============================================================================
 # BARRA SUPERIOR DE CONTEXTO EXECUTIVO
@@ -2016,6 +1978,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # ==============================================================================
 # ÁREA DE CONTEÚDO PRINCIPAL (CARTÃO BRANCO #FFFFFF)
 # ==============================================================================
@@ -2050,40 +2013,77 @@ with st.container(border=True):
             )
             if up_file is not None:
                 file_bytes = up_file.getvalue()
-                analise = analisar_planilha_faeg(file_bytes)
-                if analise.get("erro"):
-                    st.error(analise["erro"])
-                else:
-                    resumo_pl = analise["resumo"]
-                    kp1, kp2, kp3, kp4 = st.columns(4)
-                    kp1.metric("Viagens Detectadas", resumo_pl["total_viagens"])
-                    kp2.metric("Receita Total Planilha", fmt_brl(resumo_pl["receita_total"]))
-                    kp3.metric("Despesas Totais Planilha", fmt_brl(resumo_pl["despesas_totais"]))
-                    kp4.metric("Resultado Líquido Planilha", fmt_brl(resumo_pl["resultado_liquido"]))
+                try:
+                    registros_pl = analisar_planilha_faeg(file_bytes)
+                except Exception as exc:
+                    st.error(f"Não foi possível ler a planilha enviada: {exc}")
+                    registros_pl = []
 
-                    if analise.get("preview_df") is not None and not analise["preview_df"].empty:
-                        st.dataframe(analise["preview_df"], use_container_width=True, hide_index=True)
+                if not registros_pl:
+                    st.warning("Nenhuma linha válida de viagem foi encontrada na planilha selecionada.")
+                else:
+                    total_vg_pl = len(registros_pl)
+                    rec_tot_pl = sum(to_float(r.get("receita_consolidada", 0.0)) for r in registros_pl)
+                    desp_tot_pl = sum(to_float(r.get("despesa_consolidada", 0.0)) for r in registros_pl)
+                    res_liq_pl = sum(to_float(r.get("resultado_consolidado", 0.0)) for r in registros_pl)
+
+                    kp1, kp2, kp3, kp4 = st.columns(4)
+                    kp1.metric("Viagens Detectadas", total_vg_pl)
+                    kp2.metric("Receita Total Planilha", fmt_brl(rec_tot_pl))
+                    kp3.metric("Despesas Totais Planilha", fmt_brl(desp_tot_pl))
+                    kp4.metric("Resultado Líquido Planilha", fmt_brl(res_liq_pl))
+
+                    df_preview_pl = pd.DataFrame(
+                        [
+                            {
+                                "ID Planilha": r.get("raw_id") or "-",
+                                "Motorista": r.get("motorista") or "-",
+                                "Placa": r.get("placa") or "-",
+                                "Cliente": r.get("empresa") or "-",
+                                "Origem": r.get("rota_origem") or "-",
+                                "Destino": r.get("rota_destino") or "-",
+                                "Receita (R$)": round(to_float(r.get("receita_consolidada", 0.0)), 2),
+                                "Despesas (R$)": round(to_float(r.get("despesa_consolidada", 0.0)), 2),
+                                "Resultado (R$)": round(to_float(r.get("resultado_consolidado", 0.0)), 2),
+                            }
+                            for r in registros_pl
+                        ]
+                    )
+                    st.dataframe(df_preview_pl, use_container_width=True, hide_index=True)
+
+                    op_dup = st.radio(
+                        "Se o código da viagem já existir no banco de dados:",
+                        options=["atualizar", "ignorar"],
+                        format_func=lambda m: (
+                            "Atualizar registros existentes com os dados da planilha"
+                            if m == "atualizar"
+                            else "Ignorar viagens já cadastradas e importar apenas as novas"
+                        ),
+                        horizontal=True,
+                        key="radio_modo_duplicado_planilha",
+                    )
 
                     if st.button(
                         "✅ Confirmar Importação e Salvar Registros no Banco",
                         key="btn_confirmar_import_planilha",
                         use_container_width=True,
                     ):
-                        with SessionLocal() as session:
-                            res_imp = importar_planilha_para_banco(session, analise["registros"])
+                        res_imp = importar_planilha_para_banco(file_bytes, modo_duplicado=op_dup)
                         carregar_listas_base.clear()
                         carregar_despesas_viagem.clear()
                         carregar_todas_viagens_consulta.clear()
                         st.session_state["loaded_viagem_id"] = None
+
+                        pend_lista = res_imp.get("pendencias", [])
                         st.success(
-                            f"Importação concluída! {res_imp['importadas']} viagem(ns) gravada(s), "
-                            f"{res_imp['atualizadas']} atualizada(s) e {res_imp['pendencias']} cadastro(s) "
-                            f"pré-criado(s) para revisão."
+                            f"Importação concluída! {res_imp['importadas']} viagem(ns) importada(s), "
+                            f"{res_imp['atualizadas']} atualizada(s), {res_imp['ignoradas']} ignorada(s) "
+                            f"e {len(pend_lista)} pendência(s) de cadastro sinalizada(s)."
                         )
-                        if res_imp.get("avisos"):
-                            with st.expander("Ver detalhes / pendências de cadastro para editar depois"):
-                                for av in res_imp["avisos"]:
-                                    st.write(f"- {av}")
+                        if pend_lista:
+                            with st.expander("Ver detalhes / pendências de cadastro para editar depois", expanded=True):
+                                for pend in pend_lista:
+                                    st.write(f"- {pend}")
                         st.rerun()
 
         c_id, c_tipo_vg, c_ciclo, c_data = st.columns([1.2, 1.3, 1.8, 1.2])
@@ -2119,7 +2119,7 @@ with st.container(border=True):
             )
         with c_data:
             st.date_input(
-                "DATA OPERAÇÃO",
+                "DATA DA OPERAÇÃO",
                 value=get_campo("data_op", date.today()),
                 format="DD/MM/YYYY",
                 key="w_data_op",
@@ -2128,17 +2128,16 @@ with st.container(border=True):
             )
 
         st.markdown('<div class="sec-subtitle">Dados do Motorista</div>', unsafe_allow_html=True)
-        mot_ops = {0: "Selecione um motorista..."}
+        mot_ops = {0: "Selecione o motorista..."}
         for m in motoristas_db:
-            mot_ops[m["id_motorista"]] = m["nome_completo"]
-
+            mot_ops[m["id_motorista"]] = f"{m['nome_completo']} ({m.get('vinculo') or 'Frota'})"
         mot_atual = get_campo("mot_id", 0)
         idx_mot = list(mot_ops.keys()).index(mot_atual) if mot_atual in mot_ops else 0
 
-        m1, m2, m3 = st.columns([2.4, 1.3, 0.9])
+        m1, m2, m3 = st.columns([2.4, 1.2, 1.0])
         with m1:
             mot_sel = st.selectbox(
-                "NOME DO MOTORISTA *",
+                "MOTORISTA *",
                 options=list(mot_ops.keys()),
                 index=idx_mot,
                 format_func=lambda x: mot_ops[x],
@@ -2166,7 +2165,6 @@ with st.container(border=True):
         vei_ops = {0: "Selecione o veículo..."}
         for v in veiculos_db:
             vei_ops[v["id_veiculo"]] = f"{v['descricao_marca']} ({v['placa']})"
-
         vei_atual = get_campo("vei_id", 0)
         idx_vei = list(vei_ops.keys()).index(vei_atual) if vei_atual in vei_ops else 0
 
@@ -2276,7 +2274,7 @@ with st.container(border=True):
             )
         with c2:
             st.number_input(
-                "QT VOLUMES",
+                "QTDE VOLUMES",
                 min_value=0,
                 step=1,
                 value=to_int(get_campo("qt_volumes", 0)),
@@ -2288,7 +2286,7 @@ with st.container(border=True):
             st.number_input(
                 "VOLUME (M³)",
                 min_value=0.0,
-                step=1.0,
+                step=0.5,
                 format="%.2f",
                 value=to_float(get_campo("volume_m3", 0.0)),
                 key="w_volume_m3",
@@ -2365,7 +2363,6 @@ with st.container(border=True):
         cli_ops = {0: "Selecione um cliente..."}
         for c in clientes_db:
             cli_ops[c["id_cliente"]] = formatar_rotulo_cliente(c)
-
         cli_atual = get_campo("cli_id", 0)
         idx_cli = list(cli_ops.keys()).index(cli_atual) if cli_atual in cli_ops else 0
 
@@ -2420,13 +2417,13 @@ with st.container(border=True):
         render_navegacao_rodape(2, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # ETAPA 4: NEGOCIAÇÃO E RECEBIMENTOS
+    # ETAPA 4: NEGOCIAÇÃO E RECEBIMENTOS (ADIANTAMENTO E SALDO DESACOPLADOS)
     # --------------------------------------------------------------------------
     elif aba_ativa == "4. Negociação / Pgto":
         st.markdown(
             """
             <div class="tab-header-wrap">
-                <div class="tab-title"><i class="fa-solid fa-hand-holding-dollar"></i> Negociação e Recebimentos</div>
+                <div class="tab-title"><i class="fa-solid fa-handshake"></i> Negociação e Recebimentos</div>
                 <span class="tab-step-pill">Etapa 4 de 11</span>
             </div>
             """,
@@ -2499,7 +2496,7 @@ with st.container(border=True):
                 on_change=on_val_adiant_change,
             )
 
-        st.markdown('<div class="sec-subtitle">Saldo a Receber</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec-subtitle">Saldo a Receber / Recebido</div>', unsafe_allow_html=True)
         s1, s2, s3, _ = st.columns([0.9, 1.1, 1.3, 1.0])
         with s1:
             st.number_input(
@@ -2532,12 +2529,28 @@ with st.container(border=True):
                 on_change=on_val_saldo_change,
             )
 
+        v_neg_now = to_float(get_campo("valor_negociado", 0.0))
         total_rec_now = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))
+        saldo_pendente_now = max(0.0, v_neg_now - total_rec_now) if v_neg_now > 0 else 0.0
         st.markdown(
             f"""
             <div class="faeg-recebimento-banner">
-                <span class="faeg-recebimento-label">Valor Total Recebido (Adiant. + Saldo):</span>
-                <span class="faeg-recebimento-val">{fmt_brl(total_rec_now)}</span>
+                <div>
+                    <span style="font-weight: 700; color: #0D263C; font-size: 0.96rem;">
+                        Valor Total Recebido (Adiant. + Saldo):
+                    </span>
+                    <span style="font-weight: 900; color: #0D263C; font-size: 1.35rem; margin-left: 0.45rem;">
+                        {fmt_brl(total_rec_now)}
+                    </span>
+                </div>
+                <div>
+                    <span style="font-weight: 700; color: #475569; font-size: 0.85rem;">
+                        Saldo Pendente a Receber:
+                    </span>
+                    <span style="font-weight: 800; color: #F34D25; font-size: 1.1rem; margin-left: 0.35rem;">
+                        {fmt_brl(saldo_pendente_now)}
+                    </span>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -2563,7 +2576,6 @@ with st.container(border=True):
         loc_ops = {0: "Selecione um local cadastrado..."}
         for l in locais_db:
             loc_ops[l["id_local"]] = formatar_rotulo_local(l, cli_map_local)
-
         col_atual = get_campo("col_id", 0)
         idx_col = list(loc_ops.keys()).index(col_atual) if col_atual in loc_ops else 0
 
@@ -2580,33 +2592,16 @@ with st.container(border=True):
 
         lc1, lc2, lc3, lc4 = st.columns([0.9, 2.3, 1.3, 0.55])
         lc1.text_input("CEP", value=(col_obj.get("cep") or "") if col_obj else "", disabled=True, key=f"p_col_cep_{col_sel}")
-        lc2.text_input(
-            "ENDEREÇO COMPLETO",
-            value=(col_obj.get("endereco_completo") or "") if col_obj else "",
-            disabled=True,
-            key=f"p_col_end_{col_sel}",
-        )
-        lc3.text_input(
-            "CIDADE",
-            value=(col_obj.get("cidade") or "") if col_obj else "",
-            disabled=True,
-            key=f"p_col_cid_{col_sel}",
-        )
+        lc2.text_input("ENDEREÇO COMPLETO", value=(col_obj.get("endereco_completo") or "") if col_obj else "", disabled=True, key=f"p_col_end_{col_sel}")
+        lc3.text_input("CIDADE", value=(col_obj.get("cidade") or "") if col_obj else "", disabled=True, key=f"p_col_cid_{col_sel}")
         lc4.text_input("UF", value=(col_obj.get("uf") or "") if col_obj else "", disabled=True, key=f"p_col_uf_{col_sel}")
 
-        if col_obj and (col_obj.get("contato_portaria") or col_obj.get("restricao_horario")):
-            st.markdown(
-                f"""
-                <div class="cliente-coleta-banner">
-                    <strong>Portaria / Contato:</strong> {col_obj.get('contato_portaria') or '-'}
-                    &nbsp;|&nbsp; <strong>Restrição de Horário:</strong> {col_obj.get('restricao_horario') or 'Não há restrição'}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        lp1, lp2 = st.columns([2.2, 2.8])
+        lp1.text_input("CONTATO / PORTARIA", value=(col_obj.get("contato_portaria") or "") if col_obj else "", disabled=True, key=f"p_col_cont_{col_sel}")
+        lp2.text_input("RESTRIÇÃO DE HORÁRIO", value=(col_obj.get("restricao_horario") or "Não há restrição") if col_obj else "", disabled=True, key=f"p_col_rest_{col_sel}")
 
-        st.markdown('<div class="sec-subtitle">Horários da Operação de Coleta</div>', unsafe_allow_html=True)
-        hc1, hc2, hc3, _ = st.columns([1.15, 1.0, 1.0, 1.3])
+        st.markdown('<div class="sec-subtitle">Horários da Operação (Coleta)</div>', unsafe_allow_html=True)
+        hc1, hc2, hc3, _ = st.columns([1.2, 1.0, 1.0, 1.8])
         with hc1:
             st.date_input(
                 "DATA COLETA",
@@ -2642,7 +2637,7 @@ with st.container(border=True):
         st.markdown(
             """
             <div class="tab-header-wrap">
-                <div class="tab-title"><i class="fa-solid fa-flag-checkered"></i> Local de Entrega (Destino)</div>
+                <div class="tab-title"><i class="fa-solid fa-location-dot"></i> Local de Entrega (Destino)</div>
                 <span class="tab-step-pill">Etapa 6 de 11</span>
             </div>
             """,
@@ -2653,7 +2648,6 @@ with st.container(border=True):
         loc_ops = {0: "Selecione um local cadastrado..."}
         for l in locais_db:
             loc_ops[l["id_local"]] = formatar_rotulo_local(l, cli_map_local)
-
         ent_atual = get_campo("ent_id", 0)
         idx_ent = list(loc_ops.keys()).index(ent_atual) if ent_atual in loc_ops else 0
 
@@ -2670,33 +2664,16 @@ with st.container(border=True):
 
         le1, le2, le3, le4 = st.columns([0.9, 2.3, 1.3, 0.55])
         le1.text_input("CEP", value=(ent_obj.get("cep") or "") if ent_obj else "", disabled=True, key=f"p_ent_cep_{ent_sel}")
-        le2.text_input(
-            "ENDEREÇO COMPLETO",
-            value=(ent_obj.get("endereco_completo") or "") if ent_obj else "",
-            disabled=True,
-            key=f"p_ent_end_{ent_sel}",
-        )
-        le3.text_input(
-            "CIDADE",
-            value=(ent_obj.get("cidade") or "") if ent_obj else "",
-            disabled=True,
-            key=f"p_ent_cid_{ent_sel}",
-        )
+        le2.text_input("ENDEREÇO COMPLETO", value=(ent_obj.get("endereco_completo") or "") if ent_obj else "", disabled=True, key=f"p_ent_end_{ent_sel}")
+        le3.text_input("CIDADE", value=(ent_obj.get("cidade") or "") if ent_obj else "", disabled=True, key=f"p_ent_cid_{ent_sel}")
         le4.text_input("UF", value=(ent_obj.get("uf") or "") if ent_obj else "", disabled=True, key=f"p_ent_uf_{ent_sel}")
 
-        if ent_obj and (ent_obj.get("contato_portaria") or ent_obj.get("restricao_horario")):
-            st.markdown(
-                f"""
-                <div class="cliente-coleta-banner">
-                    <strong>Portaria / Contato:</strong> {ent_obj.get('contato_portaria') or '-'}
-                    &nbsp;|&nbsp; <strong>Restrição de Horário:</strong> {ent_obj.get('restricao_horario') or 'Não há restrição'}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        ep1, ep2 = st.columns([2.2, 2.8])
+        ep1.text_input("CONTATO / PORTARIA", value=(ent_obj.get("contato_portaria") or "") if ent_obj else "", disabled=True, key=f"p_ent_cont_{ent_sel}")
+        ep2.text_input("RESTRIÇÃO DE HORÁRIO", value=(ent_obj.get("restricao_horario") or "Não há restrição") if ent_obj else "", disabled=True, key=f"p_ent_rest_{ent_sel}")
 
-        st.markdown('<div class="sec-subtitle">Horários da Operação de Entrega</div>', unsafe_allow_html=True)
-        he1, he2, he3, _ = st.columns([1.15, 1.0, 1.0, 1.3])
+        st.markdown('<div class="sec-subtitle">Horários da Operação (Entrega)</div>', unsafe_allow_html=True)
+        he1, he2, he3, _ = st.columns([1.2, 1.0, 1.0, 1.8])
         with he1:
             st.date_input(
                 "DATA ENTREGA",
@@ -2726,7 +2703,7 @@ with st.container(border=True):
         render_navegacao_rodape(5, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # ETAPA 7: DESPESAS DE VIAGEM (CAMPOS AMPLIADOS SEM CORTES)
+    # ETAPA 7: DESPESAS DE VIAGEM
     # --------------------------------------------------------------------------
     elif aba_ativa == "7. Despesas de Viagem":
         st.markdown(
@@ -2739,45 +2716,46 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
-        st.markdown('<div class="sec-subtitle">Adicionar Nova Despesa</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec-subtitle">Lançar Nova Despesa na Viagem</div>', unsafe_allow_html=True)
+        forn_ops = {0: "Não informado / Avulso"}
+        for f in fornecedores_db:
+            forn_ops[f["id_fornecedor"]] = f"{f['nome_fantasia']} ({f.get('categoria_servico') or 'Fornecedor'})"
 
-        # Linha 1: Campos de seleção e descrição largos para evitar corte de opções/placeholders
-        c_d1, c_d2, c_d3 = st.columns([2.1, 2.5, 2.1])
+        c_d1, c_d2, c_d3 = st.columns([1.8, 1.5, 2.2])
         with c_d1:
-            tipo_desp = st.selectbox("TIPO DE DESPESA", CATEGORIAS_DESPESA_FORNECEDOR, key="desp_tipo")
-        with c_d2:
-            desc_desp = st.text_input(
-                "DESCRIÇÃO / LOCAL",
-                placeholder="Ex: Abastecimento KM 120 / Pedágio",
-                key="desp_desc",
-            )
-        with c_d3:
-            forn_ops = {0: "Não informado"}
-            for f in fornecedores_db:
-                forn_ops[f["id_fornecedor"]] = f"{f['nome_fantasia']} ({f['categoria_servico']})"
             forn_sel = st.selectbox(
                 "FORNECEDOR / POSTO",
                 options=list(forn_ops.keys()),
                 format_func=lambda x: forn_ops[x],
-                key="desp_forn",
+                key="desp_forn_sel",
+            )
+        with c_d2:
+            tipo_desp = st.selectbox(
+                "CATEGORIA DA DESPESA",
+                CATEGORIAS_DESPESA_FORNECEDOR,
+                key="desp_cat_sel",
+            )
+        with c_d3:
+            desc_desp = st.text_input(
+                "DESCRIÇÃO / OBSERVAÇÃO",
+                placeholder="Ex: 150L Diesel S10 / Pedágio Dutra",
+                key="desp_desc_inp",
             )
 
-        # Linha 2: Quantidade, Valor Unitário, Total Calculado e Botão Adicionar
-        c_d4, c_d5, c_d6, c_d7 = st.columns([1.2, 1.3, 2.2, 2.0])
+        c_d4, c_d5, c_d6, c_d7 = st.columns([1.1, 1.3, 1.5, 1.3])
         with c_d4:
-            qtd_desp = st.number_input("QTD / L", min_value=0.01, value=1.00, step=1.0, format="%.2f", key="desp_qtd")
+            qtd_desp = st.number_input("QTD / LITROS", min_value=0.01, value=1.0, step=1.0, format="%.2f", key="desp_qtd_inp")
         with c_d5:
-            unit_desp = st.number_input("UNITÁRIO (R$)", min_value=0.00, value=0.00, step=10.0, format="%.2f", key="desp_unit")
+            unit_desp = st.number_input("VALOR UNITÁRIO (R$)", min_value=0.0, value=0.0, step=10.0, format="%.2f", key="desp_unit_inp")
+        total_previsto_desp = round(to_float(qtd_desp) * to_float(unit_desp), 2)
         with c_d6:
-            total_previsto_desp = qtd_desp * unit_desp
             st.markdown(
-                f'<div style="padding-top:1.55rem; font-weight:800; color:#0D263C; font-size:0.86rem;">'
-                f'VALOR TOTAL: <span style="color:#F34D25; font-size:1.2rem;">{fmt_brl(total_previsto_desp)}</span>'
-                f"</div>",
+                f"<div style='padding-top: 1.55rem; font-weight: 800; color: #0D263C; font-size: 0.92rem;'>"
+                f"VALOR TOTAL: {fmt_brl(total_previsto_desp)}</div>",
                 unsafe_allow_html=True,
             )
         with c_d7:
-            st.markdown('<div style="padding-top:1.35rem;"></div>', unsafe_allow_html=True)
+            st.markdown("<div style='padding-top: 1.25rem;'></div>", unsafe_allow_html=True)
             btn_add_desp = st.button("Adicionar à Lista", use_container_width=True, key="btn_add_despesa")
 
         if btn_add_desp:
@@ -2864,7 +2842,7 @@ with st.container(border=True):
                 col_t2.markdown(f"{item['descricao_detalhe']}")
                 col_t3.markdown(f"{item['quantidade']:.2f} × {fmt_brl(item['valor_unitario'])}")
                 col_t4.markdown(f"**{fmt_brl(item['valor_total'])}**")
-                if col_t5.button("🗑️", key=f"del_desp_{viagem_sel_id}_{item['idx']}", help="Remover despesa"):
+                if col_t5.button("🗑", key=f"del_desp_{viagem_sel_id}_{item['idx']}", help="Remover despesa"):
                     if viagem_sel_id == 0:
                         st.session_state["despesas_temp"].pop(item["idx"])
                         st.rerun()
@@ -2876,14 +2854,18 @@ with st.container(border=True):
                                 db.commit()
                         carregar_despesas_viagem.clear()
                         carregar_todas_viagens_consulta.clear()
-                        st.toast("Despesa removida!", icon="🗑️")
+                        st.toast("Despesa removida!", icon="🗑")
                         st.rerun()
 
             st.markdown(
                 f"""
-                <div class="faeg-recebimento-banner" style="border-left-color:#F34D25;">
-                    <span class="faeg-recebimento-label">Custo Total Acumulado na Viagem:</span>
-                    <span class="faeg-recebimento-val" style="color:#F34D25;">{fmt_brl(soma_desp)}</span>
+                <div class="faeg-recebimento-banner" style="border-left-color: #F34D25;">
+                    <span style="font-weight: 700; color: #0D263C; font-size: 0.98rem;">
+                        Custo Total Acumulado na Viagem:
+                    </span>
+                    <span style="font-weight: 900; color: #F34D25; font-size: 1.4rem;">
+                        {fmt_brl(soma_desp)}
+                    </span>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -2898,7 +2880,7 @@ with st.container(border=True):
         st.markdown(
             """
             <div class="tab-header-wrap">
-                <div class="tab-title"><i class="fa-solid fa-calculator"></i> Fechamento Final e DRE</div>
+                <div class="tab-title"><i class="fa-solid fa-flag-checkered"></i> Fechamento Final e DRE</div>
                 <span class="tab-step-pill">Etapa 8 de 11</span>
             </div>
             """,
@@ -2957,16 +2939,16 @@ with st.container(border=True):
             <div class="dre-box">
                 <div class="dre-header">Demonstrativo de Resultado da Viagem (DRE — FAEG)</div>
                 <div class="dre-row">
-                    <span style="color:#ABCEE1;">Receita Total (Frete Negociado / Recebido)</span>
-                    <span style="font-weight:800; font-size:1.15rem;">{fmt_brl(receita_dre)}</span>
+                    <span style="color: #ABCEE1;">Receita Total (Frete Negociado / Recebido)</span>
+                    <span style="font-weight: 800; font-size: 1.15rem;">{fmt_brl(receita_dre)}</span>
                 </div>
                 <div class="dre-row">
-                    <span style="color:#ABCEE1;">Custos Totais (Combustível, Pedágios e Outras Despesas)</span>
-                    <span style="font-weight:800; font-size:1.15rem; color:#F34D25;">- {fmt_brl(custos_dre)}</span>
+                    <span style="color: #ABCEE1;">Custos Totais (Combustível, Pedágios e Outras Despesas)</span>
+                    <span style="font-weight: 800; font-size: 1.15rem; color: #F34D25;">- {fmt_brl(custos_dre)}</span>
                 </div>
                 <div class="dre-total-row">
-                    <span style="font-weight:800; text-transform:uppercase; letter-spacing:0.04em;">Resultado Líquido</span>
-                    <span style="font-weight:900; font-size:1.85rem; color:{cor_res};">{fmt_brl(resultado_dre)}</span>
+                    <span style="font-weight: 800; font-size: 1.15rem; letter-spacing: 0.04em;">RESULTADO LÍQUIDO</span>
+                    <span style="font-weight: 900; font-size: 1.85rem; color: {cor_res};">{fmt_brl(resultado_dre)}</span>
                 </div>
             </div>
             """,
@@ -3144,18 +3126,16 @@ with st.container(border=True):
                 km_global = sum(v["km_rodado"] for v in vg_bi_filtradas)
                 custo_km_global = (desp_global / km_global) if km_global > 0 else 0.0
 
-                st.markdown('<div class="sec-subtitle">Indicadores Globais Consolidados</div>', unsafe_allow_html=True)
-                bg1, bg2, bg3 = st.columns(3)
-                bg1.metric("Viagens Analisadas", len(vg_bi_filtradas))
-                bg2.metric("Receita Consolidada", fmt_brl(rec_global))
-                bg3.metric("Despesas Consolidadas", fmt_brl(desp_global))
+                st.markdown('<div class="sec-subtitle">Indicadores Consolidados da Operação</div>', unsafe_allow_html=True)
+                bk1, bk2, bk3, bk4, bk5, bk6 = st.columns(6)
+                bk1.metric("Viagens", len(vg_bi_filtradas))
+                bk2.metric("Receita Total", fmt_brl(rec_global))
+                bk3.metric("Despesas Totais", fmt_brl(desp_global))
+                bk4.metric("Resultado Líquido", fmt_brl(res_global))
+                bk5.metric("Margem Global", f"{margem_global:.1f}%")
+                bk6.metric("Custo Médio/KM", fmt_brl(custo_km_global))
 
-                bg4, bg5, bg6 = st.columns(3)
-                bg4.metric("Resultado Líquido Total", fmt_brl(res_global))
-                bg5.metric("Margem Média Global", f"{margem_global:.1f}%")
-                bg6.metric("KM Rodado / Custo Médio KM", f"{km_global:,} km ({fmt_brl(custo_km_global)})".replace(",", "."))
-
-                # Agrupamento por Cliente
+                # Ranking por Cliente
                 ranking_cli_lista = []
                 if vg_bi_filtradas:
                     df_bi_vg = pd.DataFrame(vg_bi_filtradas)
@@ -3227,19 +3207,19 @@ with st.container(border=True):
                         )
                         st.bar_chart(df_chart_cli_bi.set_index("Cliente"), color="#0D263C")
                     else:
-                        st.info("Sem viagens filtradas para exibir o ranking por cliente.")
+                        st.info("Sem clientes para exibir.")
 
                 if ranking_cli_lista:
-                    st.markdown('<div class="sec-subtitle">Resumo Executivo por Cliente</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="sec-subtitle">Desempenho Detalhado por Cliente</div>', unsafe_allow_html=True)
                     df_tabela_cli = pd.DataFrame(
                         [
                             {
                                 "Cliente": r["cliente"],
                                 "Viagens": r["viagens"],
-                                "Receita Total": r["receita_fmt"],
-                                "Despesas Totais": r["despesa_fmt"],
+                                "Receita": r["receita_fmt"],
+                                "Despesas": r["despesa_fmt"],
                                 "Resultado Líquido": r["resultado_fmt"],
-                                "Margem (%)": r["margem_fmt"],
+                                "Margem": r["margem_fmt"],
                             }
                             for r in ranking_cli_lista
                         ]
@@ -3283,13 +3263,13 @@ with st.container(border=True):
         render_navegacao_rodape(8, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # ETAPA 10: CONSULTAS GERAIS (COM RÓTULOS SEM SOBREPOSIÇÃO)
+    # ETAPA 10: CONSULTAS GERAIS (COM FILTRO DE DESPESAS NA EXPORTAÇÃO EXCEL)
     # --------------------------------------------------------------------------
     elif aba_ativa == "10. Consultas Gerais":
         st.markdown(
             """
             <div class="tab-header-wrap">
-                <div class="tab-title"><i class="fa-solid fa-magnifying-glass-chart"></i> Consultas Gerais e Histórico</div>
+                <div class="tab-title"><i class="fa-solid fa-magnifying-glass"></i> Consultas Gerais e Histórico</div>
                 <span class="tab-step-pill">Etapa 10 de 11</span>
             </div>
             """,
@@ -3352,22 +3332,22 @@ with st.container(border=True):
 
         st.markdown(
             f"""
-            <div class="kpi-consulta-grid">
-                <div class="kpi-consulta-card">
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 0.85rem; margin: 0.8rem 0 1.2rem 0;">
+                <div class="kpi-consulta-box">
                     <div class="kpi-consulta-lbl">Viagens Filtradas</div>
                     <div class="kpi-consulta-val">{len(filtradas)}</div>
                 </div>
-                <div class="kpi-consulta-card">
+                <div class="kpi-consulta-box">
                     <div class="kpi-consulta-lbl">Receita Consolidada</div>
                     <div class="kpi-consulta-val">{fmt_brl(tot_rec_f)}</div>
                 </div>
-                <div class="kpi-consulta-card orange">
+                <div class="kpi-consulta-box" style="border-top-color: #F34D25;">
                     <div class="kpi-consulta-lbl">Despesas Consolidadas</div>
-                    <div class="kpi-consulta-val">{fmt_brl(tot_desp_f)}</div>
+                    <div class="kpi-consulta-val" style="color: #F34D25;">{fmt_brl(tot_desp_f)}</div>
                 </div>
-                <div class="kpi-consulta-card">
+                <div class="kpi-consulta-box" style="border-top-color: #16A34A;">
                     <div class="kpi-consulta-lbl">Resultado Líquido</div>
-                    <div class="kpi-consulta-val">{fmt_brl(tot_res_f)}</div>
+                    <div class="kpi-consulta-val" style="color: {'#16A34A' if tot_res_f >= 0 else '#DC2626'};">{fmt_brl(tot_res_f)}</div>
                 </div>
             </div>
             """,
@@ -3400,7 +3380,8 @@ with st.container(border=True):
             st.markdown('<div class="sec-subtitle">Abrir Viagem para Visualizar ou Editar</div>', unsafe_allow_html=True)
             ac1, ac2, ac3 = st.columns([2.6, 1.5, 1.5])
             opcoes_abrir = {
-                v["id_viagem"]: f"{v['codigo_viagem']} — {v['cliente']} ({v['rota']})" for v in filtradas
+                v["id_viagem"]: f"{v['codigo_viagem']} — {v['cliente']} ({v['rota']})"
+                for v in filtradas
             }
             with ac1:
                 vg_escolhida_abrir = st.selectbox(
@@ -3410,18 +3391,28 @@ with st.container(border=True):
                     key="sel_abrir_viagem_consulta",
                 )
             with ac2:
-                st.markdown('<div style="padding-top:1.35rem;"></div>', unsafe_allow_html=True)
+                st.markdown("<div style='padding-top: 1.35rem;'></div>", unsafe_allow_html=True)
                 st.button(
-                    "✏️ Editar Viagem",
+                    "✏ Editar Viagem",
                     key="btn_editar_viagem_consulta",
                     use_container_width=True,
-                    on_click=_abrir_viagem_para_edicao,
+                    on_click=abrir_viagem_para_edicao,
                     args=(vg_escolhida_abrir, "1. Frota FAEG"),
                 )
             with ac3:
-                st.markdown('<div style="padding-top:1.35rem;"></div>', unsafe_allow_html=True)
+                st.markdown("<div style='padding-top: 1.35rem;'></div>", unsafe_allow_html=True)
+                cods_filtrados_cons = {v["codigo_viagem"] for v in filtradas}
+                desp_filtradas_cons = [
+                    d for d in desp_detalhadas if d.get("Código Viagem") in cods_filtrados_cons
+                ]
                 xlsx_cons = gerar_excel_base_completa(
-                    filtradas, desp_detalhadas, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db
+                    filtradas,
+                    desp_filtradas_cons,
+                    motoristas_db,
+                    veiculos_db,
+                    clientes_db,
+                    locais_db,
+                    fornecedores_db,
                 )
                 st.download_button(
                     "📥 Exportar Excel (.xlsx)",
@@ -3440,7 +3431,7 @@ with st.container(border=True):
         st.markdown(
             """
             <div class="tab-header-wrap">
-                <div class="tab-title"><i class="fa-solid fa-address-book"></i> Cadastros Gerais (Base de Dados)</div>
+                <div class="tab-title"><i class="fa-solid fa-database"></i> Cadastros Gerais (Base de Dados)</div>
                 <span class="tab-step-pill">Etapa 11 de 11</span>
             </div>
             """,
@@ -3466,17 +3457,15 @@ with st.container(border=True):
             with st.container(border=True):
                 st.markdown('<div class="card-faeg-azul"></div>', unsafe_allow_html=True)
                 st.markdown(
-                    "<div style='font-size:0.85rem;font-weight:800;color:#0D263C;text-transform:uppercase;margin-bottom:0.8rem;'>"
-                    "<i class='fa-solid fa-id-card' style='color:#F34D25;margin-right:0.4rem;'></i> Cadastro de Motoristas</div>",
+                    "<h4 style='color:#0D263C;margin:0 0 0.8rem 0;font-weight:800;'>Cadastro de Motoristas</h4>",
                     unsafe_allow_html=True,
                 )
-
                 edit_mot_id = st.session_state.get("edit_mot_id", None)
                 mot_edit_obj = next((m for m in motoristas_db if m["id_motorista"] == edit_mot_id), None)
 
                 if mot_edit_obj:
                     st.markdown(
-                        f"<div class='edit-banner-pill'>✏️ Editando Motorista: {mot_edit_obj['nome_completo']}</div>",
+                        f"<div class='edit-banner-pill'>✏ Editando Motorista: {mot_edit_obj['nome_completo']}</div>",
                         unsafe_allow_html=True,
                     )
 
@@ -3572,21 +3561,21 @@ with st.container(border=True):
                             mid = m["id_motorista"]
                             lm1, lm2, lm3 = st.columns([5.8, 0.7, 0.7])
                             lm1.markdown(
-                                f"**{m['nome_completo']}** <span style='color:#64748B;font-size:0.78rem;'>| CNH: {m['cnh_numero']} ({m['cnh_categoria']}) | {m.get('vinculo') or '-'}</span>",
+                                f"<div style='font-size:0.83rem;padding-top:0.3rem;'>**{m['nome_completo']}** | CNH: {m['cnh_numero']} ({m.get('cnh_categoria') or '-'}) | {m.get('vinculo') or '-'}</div>",
                                 unsafe_allow_html=True,
                             )
-                            if lm2.button("✏️", key=f"ed_m_{mid}", help="Editar"):
+                            if lm2.button("✏", key=f"ed_m_{mid}", help="Editar"):
                                 st.session_state["confirm_ed_mot"] = mid
                                 st.session_state["confirm_dl_mot"] = None
                                 st.rerun()
-                            if lm3.button("🗑️", key=f"dl_m_{mid}", help="Excluir"):
+                            if lm3.button("🗑", key=f"dl_m_{mid}", help="Excluir"):
                                 st.session_state["confirm_dl_mot"] = mid
                                 st.session_state["confirm_ed_mot"] = None
                                 st.rerun()
 
                             if st.session_state.get("confirm_ed_mot") == mid:
                                 st.markdown(
-                                    f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{m['nome_completo']}</strong>?</div>",
+                                    f"<div class='confirm-box-edit'>⚠ Confirmar edição de {m['nome_completo']}?</div>",
                                     unsafe_allow_html=True,
                                 )
                                 b_ok, b_no = st.columns(2)
@@ -3600,11 +3589,11 @@ with st.container(border=True):
 
                             if st.session_state.get("confirm_dl_mot") == mid:
                                 st.markdown(
-                                    f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{m['nome_completo']}</strong>?</div>",
+                                    f"<div class='confirm-box-del'>🚨 Excluir permanentemente {m['nome_completo']}?</div>",
                                     unsafe_allow_html=True,
                                 )
                                 b_ok, b_no = st.columns(2)
-                                if b_ok.button("🗑️ Sim, Excluir", key=f"ok_dl_m_{mid}", use_container_width=True):
+                                if b_ok.button("🗑 Sim, Excluir", key=f"ok_dl_m_{mid}", use_container_width=True):
                                     try:
                                         with SessionLocal() as db:
                                             obj = db.query(Motorista).filter_by(id_motorista=mid).first()
@@ -3613,10 +3602,10 @@ with st.container(border=True):
                                                 db.commit()
                                         st.session_state["confirm_dl_mot"] = None
                                         carregar_listas_base.clear()
-                                        st.toast("Motorista excluído!", icon="🗑️")
+                                        st.toast("Motorista excluído!", icon="🗑")
                                         st.rerun()
                                     except IntegrityError:
-                                        st.error("Não é possível excluir: motorista já possui viagens vinculadas.")
+                                        st.error("Não é possível excluir: motorista já está vinculado a viagens.")
                                 if b_no.button("❌ Cancelar", key=f"no_dl_m_{mid}", use_container_width=True):
                                     st.session_state["confirm_dl_mot"] = None
                                     st.rerun()
@@ -3626,19 +3615,17 @@ with st.container(border=True):
         # ----------------------------------------------------------------------
         with tab_vei:
             with st.container(border=True):
-                st.markdown('<div class="card-faeg-laranja"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="card-faeg-azul"></div>', unsafe_allow_html=True)
                 st.markdown(
-                    "<div style='font-size:0.85rem;font-weight:800;color:#0D263C;text-transform:uppercase;margin-bottom:0.8rem;'>"
-                    "<i class='fa-solid fa-truck-front' style='color:#F34D25;margin-right:0.4rem;'></i> Cadastro de Veículos (Frota)</div>",
+                    "<h4 style='color:#0D263C;margin:0 0 0.8rem 0;font-weight:800;'>Cadastro de Veículos</h4>",
                     unsafe_allow_html=True,
                 )
-
                 edit_vei_id = st.session_state.get("edit_vei_id", None)
                 vei_edit_obj = next((v for v in veiculos_db if v["id_veiculo"] == edit_vei_id), None)
 
                 if vei_edit_obj:
                     st.markdown(
-                        f"<div class='edit-banner-pill'>✏️ Editando Veículo: {vei_edit_obj['descricao_marca']} ({vei_edit_obj['placa']})</div>",
+                        f"<div class='edit-banner-pill'>✏ Editando Veículo: {vei_edit_obj['descricao_marca']} ({vei_edit_obj['placa']})</div>",
                         unsafe_allow_html=True,
                     )
 
@@ -3738,21 +3725,21 @@ with st.container(border=True):
                             vid = v["id_veiculo"]
                             lv1, lv2, lv3 = st.columns([5.8, 0.7, 0.7])
                             lv1.markdown(
-                                f"**{v['descricao_marca']}** <span style='color:#64748B;font-size:0.78rem;'>| Placa: {v['placa']} | {v.get('tipo_veiculo') or '-'}</span>",
+                                f"<div style='font-size:0.83rem;padding-top:0.3rem;'>**{v['descricao_marca']}** | Placa: {v['placa']} | {v.get('tipo_veiculo') or '-'}</div>",
                                 unsafe_allow_html=True,
                             )
-                            if lv2.button("✏️", key=f"ed_v_{vid}", help="Editar"):
+                            if lv2.button("✏", key=f"ed_v_{vid}", help="Editar"):
                                 st.session_state["confirm_ed_vei"] = vid
                                 st.session_state["confirm_dl_vei"] = None
                                 st.rerun()
-                            if lv3.button("🗑️", key=f"dl_v_{vid}", help="Excluir"):
+                            if lv3.button("🗑", key=f"dl_v_{vid}", help="Excluir"):
                                 st.session_state["confirm_dl_vei"] = vid
                                 st.session_state["confirm_ed_vei"] = None
                                 st.rerun()
 
                             if st.session_state.get("confirm_ed_vei") == vid:
                                 st.markdown(
-                                    f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{v['descricao_marca']} ({v['placa']})</strong>?</div>",
+                                    f"<div class='confirm-box-edit'>⚠ Confirmar edição de {v['descricao_marca']} ({v['placa']})?</div>",
                                     unsafe_allow_html=True,
                                 )
                                 b_ok, b_no = st.columns(2)
@@ -3766,11 +3753,11 @@ with st.container(border=True):
 
                             if st.session_state.get("confirm_dl_vei") == vid:
                                 st.markdown(
-                                    f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{v['descricao_marca']} ({v['placa']})</strong>?</div>",
+                                    f"<div class='confirm-box-del'>🚨 Excluir permanentemente {v['descricao_marca']} ({v['placa']})?</div>",
                                     unsafe_allow_html=True,
                                 )
                                 b_ok, b_no = st.columns(2)
-                                if b_ok.button("🗑️ Sim, Excluir", key=f"ok_dl_v_{vid}", use_container_width=True):
+                                if b_ok.button("🗑 Sim, Excluir", key=f"ok_dl_v_{vid}", use_container_width=True):
                                     try:
                                         with SessionLocal() as db:
                                             obj = db.query(Veiculo).filter_by(id_veiculo=vid).first()
@@ -3779,32 +3766,30 @@ with st.container(border=True):
                                                 db.commit()
                                         st.session_state["confirm_dl_vei"] = None
                                         carregar_listas_base.clear()
-                                        st.toast("Veículo excluído!", icon="🗑️")
+                                        st.toast("Veículo excluído!", icon="🗑")
                                         st.rerun()
                                     except IntegrityError:
-                                        st.error("Não é possível excluir: veículo já possui viagens vinculadas.")
+                                        st.error("Não é possível excluir: veículo já está vinculado a viagens.")
                                 if b_no.button("❌ Cancelar", key=f"no_dl_v_{vid}", use_container_width=True):
                                     st.session_state["confirm_dl_vei"] = None
                                     st.rerun()
 
         # ----------------------------------------------------------------------
-        # ABA 3: CLIENTES CONTRATANTES
+        # ABA 3: CLIENTES
         # ----------------------------------------------------------------------
         with tab_cli:
             with st.container(border=True):
-                st.markdown('<div class="card-faeg-expansao"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="card-faeg-laranja"></div>', unsafe_allow_html=True)
                 st.markdown(
-                    "<div style='font-size:0.85rem;font-weight:800;color:#0D263C;text-transform:uppercase;margin-bottom:0.8rem;'>"
-                    "<i class='fa-solid fa-building' style='color:#F34D25;margin-right:0.4rem;'></i> Cadastro de Clientes Contratantes</div>",
+                    "<h4 style='color:#0D263C;margin:0 0 0.8rem 0;font-weight:800;'>Cadastro de Clientes</h4>",
                     unsafe_allow_html=True,
                 )
-
                 edit_cli_id = st.session_state.get("edit_cli_id", None)
                 cli_edit_obj = next((c for c in clientes_db if c["id_cliente"] == edit_cli_id), None)
 
                 if cli_edit_obj:
                     st.markdown(
-                        f"<div class='edit-banner-pill'>✏️ Editando Cliente: {cli_edit_obj['razao_social']}</div>",
+                        f"<div class='edit-banner-pill'>✏ Editando Cliente: {cli_edit_obj['razao_social']}</div>",
                         unsafe_allow_html=True,
                     )
 
@@ -3835,14 +3820,15 @@ with st.container(border=True):
                     c_prazo = cc5.number_input(
                         "Prazo Pgto (Dias)",
                         min_value=0,
+                        max_value=180,
                         step=5,
                         value=to_int(cli_edit_obj.get("prazo_pagamento_dias"), 30) if cli_edit_obj else 30,
                     )
 
-                    cc6, cc7, cc8 = st.columns([1.6, 1.3, 1.8])
+                    cc6, cc7, cc8 = st.columns([1.4, 1.3, 1.5])
                     c_resp = cc6.text_input(
-                        "Responsável",
-                        placeholder="Ex: Mariana Costa",
+                        "Responsável Comercial",
+                        placeholder="Ex: Mariana Alves",
                         value=(cli_edit_obj.get("responsavel_comercial") or "") if cli_edit_obj else "",
                     )
                     c_tel = cc7.text_input(
@@ -3890,13 +3876,13 @@ with st.container(border=True):
                                         obj_c = db.query(Cliente).filter_by(id_cliente=edit_cli_id).first()
                                         if obj_c:
                                             obj_c.razao_social = c_razao.strip()
-                                            obj_c.nome_fantasia = c_fantasia.strip() if c_fantasia.strip() else None
+                                            obj_c.nome_fantasia = c_fantasia.strip()
                                             obj_c.cnpj_cpf = c_doc.strip()
                                             obj_c.inscricao_estadual = c_ie.strip()
+                                            obj_c.prazo_pagamento_dias = to_int(c_prazo, 30)
                                             obj_c.responsavel_comercial = c_resp.strip()
                                             obj_c.telefone_comercial = c_tel.strip()
                                             obj_c.email_financeiro = c_email.strip()
-                                            obj_c.prazo_pagamento_dias = to_int(c_prazo, 30)
                                             obj_c.cep = c_cep.strip()
                                             obj_c.endereco_completo = c_end.strip()
                                             obj_c.cidade = c_cid.strip()
@@ -3906,13 +3892,13 @@ with st.container(border=True):
                                         db.add(
                                             Cliente(
                                                 razao_social=c_razao.strip(),
-                                                nome_fantasia=c_fantasia.strip() if c_fantasia.strip() else None,
+                                                nome_fantasia=c_fantasia.strip(),
                                                 cnpj_cpf=c_doc.strip(),
                                                 inscricao_estadual=c_ie.strip(),
+                                                prazo_pagamento_dias=to_int(c_prazo, 30),
                                                 responsavel_comercial=c_resp.strip(),
                                                 telefone_comercial=c_tel.strip(),
                                                 email_financeiro=c_email.strip(),
-                                                prazo_pagamento_dias=to_int(c_prazo, 30),
                                                 cep=c_cep.strip(),
                                                 endereco_completo=c_end.strip(),
                                                 cidade=c_cid.strip(),
@@ -3939,21 +3925,21 @@ with st.container(border=True):
                             ft_txt = f" ({c['nome_fantasia']})" if c.get("nome_fantasia") else ""
                             cid_txt = f" — {c['cidade']}/{c['uf']}" if (c.get("cidade") or c.get("uf")) else ""
                             lc1.markdown(
-                                f"**{c['razao_social']}**{ft_txt} <span style='color:#64748B;font-size:0.78rem;'>| Doc: {c['cnpj_cpf']}{cid_txt}</span>",
+                                f"<div style='font-size:0.83rem;padding-top:0.3rem;'>**{c['razao_social']}**{ft_txt}{cid_txt}</div>",
                                 unsafe_allow_html=True,
                             )
-                            if lc2.button("✏️", key=f"ed_c_{cid}", help="Editar"):
+                            if lc2.button("✏", key=f"ed_c_{cid}", help="Editar"):
                                 st.session_state["confirm_ed_cli"] = cid
                                 st.session_state["confirm_dl_cli"] = None
                                 st.rerun()
-                            if lc3.button("🗑️", key=f"dl_c_{cid}", help="Excluir"):
+                            if lc3.button("🗑", key=f"dl_c_{cid}", help="Excluir"):
                                 st.session_state["confirm_dl_cli"] = cid
                                 st.session_state["confirm_ed_cli"] = None
                                 st.rerun()
 
                             if st.session_state.get("confirm_ed_cli") == cid:
                                 st.markdown(
-                                    f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{c['razao_social']}</strong>?</div>",
+                                    f"<div class='confirm-box-edit'>⚠ Confirmar edição de {c['razao_social']}?</div>",
                                     unsafe_allow_html=True,
                                 )
                                 b_ok, b_no = st.columns(2)
@@ -3967,11 +3953,11 @@ with st.container(border=True):
 
                             if st.session_state.get("confirm_dl_cli") == cid:
                                 st.markdown(
-                                    f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{c['razao_social']}</strong>?</div>",
+                                    f"<div class='confirm-box-del'>🚨 Excluir permanentemente {c['razao_social']}?</div>",
                                     unsafe_allow_html=True,
                                 )
                                 b_ok, b_no = st.columns(2)
-                                if b_ok.button("🗑️ Sim, Excluir", key=f"ok_dl_c_{cid}", use_container_width=True):
+                                if b_ok.button("🗑 Sim, Excluir", key=f"ok_dl_c_{cid}", use_container_width=True):
                                     try:
                                         with SessionLocal() as db:
                                             obj = db.query(Cliente).filter_by(id_cliente=cid).first()
@@ -3980,32 +3966,30 @@ with st.container(border=True):
                                                 db.commit()
                                         st.session_state["confirm_dl_cli"] = None
                                         carregar_listas_base.clear()
-                                        st.toast("Cliente excluído!", icon="🗑️")
+                                        st.toast("Cliente excluído!", icon="🗑")
                                         st.rerun()
                                     except IntegrityError:
-                                        st.error("Não é possível excluir: cliente já possui viagens ou locais vinculados.")
+                                        st.error("Não é possível excluir: cliente possui ciclos/viagens vinculadas.")
                                 if b_no.button("❌ Cancelar", key=f"no_dl_c_{cid}", use_container_width=True):
                                     st.session_state["confirm_dl_cli"] = None
                                     st.rerun()
 
         # ----------------------------------------------------------------------
-        # ABA 4: LOCAIS DE COLETA E ENTREGA
+        # ABA 4: LOCAIS E BASES OPERACIONAIS
         # ----------------------------------------------------------------------
         with tab_loc:
             with st.container(border=True):
-                st.markdown('<div class="card-faeg-azul"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="card-faeg-laranja"></div>', unsafe_allow_html=True)
                 st.markdown(
-                    "<div style='font-size:0.85rem;font-weight:800;color:#0D263C;text-transform:uppercase;margin-bottom:0.8rem;'>"
-                    "<i class='fa-solid fa-map-location-dot' style='color:#F34D25;margin-right:0.4rem;'></i> Locais de Coleta e Entrega</div>",
+                    "<h4 style='color:#0D263C;margin:0 0 0.8rem 0;font-weight:800;'>Locais e Bases Operacionais</h4>",
                     unsafe_allow_html=True,
                 )
-
                 edit_loc_id = st.session_state.get("edit_loc_id", None)
                 loc_edit_obj = next((l for l in locais_db if l["id_local"] == edit_loc_id), None)
 
                 if loc_edit_obj:
                     st.markdown(
-                        f"<div class='edit-banner-pill'>✏️ Editando Local: {loc_edit_obj['nome_local']}</div>",
+                        f"<div class='edit-banner-pill'>✏ Editando Local: {loc_edit_obj['nome_local']}</div>",
                         unsafe_allow_html=True,
                     )
 
@@ -4013,7 +3997,6 @@ with st.container(border=True):
                 for c in clientes_db:
                     ft = f" ({c['nome_fantasia']})" if c.get("nome_fantasia") else ""
                     cli_vinc_ops[c["id_cliente"]] = f"{c['razao_social']}{ft}"
-
                 idx_cli_vinc = (
                     list(cli_vinc_ops.keys()).index(loc_edit_obj["id_cliente"])
                     if loc_edit_obj and loc_edit_obj.get("id_cliente") in cli_vinc_ops
@@ -4083,42 +4066,49 @@ with st.container(border=True):
                 )
 
                 opcoes_rest = ["Não há restrição", "Horário Comercial", "Outros"]
-                rest_atual = (
-                    (loc_edit_obj.get("restricao_horario") or "Não há restrição")
-                    if loc_edit_obj
-                    else "Não há restrição"
-                )
+                rest_atual = (loc_edit_obj.get("restricao_horario") or "Não há restrição") if loc_edit_obj else "Não há restrição"
                 if rest_atual in ["Não há restrição", "Horário Comercial"]:
-                    idx_rest = opcoes_rest.index(rest_atual)
-                    rest_custom_init = ""
+                    idx_rest_sel = opcoes_rest.index(rest_atual)
+                    outro_rest_ini = ""
+                elif loc_edit_obj:
+                    idx_rest_sel = 2
+                    outro_rest_ini = rest_atual
                 else:
-                    idx_rest = 2
-                    rest_custom_init = rest_atual
+                    idx_rest_sel = 0
+                    outro_rest_ini = ""
 
-                lr1, lr2 = st.columns([2.8, 3.2])
+                lr1, lr2 = st.columns([2.4, 3.6])
                 l_rest_sel = lr1.selectbox(
                     "Restrição de Horário",
                     opcoes_rest,
-                    index=idx_rest,
-                    key=f"cad_loc_rest_{edit_loc_id or 'new'}",
+                    index=idx_rest_sel,
+                    key=f"cad_loc_rest_sel_{edit_loc_id or 'new'}",
                 )
-                eh_outros_rest = l_rest_sel == "Outros"
-                l_rest_manual = lr2.text_input(
-                    "Horário Manual (se Outros)",
-                    value=rest_custom_init if eh_outros_rest else "",
-                    placeholder="Ex: 08:00 às 17:00" if eh_outros_rest else "Selecione 'Outros' ao lado",
-                    disabled=not eh_outros_rest,
-                    key=f"cad_loc_rest_man_{edit_loc_id or 'new'}",
-                )
+                with lr2:
+                    if l_rest_sel == "Outros":
+                        l_rest_outro = st.text_input(
+                            "Descreva a Restrição *",
+                            placeholder="Ex: Descarga apenas até as 16h",
+                            value=outro_rest_ini,
+                            key=f"cad_loc_rest_outro_{edit_loc_id or 'new'}",
+                        )
+                    else:
+                        l_rest_outro = ""
+                        st.text_input(
+                            "Detalhe da Restrição",
+                            value="Sem restrição adicional",
+                            disabled=True,
+                            key=f"cad_loc_rest_dis_{edit_loc_id or 'new'}",
+                        )
 
                 btn_txt_loc = "Atualizar Local" if loc_edit_obj else "Cadastrar Local"
-                if st.button(btn_txt_loc, key="btn_salvar_local", use_container_width=True):
+                if st.button(btn_txt_loc, key=f"btn_save_loc_{edit_loc_id or 'new'}", use_container_width=True):
                     if not l_nome.strip():
-                        st.error("Preencha o Nome do Local / CD.")
-                    elif eh_outros_rest and not l_rest_manual.strip():
-                        st.error("Informe manualmente a restrição de horário.")
+                        st.error("Informe o Nome do Local / CD.")
+                    elif l_rest_sel == "Outros" and not l_rest_outro.strip():
+                        st.error("Descreva a restrição de horário no campo ao lado.")
                     else:
-                        restricao_final = l_rest_manual.strip() if eh_outros_rest else l_rest_sel
+                        rest_final = l_rest_outro.strip() if l_rest_sel == "Outros" else l_rest_sel
                         with SessionLocal() as db:
                             if loc_edit_obj:
                                 obj_l = db.query(Local).filter_by(id_local=edit_loc_id).first()
@@ -4131,7 +4121,7 @@ with st.container(border=True):
                                     obj_l.cidade = l_cid.strip()
                                     obj_l.uf = l_uf.strip().upper()
                                     obj_l.contato_portaria = l_contato.strip()
-                                    obj_l.restricao_horario = restricao_final
+                                    obj_l.restricao_horario = rest_final
                                 st.session_state["edit_loc_id"] = None
                             else:
                                 db.add(
@@ -4144,13 +4134,10 @@ with st.container(border=True):
                                         cidade=l_cid.strip(),
                                         uf=l_uf.strip().upper(),
                                         contato_portaria=l_contato.strip(),
-                                        restricao_horario=restricao_final,
+                                        restricao_horario=rest_final,
                                     )
                                 )
                             db.commit()
-                        for wk in list(st.session_state.keys()):
-                            if wk.startswith("cad_loc_"):
-                                del st.session_state[wk]
                         carregar_listas_base.clear()
                         st.toast("Local salvo com sucesso!", icon="✅")
                         st.rerun()
@@ -4169,21 +4156,21 @@ with st.container(border=True):
                             cli_l = cli_map_cad.get(l.get("id_cliente"))
                             cli_tag = f" [Cli: {cli_l['razao_social']}]" if cli_l else ""
                             ll_1.markdown(
-                                f"**{l['nome_local']}**{cid_l_txt} <span style='color:#64748B;font-size:0.78rem;'>| {l.get('restricao_horario') or 'Sem restrição'}{cli_tag}</span>",
+                                f"<div style='font-size:0.83rem;padding-top:0.3rem;'>**{l['nome_local']}**{cid_l_txt} | {l.get('restricao_horario') or 'Sem restrição'}{cli_tag}</div>",
                                 unsafe_allow_html=True,
                             )
-                            if ll_2.button("✏️", key=f"ed_l_{lid}", help="Editar"):
+                            if ll_2.button("✏", key=f"ed_l_{lid}", help="Editar"):
                                 st.session_state["confirm_ed_loc"] = lid
                                 st.session_state["confirm_dl_loc"] = None
                                 st.rerun()
-                            if ll_3.button("🗑️", key=f"dl_l_{lid}", help="Excluir"):
+                            if ll_3.button("🗑", key=f"dl_l_{lid}", help="Excluir"):
                                 st.session_state["confirm_dl_loc"] = lid
                                 st.session_state["confirm_ed_loc"] = None
                                 st.rerun()
 
                             if st.session_state.get("confirm_ed_loc") == lid:
                                 st.markdown(
-                                    f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{l['nome_local']}</strong>?</div>",
+                                    f"<div class='confirm-box-edit'>⚠ Confirmar edição de {l['nome_local']}?</div>",
                                     unsafe_allow_html=True,
                                 )
                                 b_ok, b_no = st.columns(2)
@@ -4197,11 +4184,11 @@ with st.container(border=True):
 
                             if st.session_state.get("confirm_dl_loc") == lid:
                                 st.markdown(
-                                    f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{l['nome_local']}</strong>?</div>",
+                                    f"<div class='confirm-box-del'>🚨 Excluir permanentemente {l['nome_local']}?</div>",
                                     unsafe_allow_html=True,
                                 )
                                 b_ok, b_no = st.columns(2)
-                                if b_ok.button("🗑️ Sim, Excluir", key=f"ok_dl_l_{lid}", use_container_width=True):
+                                if b_ok.button("🗑 Sim, Excluir", key=f"ok_dl_l_{lid}", use_container_width=True):
                                     try:
                                         with SessionLocal() as db:
                                             obj = db.query(Local).filter_by(id_local=lid).first()
@@ -4210,7 +4197,7 @@ with st.container(border=True):
                                                 db.commit()
                                         st.session_state["confirm_dl_loc"] = None
                                         carregar_listas_base.clear()
-                                        st.toast("Local excluído!", icon="🗑️")
+                                        st.toast("Local excluído!", icon="🗑")
                                         st.rerun()
                                     except IntegrityError:
                                         st.error("Não é possível excluir: local já está vinculado a viagens.")
@@ -4223,19 +4210,17 @@ with st.container(border=True):
         # ----------------------------------------------------------------------
         with tab_forn:
             with st.container(border=True):
-                st.markdown('<div class="card-faeg-azul"></div>', unsafe_allow_html=True)
+                st.markdown('<div class="card-faeg-expansao"></div>', unsafe_allow_html=True)
                 st.markdown(
-                    "<div style='font-size:0.85rem;font-weight:800;color:#0D263C;text-transform:uppercase;margin-bottom:0.8rem;'>"
-                    "<i class='fa-solid fa-gas-pump' style='color:#F34D25;margin-right:0.4rem;'></i> Fornecedores e Postos</div>",
+                    "<h4 style='color:#0D263C;margin:0 0 0.8rem 0;font-weight:800;'>Fornecedores e Postos</h4>",
                     unsafe_allow_html=True,
                 )
-
                 edit_forn_id = st.session_state.get("edit_forn_id", None)
                 forn_edit_obj = next((f for f in fornecedores_db if f["id_fornecedor"] == edit_forn_id), None)
 
                 if forn_edit_obj:
                     st.markdown(
-                        f"<div class='edit-banner-pill'>✏️ Editando Fornecedor: {forn_edit_obj['nome_fantasia']}</div>",
+                        f"<div class='edit-banner-pill'>✏ Editando Fornecedor: {forn_edit_obj['nome_fantasia']}</div>",
                         unsafe_allow_html=True,
                     )
 
@@ -4325,21 +4310,21 @@ with st.container(border=True):
                             lf1, lf2, lf3 = st.columns([5.8, 0.7, 0.7])
                             rz_f_txt = f" ({f['razao_social']})" if f.get("razao_social") else ""
                             lf1.markdown(
-                                f"**{f['nome_fantasia']}**{rz_f_txt} <span style='color:#64748B;font-size:0.78rem;'>| {f.get('categoria_servico') or '-'}</span>",
+                                f"<div style='font-size:0.83rem;padding-top:0.3rem;'>**{f['nome_fantasia']}**{rz_f_txt} | {f.get('categoria_servico') or '-'}</div>",
                                 unsafe_allow_html=True,
                             )
-                            if lf2.button("✏️", key=f"ed_f_{fid}", help="Editar"):
+                            if lf2.button("✏", key=f"ed_f_{fid}", help="Editar"):
                                 st.session_state["confirm_ed_forn"] = fid
                                 st.session_state["confirm_dl_forn"] = None
                                 st.rerun()
-                            if lf3.button("🗑️", key=f"dl_f_{fid}", help="Excluir"):
+                            if lf3.button("🗑", key=f"dl_f_{fid}", help="Excluir"):
                                 st.session_state["confirm_dl_forn"] = fid
                                 st.session_state["confirm_ed_forn"] = None
                                 st.rerun()
 
                             if st.session_state.get("confirm_ed_forn") == fid:
                                 st.markdown(
-                                    f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{f['nome_fantasia']}</strong>?</div>",
+                                    f"<div class='confirm-box-edit'>⚠ Confirmar edição de {f['nome_fantasia']}?</div>",
                                     unsafe_allow_html=True,
                                 )
                                 b_ok, b_no = st.columns(2)
@@ -4353,11 +4338,11 @@ with st.container(border=True):
 
                             if st.session_state.get("confirm_dl_forn") == fid:
                                 st.markdown(
-                                    f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{f['nome_fantasia']}</strong>?</div>",
+                                    f"<div class='confirm-box-del'>🚨 Excluir permanentemente {f['nome_fantasia']}?</div>",
                                     unsafe_allow_html=True,
                                 )
                                 b_ok, b_no = st.columns(2)
-                                if b_ok.button("🗑️ Sim, Excluir", key=f"ok_dl_f_{fid}", use_container_width=True):
+                                if b_ok.button("🗑 Sim, Excluir", key=f"ok_dl_f_{fid}", use_container_width=True):
                                     try:
                                         with SessionLocal() as db:
                                             obj = db.query(Fornecedor).filter_by(id_fornecedor=fid).first()
@@ -4366,12 +4351,10 @@ with st.container(border=True):
                                                 db.commit()
                                         st.session_state["confirm_dl_forn"] = None
                                         carregar_listas_base.clear()
-                                        st.toast("Fornecedor excluído!", icon="🗑️")
+                                        st.toast("Fornecedor excluído!", icon="🗑")
                                         st.rerun()
                                     except IntegrityError:
-                                        st.error("Não é possível excluir: fornecedor já possui despesas vinculadas.")
+                                        st.error("Não é possível excluir: fornecedor já está vinculado a despesas.")
                                 if b_no.button("❌ Cancelar", key=f"no_dl_f_{fid}", use_container_width=True):
                                     st.session_state["confirm_dl_forn"] = None
                                     st.rerun()
-
-        render_navegacao_rodape(10, MENU_ITENS)
