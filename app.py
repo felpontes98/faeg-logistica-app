@@ -1291,6 +1291,44 @@ def _pdf_esc(txt):
     return s.encode("latin-1", "replace").decode("latin-1")
 
 
+def _compilar_pdf_pagina_unica(cmds):
+    stream_bytes = "\n".join(cmds).encode("latin-1", "replace")
+    compressed = zlib.compress(stream_bytes)
+
+    objs = []
+    objs.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
+    objs.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
+    objs.append(
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+        b"/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>\nendobj\n"
+    )
+    objs.append(b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n")
+    objs.append(
+        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n"
+    )
+    objs.append(
+        f"6 0 obj\n<< /Length {len(compressed)} /Filter /FlateDecode >>\nstream\n".encode("ascii")
+        + compressed
+        + b"\nendstream\nendobj\n"
+    )
+
+    out = io.BytesIO()
+    out.write(b"%PDF-1.4\n")
+    offsets = [0]
+    for obj in objs:
+        offsets.append(out.tell())
+        out.write(obj)
+    xref_pos = out.tell()
+    out.write(f"xref\n0 {len(objs) + 1}\n".encode("ascii"))
+    out.write(b"0000000000 65535 f \n")
+    for off in offsets[1:]:
+        out.write(f"{off:010d} 00000 n \n".encode("ascii"))
+    out.write(
+        f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF".encode("ascii")
+    )
+    return out.getvalue()
+
+
 def gerar_pdf_relatorio(dados_resumo, despesas_lista):
     cmds = []
 
@@ -1387,41 +1425,108 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
             if y > 790:
                 break
 
-    stream_bytes = "\n".join(cmds).encode("latin-1", "replace")
-    compressed = zlib.compress(stream_bytes)
+    return _compilar_pdf_pagina_unica(cmds)
 
-    objs = []
-    objs.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
-    objs.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
-    objs.append(
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-        b"/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>\nendobj\n"
-    )
-    objs.append(b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n")
-    objs.append(
-        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n"
-    )
-    objs.append(
-        f"6 0 obj\n<< /Length {len(compressed)} /Filter /FlateDecode >>\nstream\n".encode("ascii")
-        + compressed
-        + b"\nendstream\nendobj\n"
-    )
 
-    out = io.BytesIO()
-    out.write(b"%PDF-1.4\n")
-    offsets = [0]
-    for obj in objs:
-        offsets.append(out.tell())
-        out.write(obj)
-    xref_pos = out.tell()
-    out.write(f"xref\n0 {len(objs) + 1}\n".encode("ascii"))
-    out.write(b"0000000000 65535 f \n")
-    for off in offsets[1:]:
-        out.write(f"{off:010d} 00000 n \n".encode("ascii"))
-    out.write(
-        f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF".encode("ascii")
+def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_categorias):
+    """Gera PDF executivo consolidado do Painel Geral / BI Operacional FAEG."""
+    cmds = []
+
+    def rect(x, y_top, w, h, r, g, b):
+        y = 842 - y_top - h
+        cmds.append(f"{r:.3f} {g:.3f} {b:.3f} rg {x:.1f} {y:.1f} {w:.1f} {h:.1f} re f")
+
+    def text(x, y_top, txt, size=10, bold=False, r=0.051, g=0.149, b=0.235):
+        y = 842 - y_top
+        font = "/F2" if bold else "/F1"
+        cmds.append(
+            f"BT {font} {size} Tf {r:.3f} {g:.3f} {b:.3f} rg {x:.1f} {y:.1f} Td ({_pdf_esc(txt)}) Tj ET"
+        )
+
+    rect(0, 0, 595, 76, 0.051, 0.149, 0.235)
+    rect(0, 76, 595, 5, 0.953, 0.302, 0.145)
+    text(40, 34, "FAEG — RELATORIO EXECUTIVO CONSOLIDADO (BI)", size=14, bold=True, r=1, g=1, b=1)
+    text(
+        40,
+        54,
+        f"Filtro aplicado: {resumo_geral['filtro_desc']}",
+        size=9,
+        bold=False,
+        r=0.671,
+        g=0.808,
+        b=0.882,
     )
-    return out.getvalue()
+    text(440, 54, f"Emissao: {date.today().strftime('%d/%m/%Y')}", size=9, bold=False, r=0.914, g=0.914, b=0.914)
+
+    rect(40, 96, 515, 22, 0.914, 0.914, 0.914)
+    text(48, 111, "1. INDICADORES GLOBAIS DA OPERACAO", size=10, bold=True)
+
+    y = 136
+    rect(40, y - 12, 515, 96, 0.051, 0.149, 0.235)
+    text(55, y + 6, f"Total de Viagens: {resumo_geral['qtd_viagens']}", size=10, bold=True, r=0.671, g=0.808, b=0.882)
+    text(310, y + 6, f"KM Total Rodado: {resumo_geral['km_total']} km", size=10, bold=True, r=0.671, g=0.808, b=0.882)
+    y += 24
+    text(55, y + 6, "Receita Consolidada:", size=10, bold=False, r=1, g=1, b=1)
+    text(210, y + 6, resumo_geral["receita_fmt"], size=10, bold=True, r=1, g=1, b=1)
+    text(340, y + 6, "Despesas Totais:", size=10, bold=False, r=1, g=1, b=1)
+    text(445, y + 6, resumo_geral["despesa_fmt"], size=10, bold=True, r=0.953, g=0.302, b=0.145)
+    y += 26
+    text(55, y + 6, "RESULTADO LIQUIDO CONSOLIDADO:", size=10, bold=True, r=1, g=1, b=1)
+    text(275, y + 6, resumo_geral["resultado_fmt"], size=12, bold=True, r=1, g=1, b=1)
+    text(430, y + 6, f"Margem: {resumo_geral['margem_fmt']}", size=10, bold=True, r=0.671, g=0.808, b=0.882)
+
+    y += 42
+    rect(40, y, 515, 22, 0.914, 0.914, 0.914)
+    text(48, y + 15, "2. DESEMPENHO CONSOLIDADO POR CLIENTE", size=10, bold=True)
+    y += 34
+
+    rect(40, y - 12, 515, 18, 0.051, 0.149, 0.235)
+    text(46, y, "Cliente", size=8, bold=True, r=1, g=1, b=1)
+    text(245, y, "Viagens", size=8, bold=True, r=1, g=1, b=1)
+    text(300, y, "Receita", size=8, bold=True, r=1, g=1, b=1)
+    text(385, y, "Despesas", size=8, bold=True, r=1, g=1, b=1)
+    text(470, y, "Resultado", size=8, bold=True, r=1, g=1, b=1)
+    y += 18
+
+    if not ranking_clientes:
+        text(46, y, "Sem dados para exibir.", size=9)
+        y += 18
+    else:
+        for idx_c, rc in enumerate(ranking_clientes[:10]):
+            if idx_c % 2 == 1:
+                rect(40, y - 11, 515, 16, 0.965, 0.972, 0.985)
+            text(46, y, str(rc["cliente"])[:34], size=8)
+            text(255, y, str(rc["viagens"]), size=8)
+            text(300, y, rc["receita_fmt"], size=8)
+            text(385, y, rc["despesa_fmt"], size=8)
+            text(470, y, rc["resultado_fmt"], size=8, bold=True)
+            y += 16
+
+    y += 14
+    rect(40, y, 515, 22, 0.914, 0.914, 0.914)
+    text(48, y + 15, "3. DISTRIBUICAO CONSOLIDADA DE DESPESAS POR CATEGORIA", size=10, bold=True)
+    y += 34
+
+    rect(40, y - 12, 515, 18, 0.051, 0.149, 0.235)
+    text(46, y, "Categoria de Despesa", size=8, bold=True, r=1, g=1, b=1)
+    text(330, y, "Participacao (%)", size=8, bold=True, r=1, g=1, b=1)
+    text(455, y, "Total Acumulado", size=8, bold=True, r=1, g=1, b=1)
+    y += 18
+
+    if not despesas_categorias:
+        text(46, y, "Nenhuma despesa registrada no filtro atual.", size=9)
+    else:
+        for idx_cat, dc in enumerate(despesas_categorias[:10]):
+            if idx_cat % 2 == 1:
+                rect(40, y - 11, 515, 16, 0.965, 0.972, 0.985)
+            text(46, y, str(dc["categoria"])[:42], size=8)
+            text(340, y, dc["pct_fmt"], size=8)
+            text(455, y, dc["total_fmt"], size=8, bold=True)
+            y += 16
+            if y > 795:
+                break
+
+    return _compilar_pdf_pagina_unica(cmds)
 
 
 # ==============================================================================
@@ -2752,7 +2857,10 @@ with st.container(border=True):
             for item in lista_desp_atual:
                 soma_desp += item["valor_total"]
                 col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns([2.2, 2.4, 1.2, 1.3, 0.7])
-                col_t1.markdown(f"**{item['tipo_despesa']}**  \n<span style='font-size:0.78rem;color:#64748B;'>{item['fornecedor']}</span>", unsafe_allow_html=True)
+                col_t1.markdown(
+                    f"**{item['tipo_despesa']}**  \n<span style='font-size:0.78rem;color:#64748B;'>{item['fornecedor']}</span>",
+                    unsafe_allow_html=True,
+                )
                 col_t2.markdown(f"{item['descricao_detalhe']}")
                 col_t3.markdown(f"{item['quantidade']:.2f} × {fmt_brl(item['valor_unitario'])}")
                 col_t4.markdown(f"**{fmt_brl(item['valor_total'])}**")
@@ -2868,7 +2976,7 @@ with st.container(border=True):
         render_navegacao_rodape(7, MENU_ITENS)
 
     # --------------------------------------------------------------------------
-    # ETAPA 9: RELATÓRIOS E EXPORTAÇÃO (EXCEL E PDF)
+    # ETAPA 9: RELATÓRIOS E EXPORTAÇÃO (VIAGEM ATIVA + PAINEL GERAL / BI)
     # --------------------------------------------------------------------------
     elif aba_ativa == "9. Relatórios / Exportar":
         st.markdown(
@@ -2881,92 +2989,296 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
-        v_neg_r = to_float(get_campo("valor_negociado", 0.0))
-        v_rec_r = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))
-        receita_r = v_neg_r if v_neg_r > 0 else v_rec_r
+        todas_vg_exp, desp_det_exp = carregar_todas_viagens_consulta()
+        xlsx_bytes_completo = gerar_excel_base_completa(
+            todas_vg_exp, desp_det_exp, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db
+        )
 
-        if viagem_sel_id == 0:
-            desps_r = st.session_state.get("despesas_temp", [])
-        else:
-            desps_r = carregar_despesas_viagem(viagem_sel_id)
+        tab_rel_viagem, tab_rel_geral = st.tabs(
+            [
+                "📄 Relatório da Viagem Ativa",
+                "📊 Painel Geral (BI Consolidado)",
+            ]
+        )
 
-        custos_r = sum(to_float(d["valor_total"]) for d in desps_r)
-        resultado_r = receita_r - custos_r
-        km_r = max(0, to_int(get_campo("odo_fin", 0)) - to_int(get_campo("odo_ini", 0)))
-        custo_km_r = (custos_r / km_r) if km_r > 0 else 0.0
-        margem_r = ((resultado_r / receita_r) * 100.0) if receita_r > 0 else 0.0
+        # ----------------------------------------------------------------------
+        # SUB-ABA 1: RELATÓRIO DA VIAGEM ATIVA
+        # ----------------------------------------------------------------------
+        with tab_rel_viagem:
+            v_neg_r = to_float(get_campo("valor_negociado", 0.0))
+            v_rec_r = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))
+            receita_r = v_neg_r if v_neg_r > 0 else v_rec_r
 
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Receita Considerada", fmt_brl(receita_r))
-        k2.metric("Custos Totais", fmt_brl(custos_r))
-        k3.metric("Custo por KM", fmt_brl(custo_km_r))
-        k4.metric("Margem de Lucro", f"{margem_r:.1f}%")
+            if viagem_sel_id == 0:
+                desps_r = st.session_state.get("despesas_temp", [])
+            else:
+                desps_r = carregar_despesas_viagem(viagem_sel_id)
 
-        st.markdown('<div class="sec-subtitle">Exportação da Viagem Atual</div>', unsafe_allow_html=True)
-        vei_obj_r = next((v for v in veiculos_db if v["id_veiculo"] == get_campo("vei_id", 0)), None)
-        dados_pdf = {
-            "codigo": id_label_ctx,
-            "id_frete": get_campo("id_frete") or "-",
-            "cliente": cli_nome_ctx,
-            "ciclo": get_campo("ciclo_nome") or "Individual",
-            "motorista": mot_nome_ctx,
-            "veiculo": f"{vei_obj_r['descricao_marca']} ({vei_obj_r['placa']})" if vei_obj_r else "-",
-            "origem": get_campo("rota_origem") or "-",
-            "destino": get_campo("rota_destino") or "-",
-            "tipo_viagem": get_campo("tipo_viagem", "Individual"),
-            "frete_info": f"{get_campo('tipo_frete', 'Dedicado')} / {get_campo('forma_contrat', '-')}",
-            "status": status_ctx,
-            "km_real": km_r,
-            "receita_fmt": fmt_brl(receita_r),
-            "despesa_fmt": fmt_brl(custos_r),
-            "resultado_fmt": fmt_brl(resultado_r),
-            "custo_km_fmt": fmt_brl(custo_km_r),
-            "margem_fmt": f"{margem_r:.1f}%",
-            "recebido_fmt": fmt_brl(v_rec_r),
-        }
-        desps_pdf = [
-            {
-                "tipo": d["tipo_despesa"],
-                "desc": d.get("descricao_detalhe") or "-",
-                "qtd": to_float(d["quantidade"]),
-                "unit_fmt": fmt_brl(d["valor_unitario"]),
-                "total_fmt": fmt_brl(d["valor_total"]),
+            custos_r = sum(to_float(d["valor_total"]) for d in desps_r)
+            resultado_r = receita_r - custos_r
+            km_r = max(0, to_int(get_campo("odo_fin", 0)) - to_int(get_campo("odo_ini", 0)))
+            custo_km_r = (custos_r / km_r) if km_r > 0 else 0.0
+            margem_r = ((resultado_r / receita_r) * 100.0) if receita_r > 0 else 0.0
+
+            k1, k2, k3, k4, k5 = st.columns(5)
+            k1.metric("Receita Considerada", fmt_brl(receita_r))
+            k2.metric("Custos Totais", fmt_brl(custos_r))
+            k3.metric("Resultado Líquido", fmt_brl(resultado_r))
+            k4.metric("Custo por KM", fmt_brl(custo_km_r))
+            k5.metric("Margem de Lucro", f"{margem_r:.1f}%")
+
+            st.markdown('<div class="sec-subtitle">Exportação da Viagem Atual</div>', unsafe_allow_html=True)
+            vei_obj_r = next((v for v in veiculos_db if v["id_veiculo"] == get_campo("vei_id", 0)), None)
+            dados_pdf = {
+                "codigo": id_label_ctx,
+                "id_frete": get_campo("id_frete") or "-",
+                "cliente": cli_nome_ctx,
+                "ciclo": get_campo("ciclo_nome") or "Individual",
+                "motorista": mot_nome_ctx,
+                "veiculo": f"{vei_obj_r['descricao_marca']} ({vei_obj_r['placa']})" if vei_obj_r else "-",
+                "origem": get_campo("rota_origem") or "-",
+                "destino": get_campo("rota_destino") or "-",
+                "tipo_viagem": get_campo("tipo_viagem", "Individual"),
+                "frete_info": f"{get_campo('tipo_frete', 'Dedicado')} / {get_campo('forma_contrat', '-')}",
+                "status": status_ctx,
+                "km_real": km_r,
+                "receita_fmt": fmt_brl(receita_r),
+                "despesa_fmt": fmt_brl(custos_r),
+                "resultado_fmt": fmt_brl(resultado_r),
+                "custo_km_fmt": fmt_brl(custo_km_r),
+                "margem_fmt": f"{margem_r:.1f}%",
+                "recebido_fmt": fmt_brl(v_rec_r),
             }
-            for d in desps_r
-        ]
-        pdf_bytes = gerar_pdf_relatorio(dados_pdf, desps_pdf)
+            desps_pdf = [
+                {
+                    "tipo": d["tipo_despesa"],
+                    "desc": d.get("descricao_detalhe") or "-",
+                    "qtd": to_float(d["quantidade"]),
+                    "unit_fmt": fmt_brl(d["valor_unitario"]),
+                    "total_fmt": fmt_brl(d["valor_total"]),
+                }
+                for d in desps_r
+            ]
+            pdf_bytes = gerar_pdf_relatorio(dados_pdf, desps_pdf)
 
-        b_pdf, b_xls, _ = st.columns([1.4, 1.6, 2.5])
-        with b_pdf:
-            st.download_button(
-                "📄 Baixar Relatório PDF",
-                data=pdf_bytes,
-                file_name=f"Relatorio_{id_label_ctx}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
-        with b_xls:
-            todas_vg_exp, desp_det_exp = carregar_todas_viagens_consulta()
-            xlsx_bytes = gerar_excel_base_completa(
-                todas_vg_exp, desp_det_exp, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db
-            )
-            st.download_button(
-                "📥 Exportar Base Completa (.xlsx)",
-                data=xlsx_bytes,
-                file_name="Base_Completa_FAEG.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
+            b_pdf, b_xls, _ = st.columns([1.5, 1.7, 2.3])
+            with b_pdf:
+                st.download_button(
+                    "📄 Baixar Relatório PDF (Viagem)",
+                    data=pdf_bytes,
+                    file_name=f"Relatorio_{id_label_ctx}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="dl_pdf_viagem_ativa",
+                )
+            with b_xls:
+                st.download_button(
+                    "📥 Exportar Base Completa (.xlsx)",
+                    data=xlsx_bytes_completo,
+                    file_name="Base_Completa_FAEG.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key="dl_xlsx_viagem_ativa",
+                )
 
-        if desps_r:
-            st.markdown('<div class="sec-subtitle">Distribuição de Gastos por Categoria</div>', unsafe_allow_html=True)
-            df_chart = (
-                pd.DataFrame(desps_r)
-                .groupby("tipo_despesa", as_index=False)["valor_total"]
-                .sum()
-                .rename(columns={"tipo_despesa": "Categoria", "valor_total": "Total (R$)"})
-            )
-            st.bar_chart(df_chart.set_index("Categoria"), color="#F34D25")
+            if desps_r:
+                st.markdown('<div class="sec-subtitle">Distribuição de Gastos por Categoria</div>', unsafe_allow_html=True)
+                df_chart = (
+                    pd.DataFrame(desps_r)
+                    .groupby("tipo_despesa", as_index=False)["valor_total"]
+                    .sum()
+                    .rename(columns={"tipo_despesa": "Categoria", "valor_total": "Total (R$)"})
+                )
+                st.bar_chart(df_chart.set_index("Categoria"), color="#F34D25")
+            else:
+                st.info("Nenhuma despesa registrada nesta viagem para exibir o gráfico de categorias.")
+
+        # ----------------------------------------------------------------------
+        # SUB-ABA 2: PAINEL GERAL (BI CONSOLIDADO DE TODAS AS VIAGENS)
+        # ----------------------------------------------------------------------
+        with tab_rel_geral:
+            if not todas_vg_exp:
+                st.info("Nenhuma viagem salva no banco até o momento para consolidar indicadores.")
+            else:
+                st.markdown('<div class="sec-subtitle">Filtros do Painel Executivo</div>', unsafe_allow_html=True)
+                fg1, fg2, fg3 = st.columns([1.4, 1.3, 2.3])
+                with fg1:
+                    bi_status = st.selectbox(
+                        "SITUAÇÃO DA OPERAÇÃO",
+                        ["Todas"] + OPCOES_SITUACAO_OPERACAO,
+                        key="bi_filtro_status",
+                    )
+                with fg2:
+                    bi_tipo = st.selectbox(
+                        "TIPO DE VIAGEM",
+                        ["Todos", "Individual", "Ciclo"],
+                        key="bi_filtro_tipo",
+                    )
+                with fg3:
+                    clientes_bi_ops = ["Todos"] + sorted(
+                        list({v["cliente"] for v in todas_vg_exp if v["cliente"] and v["cliente"] != "-"})
+                    )
+                    bi_cliente = st.selectbox(
+                        "CLIENTE CONTRATANTE",
+                        clientes_bi_ops,
+                        key="bi_filtro_cliente",
+                    )
+
+                vg_bi_filtradas = todas_vg_exp
+                if bi_status != "Todas":
+                    vg_bi_filtradas = [v for v in vg_bi_filtradas if v["status"] == bi_status]
+                if bi_tipo != "Todos":
+                    vg_bi_filtradas = [v for v in vg_bi_filtradas if v["tipo_viagem"] == bi_tipo]
+                if bi_cliente != "Todos":
+                    vg_bi_filtradas = [v for v in vg_bi_filtradas if v["cliente"] == bi_cliente]
+
+                cods_bi_ativos = {v["codigo_viagem"] for v in vg_bi_filtradas}
+                desps_bi_filtradas = [
+                    d for d in desp_det_exp if d.get("Código Viagem") in cods_bi_ativos
+                ]
+
+                rec_global = sum(v["receita_base"] for v in vg_bi_filtradas)
+                desp_global = sum(v["total_despesas"] for v in vg_bi_filtradas)
+                res_global = rec_global - desp_global
+                margem_global = ((res_global / rec_global) * 100.0) if rec_global > 0 else 0.0
+                km_global = sum(v["km_rodado"] for v in vg_bi_filtradas)
+                custo_km_global = (desp_global / km_global) if km_global > 0 else 0.0
+
+                st.markdown('<div class="sec-subtitle">Indicadores Globais Consolidados</div>', unsafe_allow_html=True)
+                bg1, bg2, bg3 = st.columns(3)
+                bg1.metric("Viagens Analisadas", len(vg_bi_filtradas))
+                bg2.metric("Receita Consolidada", fmt_brl(rec_global))
+                bg3.metric("Despesas Consolidadas", fmt_brl(desp_global))
+
+                bg4, bg5, bg6 = st.columns(3)
+                bg4.metric("Resultado Líquido Total", fmt_brl(res_global))
+                bg5.metric("Margem Média Global", f"{margem_global:.1f}%")
+                bg6.metric("KM Rodado / Custo Médio KM", f"{km_global:,} km ({fmt_brl(custo_km_global)})".replace(",", "."))
+
+                # Agrupamento por Cliente
+                ranking_cli_lista = []
+                if vg_bi_filtradas:
+                    df_bi_vg = pd.DataFrame(vg_bi_filtradas)
+                    grp_cli = (
+                        df_bi_vg.groupby("cliente", as_index=False)
+                        .agg(
+                            viagens=("id_viagem", "count"),
+                            receita=("receita_base", "sum"),
+                            despesas=("total_despesas", "sum"),
+                            resultado=("resultado_liquido", "sum"),
+                        )
+                        .sort_values("resultado", ascending=False)
+                    )
+                    for _, row_c in grp_cli.iterrows():
+                        mg_c = ((row_c["resultado"] / row_c["receita"]) * 100.0) if row_c["receita"] > 0 else 0.0
+                        ranking_cli_lista.append(
+                            {
+                                "cliente": row_c["cliente"],
+                                "viagens": int(row_c["viagens"]),
+                                "receita": float(row_c["receita"]),
+                                "despesas": float(row_c["despesas"]),
+                                "resultado": float(row_c["resultado"]),
+                                "margem": mg_c,
+                                "receita_fmt": fmt_brl(row_c["receita"]),
+                                "despesa_fmt": fmt_brl(row_c["despesas"]),
+                                "resultado_fmt": fmt_brl(row_c["resultado"]),
+                                "margem_fmt": f"{mg_c:.1f}%",
+                            }
+                        )
+
+                # Agrupamento de Despesas por Categoria
+                desp_cat_lista = []
+                if desps_bi_filtradas:
+                    df_bi_desp = pd.DataFrame(desps_bi_filtradas)
+                    grp_cat = (
+                        df_bi_desp.groupby("Tipo Despesa", as_index=False)["Valor Total (R$)"]
+                        .sum()
+                        .sort_values("Valor Total (R$)", ascending=False)
+                    )
+                    tot_cat_soma = float(grp_cat["Valor Total (R$)"].sum())
+                    for _, row_d in grp_cat.iterrows():
+                        val_cat = float(row_d["Valor Total (R$)"])
+                        pct_cat = ((val_cat / tot_cat_soma) * 100.0) if tot_cat_soma > 0 else 0.0
+                        desp_cat_lista.append(
+                            {
+                                "categoria": row_d["Tipo Despesa"],
+                                "total": val_cat,
+                                "total_fmt": fmt_brl(val_cat),
+                                "pct_fmt": f"{pct_cat:.1f}%",
+                            }
+                        )
+
+                g_col1, g_col2 = st.columns(2)
+                with g_col1:
+                    st.markdown('<div class="sec-subtitle">Despesas por Categoria (Consolidado)</div>', unsafe_allow_html=True)
+                    if desp_cat_lista:
+                        df_chart_cat_bi = pd.DataFrame(desp_cat_lista)[["categoria", "total"]].rename(
+                            columns={"categoria": "Categoria", "total": "Total (R$)"}
+                        )
+                        st.bar_chart(df_chart_cat_bi.set_index("Categoria"), color="#F34D25")
+                    else:
+                        st.info("Sem despesas registradas para o filtro selecionado.")
+
+                with g_col2:
+                    st.markdown('<div class="sec-subtitle">Resultado Líquido por Cliente</div>', unsafe_allow_html=True)
+                    if ranking_cli_lista:
+                        df_chart_cli_bi = pd.DataFrame(ranking_cli_lista)[["cliente", "resultado"]].rename(
+                            columns={"cliente": "Cliente", "resultado": "Resultado Líquido (R$)"}
+                        )
+                        st.bar_chart(df_chart_cli_bi.set_index("Cliente"), color="#0D263C")
+                    else:
+                        st.info("Sem viagens filtradas para exibir o ranking por cliente.")
+
+                if ranking_cli_lista:
+                    st.markdown('<div class="sec-subtitle">Resumo Executivo por Cliente</div>', unsafe_allow_html=True)
+                    df_tabela_cli = pd.DataFrame(
+                        [
+                            {
+                                "Cliente": r["cliente"],
+                                "Viagens": r["viagens"],
+                                "Receita Total": r["receita_fmt"],
+                                "Despesas Totais": r["despesa_fmt"],
+                                "Resultado Líquido": r["resultado_fmt"],
+                                "Margem (%)": r["margem_fmt"],
+                            }
+                            for r in ranking_cli_lista
+                        ]
+                    )
+                    st.dataframe(df_tabela_cli, use_container_width=True, hide_index=True)
+
+                st.markdown('<div class="sec-subtitle">Exportação Executiva Consolidada</div>', unsafe_allow_html=True)
+                resumo_pdf_bi = {
+                    "filtro_desc": f"Situacao: {bi_status} | Tipo: {bi_tipo} | Cliente: {bi_cliente}",
+                    "qtd_viagens": len(vg_bi_filtradas),
+                    "km_total": km_global,
+                    "receita_fmt": fmt_brl(rec_global),
+                    "despesa_fmt": fmt_brl(desp_global),
+                    "resultado_fmt": fmt_brl(res_global),
+                    "margem_fmt": f"{margem_global:.1f}%",
+                }
+                pdf_bi_bytes = gerar_pdf_relatorio_consolidado(
+                    resumo_pdf_bi, ranking_cli_lista, desp_cat_lista
+                )
+
+                eb1, eb2, _ = st.columns([1.8, 1.7, 2.0])
+                with eb1:
+                    st.download_button(
+                        "📄 Baixar Relatório Executivo PDF",
+                        data=pdf_bi_bytes,
+                        file_name=f"Relatorio_Consolidado_FAEG_{date.today().strftime('%Y%m%d')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="dl_pdf_consolidado_bi",
+                    )
+                with eb2:
+                    st.download_button(
+                        "📥 Exportar Base Completa (.xlsx)",
+                        data=xlsx_bytes_completo,
+                        file_name="Base_Completa_FAEG.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        key="dl_xlsx_consolidado_bi",
+                    )
 
         render_navegacao_rodape(8, MENU_ITENS)
 
