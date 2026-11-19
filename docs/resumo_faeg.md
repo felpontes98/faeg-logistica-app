@@ -1,7 +1,7 @@
 # Especificação Técnica e Regras de Negócio — FAEG Logística
 
 ## 1. Visão Geral e Infraestrutura em Nuvem
-* **Escopo:** MVP desenvolvido por Felipe Pontes, Eduardo Pontes e Larissa do Espírito Santo para o **Startup Challenge UMC 2026 (Trilha T2)**, substituindo planilhas manuais da transportadora FAEG por um sistema web integrado.
+* **Escopo:** MVP desenvolvido por Felipe Pontes e Larissa do Espírito Santo para o **Startup Challenge UMC 2026 (Trilha T2)**, substituindo planilhas manuais da transportadora FAEG por um sistema web integrado.
 * **Stack Tecnológica:** Python + **Streamlit** (`app.py`), **SQLAlchemy** + `psycopg[binary]`, **Pandas** + `openpyxl`, banco **PostgreSQL Serverless no Neon.tech** (`neondb`, com *pooled connection*) e deploy contínuo no **Streamlit Community Cloud** via GitHub (`felpontes98/faeg-logistica-app`, branch `main`).
 * **Estrutura do Repositório:**
   * `app.py`: interface principal de 11 etapas, regras de cálculo, geração de PDF e exportação Excel.
