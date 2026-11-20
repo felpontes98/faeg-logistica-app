@@ -49,13 +49,13 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def inicializar_banco_uma_vez(schema_v=11):
+def inicializar_banco_uma_vez(schema_v=12):
     """Garante que todas as tabelas e colunas novas existam no Neon sem alterar dados."""
     sincronizar_colunas_banco()
     return True
 
 
-inicializar_banco_uma_vez(schema_v=11)
+inicializar_banco_uma_vez(schema_v=12)
 
 # ==============================================================================
 # LISTAS PADRONIZADAS DO SISTEMA
@@ -729,6 +729,134 @@ st.markdown(
         font-weight: 900;
         color: #0D263C;
         margin-top: 0.2rem;
+    }
+
+    /* Painel de KM do fechamento: hierarquia clara, sem seis métricas soltas. */
+    .faeg-km-dashboard {
+        background: #F8FAFC;
+        border: 1px solid #D5E0E8;
+        border-radius: 0.8rem;
+        padding: 1.35rem;
+        margin: 1rem 0 0.6rem;
+    }
+    .faeg-km-heading {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.7rem;
+        margin-bottom: 1.05rem;
+    }
+    .faeg-km-eyebrow {
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #D94B2A;
+        margin-bottom: 0.2rem;
+    }
+    .faeg-km-title {
+        color: #0D263C;
+        font-size: 1.15rem;
+        font-weight: 850;
+        line-height: 1.3;
+    }
+    .faeg-km-tag {
+        display: inline-block;
+        color: #1C4A64;
+        background: #E5F1F7;
+        border: 1px solid #C4DFEE;
+        border-radius: 999px;
+        font-weight: 750;
+        font-size: 0.69rem;
+        padding: 0.32rem 0.72rem;
+    }
+    .faeg-km-group-label {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        color: #526579;
+        font-size: 0.69rem;
+        font-weight: 850;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        margin: 0.65rem 0 0.55rem;
+    }
+    .faeg-km-group-label::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: #D9E3EA;
+    }
+    .faeg-km-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.8rem;
+    }
+    .faeg-km-card {
+        background: #FFFFFF;
+        border: 1px solid #DCE6EE;
+        border-top: 3px solid #ABCEE1;
+        border-radius: 0.55rem;
+        padding: 1rem 1.1rem;
+        min-width: 0;
+    }
+    .faeg-km-card.is-primary {
+        background: #EFF6FA;
+        border-color: #C7DCE9;
+        border-top-color: #F34D25;
+        border-top-width: 4px;
+    }
+    .faeg-km-card.is-unavailable {
+        background: #F9FAFB;
+    }
+    .faeg-km-card-label {
+        color: #4A6175;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.045em;
+        text-transform: uppercase;
+        line-height: 1.4;
+    }
+    .faeg-km-card-value {
+        color: #0D263C;
+        font-size: clamp(1.15rem, 1.9vw, 1.65rem);
+        font-weight: 850;
+        margin-top: 0.4rem;
+        line-height: 1.15;
+        overflow-wrap: anywhere;
+    }
+    .faeg-km-card.is-primary .faeg-km-card-value {
+        color: #113F5A;
+    }
+    .faeg-km-card.is-warning .faeg-km-card-value {
+        color: #B84424;
+    }
+    .faeg-km-card-note {
+        color: #61758A;
+        font-size: 0.72rem;
+        line-height: 1.45;
+        margin-top: 0.5rem;
+    }
+    .faeg-km-formula {
+        margin-top: 0.95rem;
+        padding: 0.75rem 0.9rem;
+        border-radius: 0.45rem;
+        color: #23445B;
+        font-size: 0.81rem;
+        font-weight: 650;
+        background: #EAF2F7;
+        border: 1px solid #D2E3EF;
+        line-height: 1.45;
+    }
+    @media (max-width: 950px) {
+        .faeg-km-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .faeg-km-card.is-primary { grid-column: auto; }
+    }
+    @media (max-width: 600px) {
+        .faeg-km-dashboard { padding: 0.9rem; }
+        .faeg-km-grid { grid-template-columns: minmax(0, 1fr); }
+        .faeg-km-card-value { font-size: 1.4rem; }
     }
 
     .dre-box {
@@ -4730,6 +4858,7 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
+        st.markdown('<div class="sec-subtitle">Leituras e situação da operação</div>', unsafe_allow_html=True)
         f1, f2, f3, f4 = st.columns([1.1, 1.1, 1.1, 1.7])
         odo_ini_v = to_int(get_campo("odo_ini", 0))
         odo_fin_v = to_int(get_campo("odo_fin", 0))
@@ -4767,11 +4896,6 @@ with st.container(border=True):
             )
         if odo_ini_v > 0 and odo_fin_v > 0 and odo_fin_v < odo_ini_v:
             st.error("Leituras inconsistentes: odômetro final menor que o inicial.")
-        st.caption(
-            "Os mesmos odômetros da operação também podem ser preenchidos na Etapa 2 "
-            "(sem duplicar o dado). Leituras de abastecimento na Etapa 7 "
-            "são independentes e podem ocorrer no meio da viagem."
-        )
         with f4:
             st_atual = get_campo("status_viagem", "Aguardando Adiantamento")
             st.selectbox(
@@ -4783,39 +4907,102 @@ with st.container(border=True):
                 args=("w_status_viagem", "status_viagem"),
             )
 
-        st.markdown('<div class="sec-subtitle">Quilometragem Planejada da Operação</div>', unsafe_allow_html=True)
-        km_planejado_op = calcular_km_planejado_operacao(viagem_sel_id)
-        k1, k2, k3 = st.columns(3)
-        with k1:
-            st.metric("KM PLANEJADO", fmt_km(km_planejado_op))
-            st.caption(
-                "Calculado automaticamente: individual = KM manual da Etapa 2; "
-                "ciclo = soma do KM manual dos fretes do mesmo ID interno."
-            )
-        with k2:
-            km_deslocamentos_op = calcular_km_deslocamentos_formulario()
-            st.metric("KM DESLOCAMENTOS OPERACIONAIS", fmt_km(km_deslocamentos_op))
-            if get_campo("km_componentes_discriminados", True):
-                st.caption(
-                    f"Saída/entre coletas: {fmt_km(get_campo('km_saida_entre_coletas', 0.0))} + "
-                    f"retorno: {fmt_km(get_campo('km_retorno_operacional', 0.0))}. "
-                    "Informados manualmente na Etapa 2; somados uma única vez por ciclo."
-                )
-            else:
-                st.caption(
-                    "Total registrado anteriormente, ainda sem discriminação em saída e retorno. "
-                    "Para detalhar, preencha ambos os campos na Etapa 2."
-                )
-        with k3:
-            km_total_previsto_op = round(km_planejado_op + km_deslocamentos_op, 2)
-            st.metric("KM TOTAL PLANEJADO", fmt_km(km_total_previsto_op))
-            st.caption("KM Planejado + KM Deslocamentos Operacionais.")
         st.caption(
-            f"Memória de cálculo: {fmt_km(km_planejado_op)} (trechos dos fretes) + "
-            f"{fmt_km(km_deslocamentos_op)} (deslocamentos) = "
-            f"{fmt_km(km_total_previsto_op)} planejados. "
-            "Os odômetros da operação são leituras reais independentes desta soma."
+            "Os odômetros da operação são compartilhados com a Etapa 2. "
+            "O odômetro de cada abastecimento permanece independente na Etapa 7."
         )
+
+        km_planejado_op = calcular_km_planejado_operacao(viagem_sel_id)
+        km_deslocamentos_op = calcular_km_deslocamentos_formulario()
+        km_total_previsto_op = round(km_planejado_op + km_deslocamentos_op, 2)
+        km_total_real_op = calcular_km_total_real_operacao(viagem_sel_id, odo_ini_v, odo_fin_v)
+
+        if km_total_real_op is not None:
+            diferenca_km = km_total_real_op - km_total_previsto_op
+            diferenca_formatada = ("+" if diferenca_km > 0 else "") + fmt_km(diferenca_km)
+            if km_total_previsto_op > 0:
+                desvio_percentual = (diferenca_km / km_total_previsto_op) * 100
+                desvio_formatado = (
+                    f"{desvio_percentual:+.1f}%" if abs(desvio_percentual) >= 0.05
+                    else "0,0%"
+                ).replace(".", ",")
+            else:
+                desvio_formatado = "Não calculável"
+            cor_diferenca = " is-warning" if diferenca_km > 0 else ""
+            classe_real = ""
+            nota_diferenca = "Positivo indica KM acima do previsto."
+        else:
+            diferenca_km = None
+            diferenca_formatada = "Não calculável"
+            desvio_formatado = "Não calculável"
+            cor_diferenca = ""
+            classe_real = " is-unavailable"
+            nota_diferenca = "Aguardando odômetros válidos."
+
+        descricao_real = (
+            "Soma dos intervalos válidos dos fretes do ciclo."
+            if get_campo("tipo_viagem", "Individual") == "Ciclo"
+            else "Diferença entre os dois odômetros da operação."
+        )
+        etiqueta_operacao = (
+            "Ciclo operacional" if get_campo("tipo_viagem", "Individual") == "Ciclo"
+            else "Frete individual"
+        )
+        st.markdown(
+            f"""
+            <section class="faeg-km-dashboard" aria-label="Resumo da quilometragem da operação">
+                <div class="faeg-km-heading">
+                    <div>
+                        <div class="faeg-km-eyebrow">Planejamento e execução</div>
+                        <div class="faeg-km-title">Resumo da quilometragem</div>
+                    </div>
+                    <span class="faeg-km-tag">{etiqueta_operacao}</span>
+                </div>
+                <div class="faeg-km-group-label">Planejado</div>
+                <div class="faeg-km-grid">
+                    <article class="faeg-km-card">
+                        <div class="faeg-km-card-label">KM planejado dos fretes</div>
+                        <div class="faeg-km-card-value">{fmt_km(km_planejado_op)}</div>
+                        <div class="faeg-km-card-note">Trechos informados na Etapa 2.</div>
+                    </article>
+                    <article class="faeg-km-card">
+                        <div class="faeg-km-card-label">KM deslocamentos operacionais</div>
+                        <div class="faeg-km-card-value">{fmt_km(km_deslocamentos_op)}</div>
+                        <div class="faeg-km-card-note">Saída / entre coletas + retorno.</div>
+                    </article>
+                    <article class="faeg-km-card is-primary">
+                        <div class="faeg-km-card-label">KM total planejado</div>
+                        <div class="faeg-km-card-value">{fmt_km(km_total_previsto_op)}</div>
+                        <div class="faeg-km-card-note">Fretes + deslocamentos, sem repetição.</div>
+                    </article>
+                </div>
+                <div class="faeg-km-formula">
+                    Memória: {fmt_km(km_planejado_op)} + {fmt_km(km_deslocamentos_op)}
+                    = {fmt_km(km_total_previsto_op)} planejados.
+                </div>
+                <div class="faeg-km-group-label">Realizado e comparação</div>
+                <div class="faeg-km-grid">
+                    <article class="faeg-km-card{classe_real}">
+                        <div class="faeg-km-card-label">KM total real</div>
+                        <div class="faeg-km-card-value">{fmt_km(km_total_real_op) if km_total_real_op is not None else 'Não informado'}</div>
+                        <div class="faeg-km-card-note">{descricao_real}</div>
+                    </article>
+                    <article class="faeg-km-card{cor_diferenca}">
+                        <div class="faeg-km-card-label">Diferença: real − planejado</div>
+                        <div class="faeg-km-card-value">{diferenca_formatada}</div>
+                        <div class="faeg-km-card-note">{nota_diferenca}</div>
+                    </article>
+                    <article class="faeg-km-card">
+                        <div class="faeg-km-card-label">Desvio do planejado</div>
+                        <div class="faeg-km-card-value">{desvio_formatado}</div>
+                        <div class="faeg-km-card-note">Percentual sobre o total planejado.</div>
+                    </article>
+                </div>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
+
         if to_float(get_campo("km_rota", 0.0)) <= 0:
             st.warning(
                 "O campo KM INDIVIDUAL / CICLO do frete atual ainda está zerado "
@@ -4823,46 +5010,33 @@ with st.container(border=True):
                 "de considerar o KM Total Planejado como completo."
             )
 
-        km_total_real_op = calcular_km_total_real_operacao(viagem_sel_id, odo_ini_v, odo_fin_v)
-        c_real_1, c_real_2, c_real_3 = st.columns(3)
-        if km_total_real_op is not None:
-            diferenca_km = km_total_real_op - km_total_previsto_op
-            c_real_1.metric("KM TOTAL REAL", fmt_km(km_total_real_op))
-            c_real_1.caption(
-                "Individual: odômetro final − inicial; ciclo: soma dos intervalos "
-                "válidos, sem sobreposição, de seus fretes."
+        with st.expander("Ver detalhes dos cálculos de KM", expanded=False):
+            st.markdown(
+                "**KM planejado:** no frete individual, usa o KM manual da Etapa 2; "
+                "no ciclo, soma os fretes vinculados ao mesmo ID interno."
             )
-            c_real_2.metric("DIF. KM TOTAL PLANEJADO X REAL", fmt_km(diferenca_km))
-            c_real_2.caption("KM real − KM total planejado; positivo significa KM excedente.")
-            if km_total_previsto_op > 0:
-                c_real_3.metric("DESVIO DO PLANEJADO", f"{(diferenca_km / km_total_previsto_op) * 100:+.1f}%")
+            if get_campo("km_componentes_discriminados", True):
+                st.markdown(
+                    f"**Deslocamentos operacionais:** saída / entre coletas "
+                    f"({fmt_km(get_campo('km_saida_entre_coletas', 0.0))}) + "
+                    f"retorno ({fmt_km(get_campo('km_retorno_operacional', 0.0))}) "
+                    f"= **{fmt_km(km_deslocamentos_op)}**, contados uma única vez por ciclo."
+                )
             else:
-                c_real_3.metric("DESVIO DO PLANEJADO", "Não calculável")
-        else:
-            c_real_1.metric("KM TOTAL REAL", "Não informado")
-            c_real_2.metric("DIF. KM TOTAL PLANEJADO X REAL", "Não calculável")
-            c_real_3.metric("DESVIO DO PLANEJADO", "Não calculável")
-            st.caption(
-                "KM total real, diferença e desvio dependem de odômetros válidos em todos "
-                "os fretes do ciclo, sem intervalos sobrepostos no mesmo veículo."
+                st.info(
+                    "Os KM de deslocamentos foram registrados antes da separação dos campos. "
+                    "O valor anterior foi preservado; a discriminação deve ser feita na Etapa 2."
+                )
+            st.markdown(
+                "**KM total real:** diferença dos odômetros para frete individual; "
+                "no ciclo, soma dos intervalos válidos dos fretes, sem sobreposição no mesmo veículo. "
+                "**Diferença:** KM total real menos KM total planejado."
             )
-
-        vei_km_id = get_campo("vei_id", 0)
-        if vei_km_id:
-            historico_km = carregar_abastecimentos_veiculo(vei_km_id)
-            ultima_medicao = next(
-                (a for a in reversed(historico_km) if a["km_por_litro"] is not None),
-                None,
+        if km_total_real_op is None:
+            st.info(
+                "O KM real consolidado e seu desvio ficam indisponíveis até haver "
+                "odômetros válidos para os fretes envolvidos, sem intervalos sobrepostos."
             )
-            st.markdown('<div class="sec-subtitle">Consumo do Veículo (Controle Separado)</div>', unsafe_allow_html=True)
-            if ultima_medicao:
-                r1, r2, r3 = st.columns(3)
-                r1.metric("KM ENTRE ABASTECIMENTOS", fmt_km(ultima_medicao["km_intervalo"]))
-                r2.metric("MÉDIA INDICATIVA DE DIESEL", f"{ultima_medicao['km_por_litro']:.2f} km/L")
-                r3.metric("CUSTO INDICATIVO DE DIESEL/KM", fmt_brl(ultima_medicao["custo_por_km"]))
-                st.caption("Base: abastecimentos consecutivos de Diesel do veículo na Etapa 7, com tanque cheio. Não é o KM da viagem ou do ciclo.")
-            else:
-                st.caption("Registre ao menos dois abastecimentos consecutivos de Diesel com odômetros válidos na Etapa 7 para calcular o consumo.")
 
         v_neg_dre = to_float(get_campo("valor_negociado", 0.0))
         v_rec_dre = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))
@@ -4937,37 +5111,55 @@ with st.container(border=True):
                     "Gastos compartilhados não são rateados entre os fretes."
                 )
 
-                p1, p2, p3 = st.columns(3)
-                p1.metric("ADIANTAMENTOS PREVISTOS", fmt_brl(previa["adiantamentos_previstos"]))
-                p2.metric("SALDOS PREVISTOS", fmt_brl(previa["saldos_previstos"]))
-                p3.metric("PARCELAS PREVISTAS", fmt_brl(previa["parcelas_previstas"]))
-                p4, p5 = st.columns(2)
-                p4.metric("RECEBIDO EFETIVAMENTE NO CICLO", fmt_brl(previa["total_recebido"]))
-                p5.metric("SALDO A RECEBER DO CICLO", fmt_brl(previa["saldo_a_receber"]) if previa["saldo_a_receber"] is not None else "Conferir financeiro legado")
-                st.caption("Adiantamento e saldo previstos não comprovam recebimento. O ciclo soma apenas pagamentos realmente registrados na Etapa 4 de cada frete.")
+                with st.expander("Ver parcelas, recebimentos e fretes do ciclo", expanded=False):
+                    p1, p2, p3 = st.columns(3)
+                    p1.metric("ADIANTAMENTOS PREVISTOS", fmt_brl(previa["adiantamentos_previstos"]))
+                    p2.metric("SALDOS PREVISTOS", fmt_brl(previa["saldos_previstos"]))
+                    p3.metric("PARCELAS PREVISTAS", fmt_brl(previa["parcelas_previstas"]))
+                    p4, p5 = st.columns(2)
+                    p4.metric("RECEBIDO EFETIVAMENTE NO CICLO", fmt_brl(previa["total_recebido"]))
+                    p5.metric("SALDO A RECEBER DO CICLO", fmt_brl(previa["saldo_a_receber"]) if previa["saldo_a_receber"] is not None else "Conferir financeiro legado")
+                    st.caption("Adiantamento e saldo previstos não comprovam recebimento. O ciclo soma apenas pagamentos realmente registrados na Etapa 4 de cada frete.")
 
-                st.dataframe(
-                    pd.DataFrame([
-                        {
-                            "ID Frete": i["id_frete"],
-                            "Código Viagem": i["codigo_viagem"],
-                            "Cliente": i["cliente"],
-                            "Negociado Considerado (R$)": to_float(i["negociado_considerado"]),
-                            "Recebido de Fato (R$)": to_float(i["total_recebido"]),
-                            "Despesas (R$)": to_float(i["total_despesas"]),
-                            "Situação Financeira": "Legado para conferir" if i["financeiro_legado_ambiguo"] else "Individualizado",
-                        }
-                        for i in previa["fretes"]
-                    ]),
-                    hide_index=True,
-                    use_container_width=True,
-                )
+                    st.dataframe(
+                        pd.DataFrame([
+                            {
+                                "ID Frete": i["id_frete"],
+                                "Código Viagem": i["codigo_viagem"],
+                                "Cliente": i["cliente"],
+                                "Negociado Considerado (R$)": to_float(i["negociado_considerado"]),
+                                "Recebido de Fato (R$)": to_float(i["total_recebido"]),
+                                "Despesas (R$)": to_float(i["total_despesas"]),
+                                "Situação Financeira": "Legado para conferir" if i["financeiro_legado_ambiguo"] else "Individualizado",
+                            }
+                            for i in previa["fretes"]
+                        ]),
+                        hide_index=True,
+                        use_container_width=True,
+                    )
                 if previa["qtd_financeiros_legados_ambiguos"]:
                     st.warning(
                         "Há frete(s) com dados financeiros legados compartilhados por vários "
                         "fretes. Seus valores negociados não entraram na soma para impedir "
                         "duplicação; confira e salve os dados financeiros individualmente."
                     )
+
+        vei_km_id = get_campo("vei_id", 0)
+        if vei_km_id:
+            with st.expander("Indicadores de consumo do veículo · abastecimentos", expanded=False):
+                historico_km = carregar_abastecimentos_veiculo(vei_km_id)
+                ultima_medicao = next(
+                    (a for a in reversed(historico_km) if a["km_por_litro"] is not None),
+                    None,
+                )
+                if ultima_medicao:
+                    r1, r2, r3 = st.columns(3)
+                    r1.metric("KM ENTRE ABASTECIMENTOS", fmt_km(ultima_medicao["km_intervalo"]))
+                    r2.metric("MÉDIA INDICATIVA DE DIESEL", f"{ultima_medicao['km_por_litro']:.2f} km/L")
+                    r3.metric("CUSTO INDICATIVO DE DIESEL/KM", fmt_brl(ultima_medicao["custo_por_km"]))
+                    st.caption("Base: abastecimentos consecutivos de Diesel do veículo na Etapa 7, com tanque cheio. Não é o KM da viagem ou do ciclo.")
+                else:
+                    st.caption("Registre ao menos dois abastecimentos consecutivos de Diesel com odômetros válidos na Etapa 7 para calcular o consumo.")
 
         render_navegacao_rodape(7, MENU_ITENS)
 

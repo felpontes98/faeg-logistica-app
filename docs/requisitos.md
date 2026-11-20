@@ -49,6 +49,8 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 | RF-37 | Acrescentar na Tela 2 os campos manuais de KM saída/entre coletas e KM retorno operacional, preservando o KM individual do frete e seu título de seção | Proposto; teste pendente |
 | RF-38 | Calcular KM Deslocamentos Operacionais somente na Tela 8 pela soma dos componentes da Tela 2, sem duplicar por frete do mesmo ciclo | Proposto; teste pendente |
 | RF-39 | Preservar o total de deslocamentos legado até discriminação manual e exportar componentes e leituras operacionais sem misturar odômetro de combustível | Proposto; teste pendente |
+| RF-40 | Exibir a Tela 8 em dois grupos visuais de KM (planejado e realizado), com totais destacados, fórmula resumida e explicações expansíveis, preservando os cálculos | Proposto; teste visual pendente |
+| RF-41 | Manter na Tela 8 DRE e situação dos recebimentos visíveis; agrupar detalhes de parcelas/fretes do ciclo e indicadores de consumo do veículo em áreas expansíveis | Proposto; teste visual pendente |
 
 ## Critérios de aceite dos cálculos
 
@@ -132,6 +134,8 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - [ ] Conferir ausência de valor negociado, adiantamento/saldo previstos e ausência de odômetros sem contabilizar valores fictícios.
 - [ ] Salvar operação sem odômetros, com odômetros válidos e com odômetro final inferior ao inicial.
 - [ ] Em ciclo com dois fretes, verificar KM Real Rodado individual (topo da Tela 8) e KM Total Real consolidado, incluindo caso de odômetros ausentes e intervalos sobrepostos no mesmo veículo.
+- [ ] Conferir no desktop e no celular que o painel da Tela 8 não corta valores/legendas, que as seis métricas estão legíveis e que as seções expansíveis preservam todas as informações existentes.
+- [ ] Confirmar que os alertas de KM ausente, intervalos sobrepostos e financeiro legado continuam visíveis mesmo com os detalhes fechados.
 - [ ] Conferir cenário de fechamento e exportação sem viagens e com viagens.
 - [ ] Conciliar amostra com a planilha, inspecionar as divergências já relatadas e verificar que nada foi importado sem autorização.
 - [ ] Realizar backup e ensaio de migração em banco de testes; somente depois avaliar o deploy no banco oficial.
