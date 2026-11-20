@@ -222,7 +222,10 @@ st.markdown(
     }
 
     .sidebar-brand {
-        padding: 1.35rem 1.1rem 1.15rem 1.1rem;
+        /* Compensa o espaço superior reservado pelo Streamlit sem mover o menu. */
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.35rem 1.1rem 2.15rem 1.1rem;
         border-bottom: 1px solid rgba(171, 206, 225, 0.22);
         margin-bottom: 0.9rem;
         display: flex;
@@ -235,7 +238,9 @@ st.markdown(
         max-height: 86px;
         height: auto;
         object-fit: contain;
+        object-position: center;
         display: block;
+        margin: 0 auto;
         filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
     }
     .sidebar-monogram-fallback {
