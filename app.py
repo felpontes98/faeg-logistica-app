@@ -12,6 +12,7 @@ from sqlalchemy import func
 
 from database.connection import SessionLocal
 from database.controle_abastecimentos import calcular_indicadores_abastecimentos
+from database.fechamento_ciclos import consolidar_ciclos
 from database.importador_planilha import preparar_previa_importacao_faeg
 from database.models import (
     Abastecimento,
@@ -1152,13 +1153,21 @@ def carregar_todas_viagens_consulta():
             v_adi = to_float(fin.valor_adiantamento) if fin else 0.0
             v_sal = to_float(fin.valor_saldo) if fin else 0.0
             total_previsto = v_adi + v_sal
-            receita_base = v_neg if v_neg > 0 else total_previsto
+            financeiro_individual = vg.financeiro_frete is not None
+            # Uma linha financeira legada do CICLO não pode ser replicada como
+            # receita individual em vários fretes do mesmo grupo.
+            legado_ambiguo = (
+                not financeiro_individual and ciclo is not None and len(ciclo.viagens) > 1
+            )
+            # Parcelas previstas NÃO são recebimentos nem receita negociada:
+            # não substituem o valor negociado ausente no fechamento.
+            receita_base = 0.0 if legado_ambiguo else v_neg
             tot_desp = desp_por_viagem.get(vg.id_viagem, 0.0)
             res_liq = receita_base - tot_desp
-            km_real = to_int(vg.km_real_rodado)
-            if km_real == 0 and to_int(vg.odometro_final) > to_int(vg.odometro_inicial):
-                km_real = to_int(vg.odometro_final) - to_int(vg.odometro_inicial)
-            custo_km = (tot_desp / km_real) if km_real > 0 else 0.0
+            od_ini = to_int(vg.odometro_inicial)
+            od_fim = to_int(vg.odometro_final)
+            km_real = od_fim - od_ini if od_ini > 0 and od_fim >= od_ini else None
+            custo_km = (tot_desp / km_real) if km_real else None
             margem = ((res_liq / receita_base) * 100.0) if receita_base > 0 else 0.0
 
             tipo_viagem_atual = getattr(vg, "tipo_viagem", None) or (
@@ -1180,6 +1189,7 @@ def carregar_todas_viagens_consulta():
             lista.append(
                 {
                     "id_viagem": vg.id_viagem,
+                    "id_ciclo": vg.id_ciclo,
                     "codigo_viagem": cod_vg,
                     "seq_num": extrair_numero_sequencial(cod_vg, vg.id_viagem),
                     "id_frete": vg.id_frete_externo or "-",
@@ -1205,11 +1215,15 @@ def carregar_todas_viagens_consulta():
                     "ciot": vg.ciot_numero or "-",
                     "valor_divulgado": v_div,
                     "valor_negociado": v_neg,
+                    "financeiro_individual": financeiro_individual,
+                    "financeiro_legado_ambiguo": legado_ambiguo,
                     "valor_adiantamento": v_adi,
                     "valor_saldo": v_sal,
                     "total_previsto": total_previsto,
                     "receita_base": receita_base,
                     "total_despesas": tot_desp,
+                    "km_rota_planejado": to_float(vg.km_rota_planejado),
+                    "km_deslocamentos_operacionais": to_float(ciclo.km_deslocamentos_operacionais) if ciclo else 0.0,
                     "resultado_liquido": res_liq,
                     "km_rodado": km_real,
                     "custo_km": custo_km,
@@ -1274,7 +1288,7 @@ def carregar_abastecimentos_veiculo(id_veiculo):
     return [a for a in carregar_todos_abastecimentos() if a["id_veiculo"] == id_veiculo]
 
 
-def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None):
+def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None):
     """Gera arquivo Excel (.xlsx) completo com todas as viagens, despesas e cadastros do sistema."""
     buf = io.BytesIO()
 
@@ -1308,10 +1322,10 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
                 "Saldo (R$)": v["valor_saldo"],
                 "Parcelas Previstas (R$)": v["total_previsto"],
                 "Despesas Totais (R$)": v["total_despesas"],
-                "Resultado Líquido (R$)": v["resultado_liquido"],
+                "Resultado Operacional Parcial (R$)": v["resultado_liquido"],
                 "Margem (%)": round(v["margem_pct"], 2),
                 "KM Rodado": v["km_rodado"],
-                "Custo por KM (R$)": round(v["custo_km"], 2),
+                "Custo por KM (R$)": round(v["custo_km"], 2) if v["custo_km"] is not None else None,
             }
             for v in todas_viagens
         ]
@@ -1345,6 +1359,33 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         "Preço por Litro (R$)", "Valor Total (R$)", "KM entre Diesel",
         "KM/L Indicativo", "R$/KM Indicativo", "Observação",
     ])
+    df_ciclos = pd.DataFrame([
+        {
+            "ID Interno Ciclo": f["id_ciclo"],
+            "Código Ciclo": f["ciclo"],
+            "Quantidade Fretes": f["qtd_fretes"],
+            "IDs Frete": ", ".join(f["ids_frete"]),
+            "Clientes": ", ".join(f["clientes"]),
+            "Negociado (R$)": f["valor_negociado_total"],
+            "Adiantamentos Previstos (R$)": f["adiantamentos_previstos"],
+            "Saldos Previstos (R$)": f["saldos_previstos"],
+            "Parcelas Previstas (R$)": f["parcelas_previstas"],
+            "Despesas Financeiras (R$)": f["despesas_total"],
+            "Resultado Operacional Parcial (R$)": f["resultado_operacional_parcial"],
+            "KM Fretes Planejados": f["km_planejado_fretes"],
+            "KM Deslocamentos": f["km_deslocamentos_operacionais"],
+            "KM Total Planejado": f["km_total_planejado"],
+            "Fretes com Financeiro Legado Ambíguo": f["qtd_financeiros_legados_ambiguos"],
+        }
+        for f in (fechamentos_ciclos if fechamentos_ciclos is not None else consolidar_ciclos(todas_viagens))
+    ], columns=[
+        "ID Interno Ciclo", "Código Ciclo", "Quantidade Fretes", "IDs Frete",
+        "Clientes", "Negociado (R$)", "Adiantamentos Previstos (R$)",
+        "Saldos Previstos (R$)", "Parcelas Previstas (R$)",
+        "Despesas Financeiras (R$)", "Resultado Operacional Parcial (R$)",
+        "KM Fretes Planejados", "KM Deslocamentos", "KM Total Planejado",
+        "Fretes com Financeiro Legado Ambíguo",
+    ])
 
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         df_viagens.to_excel(writer, sheet_name="Viagens_e_Ciclos", index=False)
@@ -1355,6 +1396,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         df_loc.to_excel(writer, sheet_name="Cad_Locais", index=False)
         df_forn.to_excel(writer, sheet_name="Cad_Fornecedores", index=False)
         df_abast.to_excel(writer, sheet_name="Abastecimentos_Veiculos", index=False)
+        df_ciclos.to_excel(writer, sheet_name="Fechamento_Ciclos", index=False)
 
     return buf.getvalue()
 
@@ -1500,7 +1542,7 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
     y += 34
 
     text(42, y, f"Custo por KM: {dados_resumo['custo_km_fmt']}", size=10, bold=True)
-    text(250, y, f"Margem de Lucro: {dados_resumo['margem_fmt']}", size=10, bold=True)
+    text(250, y, f"Margem Operacional: {dados_resumo['margem_fmt']}", size=10, bold=True)
     text(420, y, f"Parcelas previstas: {dados_resumo['parcelas_previstas_fmt']}", size=8, bold=False)
     y += 24
 
@@ -1570,14 +1612,14 @@ def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_cat
     y = 136
     rect(40, y - 12, 515, 96, 0.051, 0.149, 0.235)
     text(55, y + 6, f"Total de Viagens: {resumo_geral['qtd_viagens']}", size=10, bold=True, r=0.671, g=0.808, b=0.882)
-    text(310, y + 6, f"KM Total Rodado: {resumo_geral['km_total']} km", size=10, bold=True, r=0.671, g=0.808, b=0.882)
+    text(310, y + 6, f"KM Registrado: {resumo_geral['km_total_fmt']}", size=10, bold=True, r=0.671, g=0.808, b=0.882)
     y += 24
     text(55, y + 6, "Receita Consolidada:", size=10, bold=False, r=1, g=1, b=1)
     text(210, y + 6, resumo_geral["receita_fmt"], size=10, bold=True, r=1, g=1, b=1)
     text(340, y + 6, "Despesas Totais:", size=10, bold=False, r=1, g=1, b=1)
     text(445, y + 6, resumo_geral["despesa_fmt"], size=10, bold=True, r=0.953, g=0.302, b=0.145)
     y += 26
-    text(55, y + 6, "RESULTADO LIQUIDO CONSOLIDADO:", size=10, bold=True, r=1, g=1, b=1)
+    text(55, y + 6, "RESULTADO OPERACIONAL PARCIAL:", size=10, bold=True, r=1, g=1, b=1)
     text(275, y + 6, resumo_geral["resultado_fmt"], size=12, bold=True, r=1, g=1, b=1)
     text(430, y + 6, f"Margem: {resumo_geral['margem_fmt']}", size=10, bold=True, r=0.671, g=0.808, b=0.882)
 
@@ -1869,6 +1911,51 @@ def calcular_km_planejado_operacao(id_viagem_atual):
             if v.id_viagem != id_viagem_atual
         )
     return round(km_atual + soma_outros, 2)
+
+
+def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual):
+    """Considera fretes salvos e substitui o atual pelo formulário não salvo."""
+    identificador = (get_campo("ciclo_nome") or "").strip()
+    if get_campo("tipo_viagem", "Individual") != "Ciclo" or not identificador:
+        return None
+
+    todos, _ = carregar_todas_viagens_consulta()
+    ativo_salvo = next((v for v in todos if v["id_viagem"] == id_viagem_atual), None)
+    if ativo_salvo and ativo_salvo["ciclo"].strip().casefold() == identificador.casefold():
+        id_ciclo = ativo_salvo["id_ciclo"]
+    else:
+        with SessionLocal() as session:
+            existente = localizar_ciclo_operacional(session, identificador)
+            id_ciclo = existente.id_ciclo if existente is not None else None
+
+    outros = [
+        v for v in todos
+        if v["tipo_viagem"] == "Ciclo"
+        and v["id_ciclo"] == id_ciclo
+        and v["id_viagem"] != id_viagem_atual
+    ] if id_ciclo is not None else []
+
+    cli_obj = next((c for c in clientes_db if c["id_cliente"] == get_campo("cli_id", 0)), None)
+    frete_atual = {
+        "id_viagem": id_viagem_atual,
+        "id_ciclo": id_ciclo,
+        "codigo_viagem": get_campo("id_viagem_label") or "Em edição",
+        "id_frete": get_campo("id_frete") or "-",
+        "tipo_viagem": "Ciclo",
+        "ciclo": identificador,
+        "cliente": cli_obj["razao_social"] if cli_obj else "Não informado",
+        "valor_negociado": to_float(get_campo("valor_negociado", 0.0)),
+        "valor_adiantamento": to_float(get_campo("valor_adiant", 0.0)),
+        "valor_saldo": to_float(get_campo("valor_saldo", 0.0)),
+        "total_despesas": despesas_frete_atual,
+        "km_rota_planejado": to_float(get_campo("km_rota", 0.0)),
+        "km_deslocamentos_operacionais": to_float(get_campo("km_deslocamentos", 0.0)),
+        # Uma viagem antiga que só lê ciclos_financeiro permanece ambígua até
+        # ser salva com seus próprios valores em fretes_financeiro.
+        "financeiro_individual": ativo_salvo["financeiro_individual"] if ativo_salvo else True,
+    }
+    consolidados = consolidar_ciclos(outros + [frete_atual])
+    return consolidados[0] if consolidados else None
 
 
 def salvar_km_deslocamentos_ciclo(ciclo):
@@ -3380,7 +3467,7 @@ with st.container(border=True):
 
         v_neg_dre = to_float(get_campo("valor_negociado", 0.0))
         v_rec_dre = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))
-        receita_dre = v_neg_dre if v_neg_dre > 0 else v_rec_dre
+        receita_dre = v_neg_dre
 
         if viagem_sel_id == 0:
             custos_dre = sum(to_float(d["valor_total"]) for d in st.session_state.get("despesas_temp", []))
@@ -3412,6 +3499,50 @@ with st.container(border=True):
         )
         st.caption("Custos do histórico de abastecimentos por veículo não são somados aqui; apenas despesas financeiras vinculadas a esta viagem entram no resultado.")
 
+        if get_campo("tipo_viagem", "Individual") == "Ciclo":
+            st.markdown('<div class="sec-subtitle">Prévia do Fechamento Financeiro do Ciclo</div>', unsafe_allow_html=True)
+            previa = montar_previa_financeira_ciclo(viagem_sel_id, custos_dre)
+            if previa is None:
+                st.info("Informe o Nº do Ciclo Operacional na Etapa 1 para visualizar o consolidado.")
+            else:
+                st.caption(
+                    "Consolida os fretes do mesmo ID Ciclo, incluindo os valores ainda não salvos "
+                    "deste formulário. Cada despesa é somada apenas no frete ao qual foi lançada."
+                )
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("FRETES NO CICLO", previa["qtd_fretes"])
+                c2.metric("RECEITA NEGOCIADA DO CICLO", fmt_brl(previa["valor_negociado_total"]))
+                c3.metric("DESPESAS FINANCEIRAS DO CICLO", fmt_brl(previa["despesas_total"]))
+                c4.metric("RESULTADO OPERACIONAL PARCIAL", fmt_brl(previa["resultado_operacional_parcial"]))
+
+                p1, p2, p3 = st.columns(3)
+                p1.metric("ADIANTAMENTOS PREVISTOS", fmt_brl(previa["adiantamentos_previstos"]))
+                p2.metric("SALDOS PREVISTOS", fmt_brl(previa["saldos_previstos"]))
+                p3.metric("PARCELAS PREVISTAS", fmt_brl(previa["parcelas_previstas"]))
+                st.caption("Adiantamentos e saldos previstos não comprovam recebimento de dinheiro; os pagamentos efetivos ainda não possuem cadastro separado.")
+
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            "ID Frete": i["id_frete"],
+                            "Código Viagem": i["codigo_viagem"],
+                            "Cliente": i["cliente"],
+                            "Negociado Considerado (R$)": to_float(i["negociado_considerado"]),
+                            "Despesas (R$)": to_float(i["total_despesas"]),
+                            "Situação Financeira": "Legado para conferir" if i["financeiro_legado_ambiguo"] else "Individualizado",
+                        }
+                        for i in previa["fretes"]
+                    ]),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+                if previa["qtd_financeiros_legados_ambiguos"]:
+                    st.warning(
+                        "Há frete(s) com dados financeiros legados compartilhados por vários "
+                        "fretes. Seus valores negociados não entraram na soma para impedir "
+                        "duplicação; confira e salve os dados financeiros individualmente."
+                    )
+
         render_navegacao_rodape(7, MENU_ITENS)
 
     # --------------------------------------------------------------------------
@@ -3433,12 +3564,14 @@ with st.container(border=True):
         xlsx_bytes_completo = gerar_excel_base_completa(
             todas_vg_exp, desp_det_exp, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db,
             abastecimentos=todos_abast_exp,
+            fechamentos_ciclos=consolidar_ciclos(todas_vg_exp),
         )
 
-        tab_rel_viagem, tab_rel_geral = st.tabs(
+        tab_rel_viagem, tab_rel_geral, tab_rel_ciclos = st.tabs(
             [
                 "📄 Relatório da Viagem Ativa",
                 "📊 Painel Geral (BI Consolidado)",
+                "📚 Fechamento por Ciclo",
             ]
         )
 
@@ -3448,7 +3581,7 @@ with st.container(border=True):
         with tab_rel_viagem:
             v_neg_r = to_float(get_campo("valor_negociado", 0.0))
             v_rec_r = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))
-            receita_r = v_neg_r if v_neg_r > 0 else v_rec_r
+            receita_r = v_neg_r
 
             if viagem_sel_id == 0:
                 desps_r = st.session_state.get("despesas_temp", [])
@@ -3468,11 +3601,11 @@ with st.container(border=True):
             margem_r = ((resultado_r / receita_r) * 100.0) if receita_r > 0 else 0.0
 
             k1, k2, k3, k4, k5 = st.columns(5)
-            k1.metric("Receita Considerada", fmt_brl(receita_r))
+            k1.metric("Receita Negociada", fmt_brl(receita_r))
             k2.metric("Custos Totais", fmt_brl(custos_r))
             k3.metric("Resultado Operacional Parcial", fmt_brl(resultado_r))
             k4.metric("Custo por KM", fmt_brl(custo_km_r) if custo_km_r is not None else "Não informado")
-            k5.metric("Margem de Lucro", f"{margem_r:.1f}%")
+            k5.metric("Margem Operacional", f"{margem_r:.1f}%")
 
             st.markdown('<div class="sec-subtitle">Exportação da Viagem Atual</div>', unsafe_allow_html=True)
             vei_obj_r = next((v for v in veiculos_db if v["id_veiculo"] == get_campo("vei_id", 0)), None)
@@ -3588,8 +3721,14 @@ with st.container(border=True):
                 desp_global = sum(v["total_despesas"] for v in vg_bi_filtradas)
                 res_global = rec_global - desp_global
                 margem_global = ((res_global / rec_global) * 100.0) if rec_global > 0 else 0.0
-                km_global = sum(v["km_rodado"] for v in vg_bi_filtradas)
-                custo_km_global = (desp_global / km_global) if km_global > 0 else 0.0
+                km_global = sum(v["km_rodado"] or 0 for v in vg_bi_filtradas)
+                quantos_com_odometro = sum(v["km_rodado"] is not None for v in vg_bi_filtradas)
+                km_completo = quantos_com_odometro == len(vg_bi_filtradas) and bool(vg_bi_filtradas)
+                custo_km_global = (desp_global / km_global) if km_global > 0 and km_completo else None
+                km_global_fmt = (
+                    f"{km_global:,} km".replace(",", ".") + (" (parcial)" if not km_completo else "")
+                    if quantos_com_odometro else "Não informado"
+                )
 
                 st.markdown('<div class="sec-subtitle">Indicadores Globais Consolidados</div>', unsafe_allow_html=True)
                 bg1, bg2, bg3 = st.columns(3)
@@ -3598,9 +3737,16 @@ with st.container(border=True):
                 bg3.metric("Despesas Consolidadas", fmt_brl(desp_global))
 
                 bg4, bg5, bg6 = st.columns(3)
-                bg4.metric("Resultado Líquido Total", fmt_brl(res_global))
-                bg5.metric("Margem Média Global", f"{margem_global:.1f}%")
-                bg6.metric("KM Rodado / Custo Médio KM", f"{km_global:,} km ({fmt_brl(custo_km_global)})".replace(",", "."))
+                bg4.metric("Resultado Operacional Parcial", fmt_brl(res_global))
+                bg5.metric("Margem Operacional", f"{margem_global:.1f}%")
+                bg6.metric(
+                    "KM Registrado / Custo Médio KM",
+                    f"{km_global_fmt} / {fmt_brl(custo_km_global) if custo_km_global is not None else 'Não informado'}",
+                )
+                if not km_completo:
+                    st.caption("KM total parcial: existem fretes sem as duas leituras de odômetro. Custo médio por KM global fica indisponível.")
+                if any(v["financeiro_legado_ambiguo"] for v in vg_bi_filtradas):
+                    st.warning("Alguns fretes antigos compartilham o financeiro do ciclo. Esses valores foram excluídos dos totais por frete até a conferência, evitando receita duplicada.")
 
                 # Agrupamento por Cliente
                 ranking_cli_lista = []
@@ -3667,10 +3813,10 @@ with st.container(border=True):
                         st.info("Sem despesas registradas para o filtro selecionado.")
 
                 with g_col2:
-                    st.markdown('<div class="sec-subtitle">Resultado Líquido por Cliente</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="sec-subtitle">Resultado Operacional Parcial por Cliente</div>', unsafe_allow_html=True)
                     if ranking_cli_lista:
                         df_chart_cli_bi = pd.DataFrame(ranking_cli_lista)[["cliente", "resultado"]].rename(
-                            columns={"cliente": "Cliente", "resultado": "Resultado Líquido (R$)"}
+                            columns={"cliente": "Cliente", "resultado": "Resultado Operacional Parcial (R$)"}
                         )
                         st.bar_chart(df_chart_cli_bi.set_index("Cliente"), color="#0D263C")
                     else:
@@ -3685,7 +3831,7 @@ with st.container(border=True):
                                 "Viagens": r["viagens"],
                                 "Receita Total": r["receita_fmt"],
                                 "Despesas Totais": r["despesa_fmt"],
-                                "Resultado Líquido": r["resultado_fmt"],
+                                "Resultado Operacional Parcial": r["resultado_fmt"],
                                 "Margem (%)": r["margem_fmt"],
                             }
                             for r in ranking_cli_lista
@@ -3697,7 +3843,7 @@ with st.container(border=True):
                 resumo_pdf_bi = {
                     "filtro_desc": f"Situacao: {bi_status} | Tipo: {bi_tipo} | Cliente: {bi_cliente}",
                     "qtd_viagens": len(vg_bi_filtradas),
-                    "km_total": km_global,
+                    "km_total_fmt": km_global_fmt,
                     "receita_fmt": fmt_brl(rec_global),
                     "despesa_fmt": fmt_brl(desp_global),
                     "resultado_fmt": fmt_brl(res_global),
@@ -3726,6 +3872,74 @@ with st.container(border=True):
                         use_container_width=True,
                         key="dl_xlsx_consolidado_bi",
                     )
+
+        # ----------------------------------------------------------------------
+        # SUB-ABA 3: CONSOLIDAÇÃO POR ID INTERNO DO CICLO
+        # ----------------------------------------------------------------------
+        with tab_rel_ciclos:
+            fechamentos_salvos = consolidar_ciclos(todas_vg_exp)
+            st.caption(
+                "Cada frete aparece uma vez no ciclo correspondente; a despesa registrada "
+                "em seu ID Frete é somada uma vez. Este painel é uma visão dos mesmos valores "
+                "do BI por frete, portanto não deve ser somado novamente ao total geral."
+            )
+            if not fechamentos_salvos:
+                st.info("Ainda não existem fretes do tipo Ciclo salvos para consolidar.")
+            else:
+                cl1, cl2, cl3 = st.columns(3)
+                cl1.metric("CICLOS COM FRETES", len(fechamentos_salvos))
+                cl2.metric("FRETES AGRUPADOS", sum(f["qtd_fretes"] for f in fechamentos_salvos))
+                cl3.metric(
+                    "DESPESAS ATRIBUÍDAS AOS CICLOS",
+                    fmt_brl(sum(f["despesas_total"] for f in fechamentos_salvos)),
+                )
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            "Ciclo": f["ciclo"],
+                            "Fretes": f["qtd_fretes"],
+                            "Receita Negociada": fmt_brl(f["valor_negociado_total"]),
+                            "Parcelas Previstas": fmt_brl(f["parcelas_previstas"]),
+                            "Despesas": fmt_brl(f["despesas_total"]),
+                            "Resultado Parcial": fmt_brl(f["resultado_operacional_parcial"]),
+                            "KM Total Planejado": fmt_km(f["km_total_planejado"]),
+                            "Conferência Financeira": "Pendente" if f["qtd_financeiros_legados_ambiguos"] else "Por frete",
+                        }
+                        for f in fechamentos_salvos
+                    ]),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+                opcoes_ciclos = {f["id_ciclo"]: f for f in fechamentos_salvos}
+                ciclo_abrir_id = st.selectbox(
+                    "VER DETALHAMENTO DO CICLO",
+                    options=list(opcoes_ciclos),
+                    format_func=lambda x: f"{opcoes_ciclos[x]['ciclo']} — {opcoes_ciclos[x]['qtd_fretes']} frete(s)",
+                    key="rel_ciclo_detalhe",
+                )
+                ciclo_aberto = opcoes_ciclos[ciclo_abrir_id]
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            "ID Frete": f["id_frete"],
+                            "Código Viagem": f["codigo_viagem"],
+                            "Cliente": f["cliente"],
+                            "Negociado Considerado (R$)": to_float(f["negociado_considerado"]),
+                            "Despesas (R$)": to_float(f["total_despesas"]),
+                            "Situação Financeira": "Legado para conferir" if f["financeiro_legado_ambiguo"] else "Individualizado",
+                        }
+                        for f in ciclo_aberto["fretes"]
+                    ]),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+                if ciclo_aberto["qtd_financeiros_legados_ambiguos"]:
+                    st.warning(
+                        "Atenção: este ciclo contém registros financeiros antigos sem separação "
+                        "por frete. Esses valores não foram repetidos na receita consolidada; "
+                        "a conferência e a individualização ainda são necessárias."
+                    )
+                st.caption("O Excel da Etapa 9 inclui a planilha Fechamento_Ciclos com esses totais.")
 
         render_navegacao_rodape(8, MENU_ITENS)
 
@@ -3813,7 +4027,7 @@ with st.container(border=True):
                     <div class="kpi-consulta-val">{fmt_brl(tot_desp_f)}</div>
                 </div>
                 <div class="kpi-consulta-card">
-                    <div class="kpi-consulta-lbl">Resultado Líquido</div>
+                    <div class="kpi-consulta-lbl">Resultado Operacional Parcial</div>
                     <div class="kpi-consulta-val">{fmt_brl(tot_res_f)}</div>
                 </div>
             </div>
@@ -3870,6 +4084,7 @@ with st.container(border=True):
                 xlsx_cons = gerar_excel_base_completa(
                     filtradas, desp_detalhadas, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db,
                     abastecimentos=carregar_todos_abastecimentos(),
+                    fechamentos_ciclos=consolidar_ciclos(todas_viagens),
                 )
                 st.download_button(
                     "📥 Exportar Excel (.xlsx)",

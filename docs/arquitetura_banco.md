@@ -54,8 +54,10 @@ Nesta proposta, a tela de cadastro passa a funcionar da seguinte maneira:
 6. O cálculo da Etapa 8 soma `viagens.km_rota_planejado` de todos os fretes do ciclo, sem duplicar o frete aberto para edição, e acrescenta **uma única vez** `ciclos_operacionais.km_deslocamentos_operacionais`. O odômetro inicial/final continua separado da quilometragem planejada.
 7. O histórico de abastecimentos agora reside na **nova tabela `abastecimentos`**, usando a placa/veículo como referência, sem FK para frete. Pode ser preenchido sem nenhuma viagem cadastrada. O registro de Diesel ou ARLA na Etapa 7 gera dados operacionais e não cria despesa de viagem automaticamente. Quando houver despesa financeira atribuída a frete, ela continua na tabela `viagens_despesas`, contabilizada apenas uma vez no DRE. O campo legado `viagens_despesas.odometro_abastecimento` permanece por compatibilidade, mas os novos odômetros são registrados em `abastecimentos`.
 8. A Etapa 7 mostra distância entre dois abastecimentos de Diesel consecutivos e indicadores aproximados de KM/L e R$/KM, quando as leituras são válidas. A Etapa 8 apresenta o último indicador disponível do veículo, além de diferença e desvio entre KM real e planejado quando os dois odômetros da operação estão informados. Leituras ausentes não aparecem como zero medido.
+9. O módulo `database/fechamento_ciclos.py` consolida valores somente em memória, agrupando os fretes pelo `id_ciclo` interno (sem misturar nomes legados iguais). O fechamento na Etapa 8 substitui o frete atual pelos valores não salvos; a Etapa 9 cria a visão por ciclo e a aba Excel `Fechamento_Ciclos`. Receitas negociadas e despesas por frete são somadas uma vez; parcelas previstas são mostradas separadamente dos recebimentos efetivos, ainda não implementados.
+10. Quando um mesmo `ciclos_financeiro` legado serve de fonte para vários fretes sem `fretes_financeiro`, a receita legada não entra repetidamente nos totais do BI ou do ciclo. Os fretes são sinalizados como pendentes de individualização, mantendo os registros originais.
 
-**Limitação:** ciclos duplicados já existentes na base não são mesclados; isso exige migração específica, conferência e backup. Despesas compartilhadas, recebimentos efetivos e fechamento por ciclo ainda não foram implementados.
+**Limitação:** ciclos duplicados já existentes na base não são mesclados; isso exige migração específica, conferência e backup. O **resumo gerencial** por ciclo foi implementado no código, mas **despesas compartilhadas independentes, rateio, recebimentos efetivos e fechamento formal com alteração de status** ainda não foram implementados.
 
 **Critério de segurança:** a proximidade entre uma linha de fechamento e os fretes anteriores é utilizada para sugerir a correspondência na auditoria. Ela **não autoriza corrigir automaticamente** o ID do ciclo nem transferir valores ou despesas. Linhas interpretadas como total geral não são somadas como fretes adicionais.
 
@@ -115,6 +117,9 @@ Os códigos de negócio devem ser gerados e validados no banco de forma segura p
 - [ ] Contar ciclos e fretes importados e identificar ciclos duplicados pelo nome.
 - [ ] Verificar se já existem códigos `V1`, `V2` etc. vinculados a fretes históricos.
 - [ ] Conciliar receitas, despesas e linhas de fechamento com o Excel.
+- [ ] Conferir um ciclo de três fretes com clientes e despesas distintas; a receita e os custos devem corresponder à soma individual sem duplicação.
+- [ ] Conferir prévia da Etapa 8 antes de salvar o frete editado e resumo da Etapa 9 depois de salvar.
+- [ ] Conferir que ciclo legado com vários fretes e um mesmo financeiro antigo seja sinalizado sem multiplicar o valor negociado.
 - [ ] Simular migração e restauração em banco de teste antes de alterar dados reais.
 
 Para as decisões operacionais que motivam esse redesenho, consultar [Regras de negócio](regras_negocio.md). Os requisitos, critérios de aceite e validações estão em [Requisitos](requisitos.md); a equipe deve acompanhar as alterações de código em Issues do GitHub.

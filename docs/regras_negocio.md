@@ -100,6 +100,10 @@ O campo legado `viagens_despesas.odometro_abastecimento` não é excluído (comp
 
 **Ciclo:** soma da receita negociada dos fretes vinculados − despesas dos fretes − despesas compartilhadas do ciclo = resultado operacional do ciclo.
 
+**Implementação parcial proposta:** a Etapa 8 apresenta uma **prévia** financeira do ciclo considerando os fretes já salvos e o formulário atual, sem somá-lo duas vezes. A Etapa 9 reúne os fretes salvos por `id_ciclo` e a exportação inclui a aba `Fechamento_Ciclos`. O cálculo inclui somente as despesas vinculadas a cada frete. **Ainda não existe lançamento independente de despesa compartilhada no ciclo**, nem rateio.
+
+Em vários fretes antigos que compartilham a mesma linha de `ciclos_financeiro`, não é possível saber a receita negociada de cada frete: a prévia/relatório os **marca para conferência e exclui a receita financeira legada ambígua**, evitando multiplica-la pelo número de fretes. Nenhum dado histórico é apagado ou redistribuído. Valor de adiantamento e saldo negociados são **parcelas previstas**, não comprovam pagamento efetivo.
+
 Resultados por frete e por ciclo não devem ser somados simultaneamente em um dashboard de totais, porque representariam os mesmos valores em níveis diferentes.
 
 Usar **“Resultado Operacional”** ou **“Resultado Operacional Parcial”** em vez de “Lucro Líquido” enquanto impostos, salários, seguros, custos fixos e demais itens necessários ao lucro líquido não estiverem incluídos.

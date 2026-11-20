@@ -24,6 +24,8 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 | RF-12 | Importar Excel distinguindo fretes, fechamentos e totais gerais | Apenas prévia/auditoria; **gravação bloqueada** |
 | RF-13 | Registrar efetivos recebimentos financeiros distintos das parcelas previstas | **Pendente** |
 | RF-14 | Fechar ciclos com despesas compartilhadas e regra de rateio aprovada | **Pendente** |
+| RF-15 | Consolidar receita negociada e despesas de cada frete por ID interno de ciclo, sem duplicar lançamentos | Proposto em `fechamento_ciclos.py`; teste pendente |
+| RF-16 | Exibir prévia do ciclo na Etapa 8 e relatório na Etapa 9; exportar `Fechamento_Ciclos` | Proposto; teste pendente |
 
 ## Critérios de aceite dos cálculos
 
@@ -36,6 +38,9 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 7. **Abastecimento:** o registro pertence ao **veículo**, não exige `id_viagem`/ID Frete e não modifica os odômetros operacionais.
 8. **Consumo:** apenas dois abastecimentos *consecutivos de Diesel* do mesmo veículo com odômetros crescentes permitem `KM entre abastecimentos`; `KM/L = distância / litros do abastecimento atual` e `R$/KM = valor atual / distância`. Informar que essa média é indicativa e pressupõe tanque cheio; ARLA é monitorado separadamente.
 9. **DRE:** histórico de abastecimentos não gera automaticamente despesa; somente despesas financeiras associadas à viagem são contabilizadas nesse resultado parcial. Rateio de custos comuns continua pendente.
+10. **Fechamento parcial do ciclo:** `Receita negociada do ciclo = soma dos valores negociados dos fretes`, `Despesas do ciclo = soma das despesas financeiras atribuídas aos respectivos fretes` e `Resultado Operacional Parcial = receita negociada − despesas do ciclo`; não contabilizar uma linha de fechamento como frete adicional.
+11. **Proteção de registros legados:** se dois ou mais fretes compartilham o mesmo financeiro legado de ciclo, não somar o valor legado uma vez por frete; avisar sobre a necessidade de individualização, sem excluir o histórico.
+12. **Parcelas previstas:** adiantamento e saldo são campos contratuais previstos, não equivalem a recebimento efetivo. Não somar o fechamento por ciclo uma segunda vez ao total geral por fretes.
 
 ## Requisitos de integridade e implantação
 
@@ -54,6 +59,9 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - [ ] Registrar abastecimento sem leitura e uma leitura regressiva; confirmar indicador indisponível/aviso e nenhuma distância negativa.
 - [ ] Confirmar que o DRE não ganhou despesa automaticamente ao salvar abastecimento do veículo.
 - [ ] Cadastrar dois fretes no mesmo ciclo e conferir soma de KM e deslocamentos informados uma vez.
+- [ ] Cadastrar três fretes de um ciclo, com receitas e despesas diferentes; conferir prévia na Etapa 8, relatório na Etapa 9 e planilha `Fechamento_Ciclos`.
+- [ ] Simular dois fretes legados com um único financeiro de ciclo; conferir aviso e receita não duplicada.
+- [ ] Conferir ausência de valor negociado, adiantamento/saldo previstos e ausência de odômetros sem contabilizar valores fictícios.
 - [ ] Salvar operação sem odômetros, com odômetros válidos e com odômetro final inferior ao inicial.
 - [ ] Conferir cenário de fechamento e exportação sem viagens e com viagens.
 - [ ] Conciliar amostra com a planilha, inspecionar as divergências já relatadas e verificar que nada foi importado sem autorização.
@@ -61,4 +69,4 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 
 ## Escopo explicitamente não encerrado
 
-Não presumir que a aplicação esteja pronta para produção por existir código. Faltam ao menos: homologação integrada, fechamento consolidado financeiro dos ciclos, regra de rateio, confirmação de recebimentos efetivos, segurança de acesso e importação com gravação autorizada.
+Não presumir que a aplicação esteja pronta para produção por existir código. Faltam ao menos: homologação integrada, fechamento **formal** dos ciclos (status/confirmação), despesas compartilhadas e regra de rateio, confirmação de recebimentos efetivos, segurança de acesso e importação com gravação autorizada. A consolidação **gerencial parcial** por ciclo já está proposta.

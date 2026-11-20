@@ -12,6 +12,7 @@ Sistema web de apoio ao controle operacional e financeiro da FAEG — Soluções
 - Odômetros de saída/chegada da operação, distintos das leituras de abastecimento.
 - Histórico de Diesel e ARLA por **veículo**, inclusive sem frete selecionado, com métricas indicativas de distância, km/L e R$/km entre registros consecutivos de Diesel.
 - Despesas financeiras por viagem e demonstrativo de resultado operacional parcial, sem lançamento automático de combustível a partir do histórico do veículo.
+- Prévia financeira do ciclo na Etapa 8 e relatório de fechamento gerencial por ciclo na Etapa 9: soma receitas negociadas e despesas atribuídas aos fretes, mantendo parcelas previstas separadas de pagamentos efetivos.
 - Prévia e auditoria da planilha Excel. **A importação com gravação no banco permanece bloqueada.**
 
 ## Tecnologia
@@ -26,6 +27,7 @@ Python, Streamlit, Pandas, SQLAlchemy, PostgreSQL (`psycopg`) e OpenPyXL. O app 
 | [`database/connection.py`](database/connection.py) | Configuração da conexão SQLAlchemy |
 | [`database/models.py`](database/models.py) | Modelos, criação de tabelas e atualização de colunas |
 | [`database/controle_abastecimentos.py`](database/controle_abastecimentos.py) | Indicadores de consumo a partir do histórico por veículo |
+| [`database/fechamento_ciclos.py`](database/fechamento_ciclos.py) | Consolidação gerencial de fretes por ID de ciclo, sem duplicação de despesas |
 | [`database/importador_planilha.py`](database/importador_planilha.py) | Prévia controlada da importação Excel |
 | [`database/conciliacao_planilha.py`](database/conciliacao_planilha.py) | Auditoria de fretes e fechamentos na planilha |
 | [`database/diagnostico_ciclos.py`](database/diagnostico_ciclos.py) | Diagnóstico somente leitura dos ciclos no PostgreSQL |

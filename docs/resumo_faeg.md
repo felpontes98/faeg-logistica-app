@@ -42,8 +42,8 @@ Exemplos e critérios de aceite estão documentados em [Regras de negócio](regr
 | --- | --- |
 | Importação Excel | Prévia sem gravação validada com 34 fretes e 13 ciclos. Das 13 linhas marcadas `FECHAMENTO`, a auditoria encontrou 12 fechamentos de fretes e 1 possível total geral. Gravação continua **bloqueada** |
 | Agrupamento | Novo cadastro reutiliza ciclo existente pelo número; mantém negociação e cliente independentes em `fretes_financeiro`. **Ciclos históricos repetidos não foram migrados** |
-| Fechamento | A prévia compara os valores negociados com a soma dos fretes anteriores e identifica códigos de ciclo ausentes ou divergentes. O fechamento real de despesas e recebimentos ainda não está implementado |
-| Recebimentos | Adiantamento mais saldo passam a ser apresentados como **total previsto**, sem confundir com pagamento confirmado; falta criar registro de recebimentos efetivos |
+| Fechamento | A auditoria Excel compara os fechamentos com os fretes e identifica códigos divergentes. A Etapa 8 ganhou uma prévia financeira do ciclo; a Etapa 9 e o Excel agora mostram receita negociada, despesas e resultado operacional parcial por ID interno de ciclo, sem duplicar fretes. Pagamentos efetivos, despesas comuns e rateio ainda não estão implementados |
+| Recebimentos | Adiantamento mais saldo são **parcelas previstas**, nunca tratados como pagamentos confirmados ou como substituto do valor negociado. Falta criar registro de recebimentos efetivos |
 | KM e abastecimento | Etapa 2 mantém o KM manual do frete; Etapa 8 soma os trechos do ciclo e os deslocamentos, compara com odômetros válidos e exibe consumo indicativo do veículo. Na Etapa 7, o histórico de Diesel/ARLA é identificado por veículo, independentemente do ID do frete, enquanto as despesas financeiras continuam atribuídas às viagens. O Excel exportado ganha a aba `Abastecimentos_Veiculos` |
 | Segurança | Não foi identificada autenticação ou autorização de usuários no código revisado |
 | Testes | Não havia suíte automatizada de testes no pacote recebido |
@@ -61,6 +61,6 @@ Na planilha de referência de setembro/2026, a auditoria apontou: linha 10 sem I
 
 ## Próxima verificação após concluir os ajustes
 
-Eduardo decidiu reunir primeiro os ajustes e deixar os testes integrados para o final. Nessa fase deverão ser avaliados, em PostgreSQL de testes: vínculo frete/ciclo, soma de KM, odômetros opcionais, cadastro de abastecimentos sem frete, indicadores consecutivos de Diesel/ARLA e DRE sem duplicação. A gravação Excel, os recebimentos efetivos e o rateio de custos compartilhados continuam pendentes, com proteção dos dados existentes. **O cadastro independente de abastecimentos já está proposto no código, mas não foi homologado.**
+Eduardo decidiu reunir primeiro os ajustes e deixar os testes integrados para o final. Nessa fase deverão ser avaliados, em PostgreSQL de testes: vínculo frete/ciclo, soma de KM, odômetros opcionais, cadastro de abastecimentos sem frete, indicadores consecutivos de Diesel/ARLA, fechamento financeiro parcial de ciclos e DRE sem duplicação. A gravação Excel, os recebimentos efetivos e o rateio de custos compartilhados continuam pendentes, com proteção dos dados existentes. **As novas rotinas de abastecimentos e fechamento por ciclo estão no código, mas não foram homologadas.**
 
 Para apresentação geral e instalação, consulte o [README](../README.md). Para a arquitetura técnica, consulte [Arquitetura do banco](arquitetura_banco.md).
