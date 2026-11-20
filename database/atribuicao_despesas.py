@@ -7,6 +7,7 @@ o caminho percorrido pelo custo, inclusive após um estorno.
 
 from datetime import date
 
+from database.conferencia_duplicidades import procurar_semelhancas_cruzadas
 from database.models import (
     Abastecimento,
     CicloDespesa,
@@ -49,7 +50,10 @@ def _dados_financeiros(despesa):
     }
 
 
-def atribuir_despesa_veiculo(session, id_despesa_veiculo, tipo_destino, id_destino, motivo):
+def atribuir_despesa_veiculo(
+    session, id_despesa_veiculo, tipo_destino, id_destino, motivo,
+    confirmar_despesa_distinta=False,
+):
     """Move financeiramente um gasto pendente sem duplicar o combustível.
 
     O chamador controla commit/rollback e invalida os caches depois do commit.
@@ -62,6 +66,14 @@ def atribuir_despesa_veiculo(session, id_despesa_veiculo, tipo_destino, id_desti
         raise ValueError("Destino inválido: selecione Frete ou Ciclo.")
 
     dados = _dados_financeiros(origem)
+    abastecimento = session.query(Abastecimento).filter_by(
+        id_despesa_veiculo=id_despesa_veiculo,
+    ).one_or_none()
+    dados_conferencia = {
+        **dados,
+        "id_veiculo_abast": origem.id_veiculo,
+        "odometro_abastecimento": abastecimento.odometro if abastecimento else None,
+    }
     if tipo_destino == "Frete":
         frete = session.query(Viagem).filter_by(id_viagem=id_destino).one_or_none()
         if frete is None or frete.id_veiculo != origem.id_veiculo:
@@ -75,9 +87,15 @@ def atribuir_despesa_veiculo(session, id_despesa_veiculo, tipo_destino, id_desti
         ).first()
         if duplicada:
             raise ValueError("Há uma despesa aparentemente igual neste frete. Confira antes de atribuir.")
-        abastecimento = session.query(Abastecimento).filter_by(
-            id_despesa_veiculo=id_despesa_veiculo,
-        ).one_or_none()
+        cruzadas = procurar_semelhancas_cruzadas(
+            session, "Frete", frete.id_ciclo, dados_conferencia,
+        )
+        if cruzadas and not confirmar_despesa_distinta:
+            raise ValueError(
+                "Existe despesa semelhante já contabilizada no ciclo "
+                f"(lançamento #{cruzadas[0]['id_lancamento']}). Confira os comprovantes "
+                "e confirme explicitamente se é outro custo antes de atribuir."
+            )
         lancamento = ViagemDespesa(
             id_viagem=id_destino,
             odometro_abastecimento=abastecimento.odometro if abastecimento else None,
@@ -103,6 +121,15 @@ def atribuir_despesa_veiculo(session, id_despesa_veiculo, tipo_destino, id_desti
         ).first()
         if duplicada:
             raise ValueError("Há uma despesa aparentemente igual neste ciclo. Confira antes de atribuir.")
+        cruzadas = procurar_semelhancas_cruzadas(
+            session, "Ciclo", id_destino, dados_conferencia,
+        )
+        if cruzadas and not confirmar_despesa_distinta:
+            raise ValueError(
+                "Existe despesa semelhante já contabilizada em um frete do ciclo "
+                f"(lançamento #{cruzadas[0]['id_lancamento']}). Confira os comprovantes "
+                "e confirme explicitamente se é outro custo antes de atribuir."
+            )
         lancamento = CicloDespesa(id_ciclo=id_destino, **dados)
         session.add(lancamento)
         session.flush()

@@ -12,6 +12,10 @@ from sqlalchemy import func
 
 from database.connection import SessionLocal
 from database.atribuicao_despesas import atribuir_despesa_veiculo, estornar_atribuicao_veiculo
+from database.conferencia_duplicidades import (
+    listar_semelhancas_entre_frete_ciclo,
+    procurar_semelhancas_cruzadas,
+)
 from database.controle_abastecimentos import calcular_indicadores_abastecimentos
 from database.fechamento_ciclos import consolidar_ciclos, reconciliar_resultado_gerencial
 from database.importador_planilha import preparar_previa_importacao_faeg
@@ -1224,10 +1228,18 @@ def carregar_historico_atribuicoes_veiculo():
         ]
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_alertas_despesas_cruzadas():
+    """Indícios para conferência humana, nunca exclusão automática de custos."""
+    with SessionLocal() as session:
+        return listar_semelhancas_entre_frete_ciclo(session)
+
+
 def limpar_caches_atribuicao():
     """Renova indicadores após movimentar um custo entre destinos."""
     carregar_todas_despesas_veiculo.clear()
     carregar_historico_atribuicoes_veiculo.clear()
+    carregar_alertas_despesas_cruzadas.clear()
     carregar_todas_despesas_ciclo.clear()
     carregar_despesas_viagem.clear()
     carregar_todas_viagens_consulta.clear()
@@ -1468,7 +1480,7 @@ def registrar_abastecimento_do_lancamento(session, dados, campo_origem, id_orige
     ))
 
 
-def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None, recebimentos=None, despesas_ciclo=None, despesas_veiculo=None, atribuicoes_veiculo=None):
+def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None, recebimentos=None, despesas_ciclo=None, despesas_veiculo=None, atribuicoes_veiculo=None, alertas_despesas=None):
     """Gera arquivo Excel (.xlsx) completo com todas as viagens, despesas e cadastros do sistema."""
     buf = io.BytesIO()
 
@@ -1747,6 +1759,16 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
             ),
         },
     ], columns=["Indicador", "Valor (R$)", "Tratamento"])
+    df_alertas_despesas = pd.DataFrame([
+        {
+            **a,
+            "Data": a["Data"].strftime("%d/%m/%Y") if a.get("Data") else None,
+        }
+        for a in (alertas_despesas or [])
+    ], columns=[
+        "ID Ciclo", "Código Ciclo", "ID Frete", "ID Despesa Frete",
+        "ID Despesa Ciclo", "Data", "Categoria", "Descrição", "Valor (R$)", "Situação",
+    ])
 
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         df_viagens.to_excel(writer, sheet_name="Viagens_e_Ciclos", index=False)
@@ -1759,6 +1781,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         df_abast.to_excel(writer, sheet_name="Abastecimentos_Veiculos", index=False)
         df_ciclos.to_excel(writer, sheet_name="Fechamento_Ciclos", index=False)
         df_conciliacao.to_excel(writer, sheet_name="Conferencia_Financeira", index=False)
+        df_alertas_despesas.to_excel(writer, sheet_name="Possiveis_Duplicidades", index=False)
         df_recebimentos.to_excel(writer, sheet_name="Recebimentos_Fretes", index=False)
         df_despesas_ciclo.to_excel(writer, sheet_name="Despesas_Ciclo", index=False)
         df_despesas_veiculo.to_excel(writer, sheet_name="Despesas_Veiculo", index=False)
@@ -2466,6 +2489,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 carregar_despesas_viagem.clear()
                 carregar_todas_viagens_consulta.clear()
                 carregar_todas_despesas_ciclo.clear()
+                carregar_alertas_despesas_cruzadas.clear()
                 carregar_todos_abastecimentos.clear()
                 carregar_abastecimentos_veiculo.clear()
                 st.toast(f"Viagem {codigo_digitado} salva com sucesso no Neon!", icon="✅")
@@ -2549,6 +2573,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     carregar_despesas_viagem.clear()
                     carregar_todas_viagens_consulta.clear()
                     carregar_todas_despesas_ciclo.clear()
+                    carregar_alertas_despesas_cruzadas.clear()
                     st.toast(f"Alterações da viagem {codigo_digitado} atualizadas!", icon="✅")
                     st.rerun()
     except IntegrityError:
@@ -3691,10 +3716,69 @@ with st.container(border=True):
             st.caption("Este gasto permanecerá pendente por veículo e NÃO comporá o resultado de fretes/ciclos até uma vinculação explícita futura.")
         elif destino_desp.startswith("Ciclo"):
             st.caption("Este custo será contabilizado uma única vez no resultado do ciclo, sem rateio por frete.")
+
+        # Um indício de repetição entre frete e ciclo exige conferência explícita,
+        # sem apagar, atribuir ou bloquear definitivamente gastos legítimos.
+        possiveis_duplicidades = []
+        confirmar_despesa_distinta = True
+        if total_previsto_desp > 0 and not destino_desp.startswith("Veículo"):
+            dados_conferencia = {
+                "tipo_despesa": tipo_desp,
+                "descricao_detalhe": desc_desp.strip() or tipo_desp,
+                "id_fornecedor": forn_sel or None,
+                "data_despesa": data_despesa_unica,
+                "quantidade": round(qtd_desp, 2),
+                "valor_unitario": round(unit_desp, 4 if eh_combustivel else 2),
+                "valor_total": total_previsto_desp,
+                "odometro_abastecimento": odometro_abast,
+                "id_veiculo_abast": veiculo_abast_id,
+            }
+            with SessionLocal() as db:
+                if destino_desp.startswith("Ciclo"):
+                    id_ciclo_conferencia = ciclo_desp_id
+                    tipo_conferencia = "Ciclo"
+                else:
+                    tipo_conferencia = "Frete"
+                    if viagem_sel_id:
+                        id_ciclo_conferencia = db.query(Viagem.id_ciclo).filter_by(
+                            id_viagem=viagem_sel_id,
+                        ).scalar()
+                    elif get_campo("tipo_viagem", "Individual") == "Ciclo":
+                        ciclo_conferencia = localizar_ciclo_operacional(
+                            db, get_campo("ciclo_nome", "") or "",
+                        )
+                        id_ciclo_conferencia = (
+                            ciclo_conferencia.id_ciclo if ciclo_conferencia else None
+                        )
+                    else:
+                        id_ciclo_conferencia = None
+                possiveis_duplicidades = procurar_semelhancas_cruzadas(
+                    db, tipo_conferencia, id_ciclo_conferencia, dados_conferencia,
+                )
+            if possiveis_duplicidades:
+                referencias = ", ".join(
+                    f"{item['origem']} (despesa #{item['id_lancamento']})"
+                    for item in possiveis_duplicidades[:4]
+                )
+                st.warning(
+                    "Existe lançamento semelhante em outro destino financeiro deste ciclo: "
+                    f"{referencias}. Confira nota/comprovante, veículo e a natureza do custo. "
+                    "Pode ser despesa distinta; o sistema não faz alteração automática."
+                )
+                chave_confirmacao = zlib.crc32(
+                    repr((dados_conferencia, tipo_conferencia, id_ciclo_conferencia,
+                          tuple((d["origem"], d["id_lancamento"]) for d in possiveis_duplicidades))).encode()
+                )
+                confirmar_despesa_distinta = st.checkbox(
+                    "Conferi o comprovante: este é um gasto distinto, não um segundo lançamento do mesmo custo.",
+                    key=f"desp_similar_confirmar_{chave_confirmacao}_{st.session_state.get('desp_similar_versao', 0)}",
+                )
         btn_add_desp = st.button("Registrar Despesa", use_container_width=True, key="btn_add_despesa")
 
         if btn_add_desp:
-            if unit_desp <= 0:
+            if possiveis_duplicidades and not confirmar_despesa_distinta:
+                st.warning("Confirme primeiro a conferência do comprovante para evitar contagem duplicada.")
+            elif unit_desp <= 0:
                 st.warning("Informe um valor unitário maior que R$ 0,00.")
             elif eh_combustivel and not veiculo_abast_id:
                 st.warning("Selecione primeiro o veículo correto para registrar o abastecimento.")
@@ -3713,31 +3797,50 @@ with st.container(border=True):
                 }
                 if destino_desp.startswith("Frete") and viagem_sel_id == 0:
                     pendentes = st.session_state.setdefault("despesas_temp", [])
-                    ja_existe = eh_combustivel and any(
+                    chaves_duplicidade_temp = (
+                        "tipo_despesa", "data_despesa", "quantidade", "valor_total",
+                        "odometro_abastecimento", "id_veiculo_abast",
+                    ) if eh_combustivel else (
+                        "tipo_despesa", "data_despesa", "quantidade", "valor_total",
+                        "descricao_detalhe", "id_fornecedor",
+                    )
+                    ja_existe = any(
                         all(d.get(k) == dados_desp[k] for k in (
-                            "tipo_despesa", "data_despesa", "quantidade",
-                            "valor_total", "odometro_abastecimento", "id_veiculo_abast",
+                            chaves_duplicidade_temp
                         )) for d in pendentes
                     )
                     if ja_existe:
-                        st.warning("Este abastecimento já está na lista temporária do frete.")
+                        st.warning("Esta despesa já está na lista temporária do frete.")
                         st.stop()
                     pendentes.append(dados_desp)
+                    st.session_state["desp_similar_versao"] = st.session_state.get("desp_similar_versao", 0) + 1
                     st.toast("Despesa adicionada à lista temporária!", icon="🧾")
                     st.rerun()
                 else:
                     with SessionLocal() as db:
                         if destino_desp.startswith("Frete"):
-                            existente = db.query(ViagemDespesa).filter_by(
+                            consulta_existente = db.query(ViagemDespesa).filter_by(
                                 id_viagem=viagem_sel_id,
                                 tipo_despesa=tipo_desp,
                                 data_despesa=data_despesa_unica,
                                 quantidade=dados_desp["quantidade"],
                                 valor_total=v_tot_item,
-                                odometro_abastecimento=odometro_abast,
-                            ).first() if eh_combustivel else None
+                            )
+                            if eh_combustivel:
+                                consulta_existente = consulta_existente.filter_by(
+                                    odometro_abastecimento=odometro_abast,
+                                )
+                            else:
+                                consulta_existente = consulta_existente.filter_by(
+                                    descricao_detalhe=dados_desp["descricao_detalhe"],
+                                    id_fornecedor=dados_desp["id_fornecedor"],
+                                )
+                            existente = consulta_existente.first()
                             if existente:
-                                st.warning("Este abastecimento já consta nas despesas deste frete.")
+                                st.warning(
+                                    "Esta despesa já consta neste frete. Se forem gastos "
+                                    "distintos, diferencie a descrição/comprovante antes de registrar."
+                                )
                                 st.stop()
                             desp_obj = ViagemDespesa(
                                 id_viagem=viagem_sel_id,
@@ -3801,8 +3904,10 @@ with st.container(border=True):
                     carregar_todas_viagens_consulta.clear()
                     carregar_todas_despesas_ciclo.clear()
                     carregar_todas_despesas_veiculo.clear()
+                    carregar_alertas_despesas_cruzadas.clear()
                     carregar_todos_abastecimentos.clear()
                     carregar_abastecimentos_veiculo.clear()
+                    st.session_state["desp_similar_versao"] = st.session_state.get("desp_similar_versao", 0) + 1
                     st.toast("Despesa registrada uma única vez no destino escolhido!", icon="✅")
                     st.rerun()
 
@@ -4068,12 +4173,47 @@ with st.container(border=True):
                                 f"{atribuir_tipo.lower()} selecionado. O histórico do abastecimento "
                                 "não será recriado nem somado duas vezes."
                             )
+                            ciclo_da_atribuicao = (
+                                next(
+                                    (v["id_ciclo"] for v in viagens_compativeis
+                                     if v["id_viagem"] == atribuir_destino_id),
+                                    None,
+                                ) if atribuir_tipo == "Frete" else atribuir_destino_id
+                            )
+                            with SessionLocal() as db:
+                                ab_origem = db.query(Abastecimento).filter_by(
+                                    id_despesa_veiculo=atribuir_id,
+                                ).one_or_none()
+                                dados_atribuicao = {
+                                    **atribuir_origem,
+                                    "id_veiculo_abast": atribuir_origem["id_veiculo"],
+                                    "odometro_abastecimento": ab_origem.odometro if ab_origem else None,
+                                }
+                                coincidencias_atribuicao = procurar_semelhancas_cruzadas(
+                                    db, atribuir_tipo, ciclo_da_atribuicao, dados_atribuicao,
+                                )
+                            confirmar_atribuicao_distinta = False
+                            if coincidencias_atribuicao:
+                                st.warning(
+                                    "Há custo semelhante no outro destino financeiro deste ciclo "
+                                    f"(despesa #{coincidencias_atribuicao[0]['id_lancamento']}). "
+                                    "Confira o comprovante antes de transferir. Se for o mesmo gasto, "
+                                    "corrija o lançamento anterior em vez de duplicá-lo."
+                                )
+                                confirmar_atribuicao_distinta = st.checkbox(
+                                    "Conferi: são gastos distintos e a justificativa informa a diferença.",
+                                    key=(
+                                        f"atribuir_similar_confirmar_{atribuir_id}_"
+                                        f"{atribuir_tipo}_{atribuir_destino_id}"
+                                    ),
+                                )
                             if st.button("Confirmar Atribuição", key="atribuir_desp_confirmar"):
                                 try:
                                     with SessionLocal() as db:
                                         atribuir_despesa_veiculo(
                                             db, atribuir_id, atribuir_tipo,
                                             atribuir_destino_id, atribuir_motivo,
+                                            confirmar_despesa_distinta=confirmar_atribuicao_distinta,
                                         )
                                         db.commit()
                                 except ValueError as exc:
@@ -4447,6 +4587,7 @@ with st.container(border=True):
             despesas_ciclo=carregar_todas_despesas_ciclo(),
             despesas_veiculo=carregar_todas_despesas_veiculo(),
             atribuicoes_veiculo=carregar_historico_atribuicoes_veiculo(),
+            alertas_despesas=carregar_alertas_despesas_cruzadas(),
         )
 
         tab_rel_viagem, tab_rel_geral, tab_rel_ciclos, tab_rel_conferencia = st.tabs(
@@ -4930,6 +5071,34 @@ with st.container(border=True):
                 "A conferência separa fontes financeiras; lançamentos manuais iguais em "
                 "destinos diferentes ainda exigem verificação humana."
             )
+            st.markdown("**Possíveis duplicidades entre despesas do frete e do ciclo**")
+            alertas_cruzados = carregar_alertas_despesas_cruzadas()
+            if alertas_cruzados:
+                st.warning(
+                    f"{len(alertas_cruzados)} coincidência(s) de data, categoria, valor "
+                    "e demais campos entre despesas de frete e do respectivo ciclo. "
+                    "Confira comprovantes antes de corrigir: duas despesas podem ser legítimas."
+                )
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            **a,
+                            "Data": a["Data"].strftime("%d/%m/%Y") if a["Data"] else None,
+                        }
+                        for a in alertas_cruzados
+                    ]),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.caption(
+                    "Nenhuma coincidência encontrada pelo critério atual. Isso não comprova "
+                    "ausência de outros lançamentos repetidos; confira os comprovantes."
+                )
+            st.caption(
+                "Esta lista é somente leitura. O Excel disponibiliza os indícios "
+                "na aba Possiveis_Duplicidades; nenhum registro é excluído automaticamente."
+            )
 
         render_navegacao_rodape(8, MENU_ITENS)
 
@@ -5091,6 +5260,7 @@ with st.container(border=True):
                     despesas_ciclo=carregar_todas_despesas_ciclo(),
                     despesas_veiculo=carregar_todas_despesas_veiculo(),
                     atribuicoes_veiculo=carregar_historico_atribuicoes_veiculo(),
+                    alertas_despesas=carregar_alertas_despesas_cruzadas(),
                 )
                 st.download_button(
                     "📥 Exportar Base Completa (.xlsx)",

@@ -40,6 +40,9 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 | RF-28 | Reconciliar resultado financeiro gerencial de toda a base, separando custo direto de frete, compartilhado de ciclo, gasto pendente de veículo e gasto já atribuído sem dupla soma | Proposto em `fechamento_ciclos.py`; teste pendente |
 | RF-29 | Disponibilizar `Conferencia_Financeira` no Excel e exportar base completa coerente na Etapa 10, independentemente dos filtros da tabela da tela | Proposto; teste pendente |
 | RF-30 | Mostrar margem como não calculável sem receita confiável, e avisar sobre despesas compartilhadas sem fretes do tipo Ciclo | Proposto; teste pendente |
+| RF-31 | Sinalizar despesas semelhantes entre frete e ciclo do mesmo ID e solicitar confirmação explícita quando forem comprovantes distintos | Proposto em `conferencia_duplicidades.py`; teste pendente |
+| RF-32 | Consultar indícios de repetição já cadastrados, sem alterar histórico, e exportar `Possiveis_Duplicidades` | Proposto; teste pendente |
+| RF-33 | Verificar repetição cruzada também durante atribuição de despesa provisória e impedir repetição imediata de gasto comum idêntico no mesmo frete | Proposto; teste pendente |
 
 ## Critérios de aceite dos cálculos
 
@@ -65,6 +68,7 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 20. **Estorno:** devolver despesa atribuída ao estado pendente com justificativa e evento permanente. O lançamento financeiro do frete é removido; o do ciclo é cancelado mantendo histórico. O custo não deve permanecer contabilizado no destino após o estorno. Despesas atribuídas não podem ser excluídas por atalhos das telas de frete/ciclo. Enquanto houver gasto de veículo atribuído a um frete, alterar o veículo desse frete exige estornar a atribuição antes.
 21. **Conferência da base inteira:** a despesa financeira gerencial é a soma das despesas diretas de fretes com as despesas compartilhadas ativas de ciclos. A receita considerada de fretes com financeiro legado ambíguo deve permanecer excluída, com aviso de resultado parcial/incompleto. Despesas de veículo pendentes são exibidas separadamente e não entram na soma; despesas atribuídas já constam no destino, nunca como uma segunda linha de custo. Se um ciclo possui despesa ativa, mas nenhum frete do tipo Ciclo, manter esse custo na conferência global e avisar sobre a necessidade de revisão. Margem só é calculável quando a receita é positiva e não há ambiguidade financeira na base considerada.
 22. **Exportação coerente:** a opção **Base Completa** da Etapa 10 exporta fretes, despesas, fechamentos e conferência da base inteira, mesmo que a tabela de consultas esteja filtrada. A aba `Conferencia_Financeira` discrimina o tratamento de cada parcela e recebido de fato não é somado à receita negociada.
+23. **Possíveis duplicidades:** comparar despesas de frete e despesas compartilhadas do ciclo correspondente por data, categoria, quantidade, valor, descrição, fornecedor e, quando possível, veículo/odômetro. Uma coincidência deve gerar aviso e exigir confirmação explícita de que os comprovantes são diferentes, sem alterar os registros automaticamente. A atribuição de despesa provisória também aplica a conferência e conserva sua justificativa. A etapa de relatórios deve listar as coincidências conhecidas e exportá-las em `Possiveis_Duplicidades`; a ausência de alertas não certifica que todos os custos sejam únicos.
 
 ## Requisitos de integridade e implantação
 
@@ -99,6 +103,11 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - [ ] Gerar Excel e confirmar correspondência com `Conferencia_Financeira`, inclusive com zero fretes e com despesas compartilhadas sem fretes do tipo Ciclo.
 - [ ] Filtrar um cliente na Etapa 10, exportar **Base Completa** e confirmar que a planilha não mistura a lista filtrada com despesas de toda a base.
 - [ ] Conferir margem “Não calculável” para receita zero ou legado ambíguo, inclusive nos gráficos e PDF do BI.
+- [ ] Lançar custo semelhante em frete e ciclo do mesmo ID e comprovar o aviso, confirmação obrigatória e ausência de alteração automática do histórico.
+- [ ] Repetir no sentido inverso e verificar IDs na aba `Possiveis_Duplicidades`, inclusive com dados vazios.
+- [ ] Cadastrar dois abastecimentos legítimos com mesmo valor, mas leituras de odômetro diferentes, sem falso bloqueio de duplicidade cruzada.
+- [ ] Atribuir despesa provisória semelhante a custo existente em outro destino; conferir exigência de confirmação e justificativa.
+- [ ] Tentar lançar duas vezes a mesma despesa não combustível em frete salvo e em frete ainda temporário; verificar prevenção de repetição imediata.
 - [ ] Tentar trocar o veículo de um frete que recebeu uma despesa provisória; confirmar bloqueio até que a atribuição seja estornada.
 - [ ] Simular dois fretes legados com um único financeiro de ciclo; conferir aviso e receita não duplicada.
 - [ ] Registrar adiantamento recebido real, saldo recebido e um pagamento parcial adicional; conferir valores por frete/ciclo.
