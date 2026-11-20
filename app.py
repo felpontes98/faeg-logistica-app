@@ -2068,26 +2068,37 @@ def _pdf_esc(txt):
     return s.encode("latin-1", "replace").decode("latin-1")
 
 
-def _compilar_pdf_pagina_unica(cmds):
-    stream_bytes = "\n".join(cmds).encode("latin-1", "replace")
-    compressed = zlib.compress(stream_bytes)
+def _compilar_pdf_paginas(paginas_cmds):
+    """Monta um PDF A4 com todas as páginas, sem descartar linhas de tabelas."""
+    if not paginas_cmds:
+        raise ValueError("O relatório PDF precisa ter ao menos uma página.")
 
-    objs = []
-    objs.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
-    objs.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
-    objs.append(
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-        b"/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>\nendobj\n"
-    )
-    objs.append(b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n")
-    objs.append(
-        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n"
-    )
-    objs.append(
-        f"6 0 obj\n<< /Length {len(compressed)} /Filter /FlateDecode >>\nstream\n".encode("ascii")
-        + compressed
-        + b"\nendstream\nendobj\n"
-    )
+    total_paginas = len(paginas_cmds)
+    ids_paginas = " ".join(f"{5 + 2 * i} 0 R" for i in range(total_paginas))
+    objs = [
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        f"2 0 obj\n<< /Type /Pages /Kids [{ids_paginas}] /Count {total_paginas} >>\nendobj\n".encode("ascii"),
+        b"3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n",
+        b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n",
+    ]
+
+    for i, cmds in enumerate(paginas_cmds):
+        id_pagina = 5 + 2 * i
+        id_conteudo = id_pagina + 1
+        comandos = list(cmds)
+        comandos.append(
+            f"BT /F1 8 Tf 0.40 0.46 0.52 rg 480 27 Td (Pagina {i + 1} de {total_paginas}) Tj ET"
+        )
+        compressed = zlib.compress("\n".join(comandos).encode("latin-1", "replace"))
+        objs.append(
+            f"{id_pagina} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            f"/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {id_conteudo} 0 R >>\nendobj\n".encode("ascii")
+        )
+        objs.append(
+            f"{id_conteudo} 0 obj\n<< /Length {len(compressed)} /Filter /FlateDecode >>\nstream\n".encode("ascii")
+            + compressed
+            + b"\nendstream\nendobj\n"
+        )
 
     out = io.BytesIO()
     out.write(b"%PDF-1.4\n")
@@ -2106,8 +2117,14 @@ def _compilar_pdf_pagina_unica(cmds):
     return out.getvalue()
 
 
+def _compilar_pdf_pagina_unica(cmds):
+    """Compatibilidade com relatórios que tenham apenas uma página."""
+    return _compilar_pdf_paginas([cmds])
+
+
 def gerar_pdf_relatorio(dados_resumo, despesas_lista):
     cmds = []
+    paginas = []
 
     def rect(x, y_top, w, h, r, g, b):
         y = 842 - y_top - h
@@ -2122,7 +2139,7 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
 
     rect(0, 0, 595, 76, 0.051, 0.149, 0.235)
     rect(0, 76, 595, 5, 0.953, 0.302, 0.145)
-    text(40, 34, "FAEG — GESTAO LOGISTICA E OPERACIONAL", size=15, bold=True, r=1, g=1, b=1)
+    text(40, 34, "FAEG - GESTAO LOGISTICA E OPERACIONAL", size=15, bold=True, r=1, g=1, b=1)
     text(
         40,
         54,
@@ -2168,7 +2185,7 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
     y += 26
     text(55, y + 4, "RESULTADO OPERACIONAL PARCIAL:", size=10, bold=True, r=1, g=1, b=1)
     text(390, y + 4, dados_resumo["resultado_fmt"], size=13, bold=True, r=1, g=1, b=1)
-    y += 34
+    y += 46  # Reserva espaço entre o painel escuro e os indicadores complementares.
 
     text(42, y, f"Custo por KM: {dados_resumo['custo_km_fmt']}", size=10, bold=True)
     text(250, y, f"Margem Operacional: {dados_resumo['margem_fmt']}", size=10, bold=True)
@@ -2193,7 +2210,25 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
     if not despesas_lista:
         text(46, y, "Nenhuma despesa lancada nesta viagem.", size=9, bold=False)
     else:
-        for idx_d, d in enumerate(despesas_lista[:22]):
+        for idx_d, d in enumerate(despesas_lista):
+            if y > 785:
+                paginas.append(cmds)
+                cmds = []
+                rect(0, 0, 595, 76, 0.051, 0.149, 0.235)
+                rect(0, 76, 595, 5, 0.953, 0.302, 0.145)
+                text(40, 35, "FAEG - DESPESAS DA VIAGEM (CONTINUACAO)", size=14, bold=True, r=1, g=1, b=1)
+                text(40, 55, f"Viagem: {dados_resumo['codigo']}  |  Frete: {dados_resumo['id_frete']}", size=10,
+                     r=0.671, g=0.808, b=0.882)
+                rect(40, 105, 515, 22, 0.914, 0.914, 0.914)
+                text(48, 120, "3. DETALHAMENTO DE DESPESAS DA VIAGEM (CONTINUACAO)", size=10, bold=True)
+                y = 152
+                rect(40, y - 12, 515, 18, 0.051, 0.149, 0.235)
+                text(46, y, "Categoria", size=8, bold=True, r=1, g=1, b=1)
+                text(175, y, "Descricao / Local", size=8, bold=True, r=1, g=1, b=1)
+                text(370, y, "Qtd", size=8, bold=True, r=1, g=1, b=1)
+                text(420, y, "Unitario", size=8, bold=True, r=1, g=1, b=1)
+                text(488, y, "Total", size=8, bold=True, r=1, g=1, b=1)
+                y += 18
             if idx_d % 2 == 1:
                 rect(40, y - 11, 515, 16, 0.965, 0.972, 0.985)
             text(46, y, str(d["tipo"])[:22], size=8)
@@ -2202,15 +2237,15 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
             text(420, y, d["unit_fmt"], size=8)
             text(488, y, d["total_fmt"], size=8, bold=True)
             y += 16
-            if y > 790:
-                break
 
-    return _compilar_pdf_pagina_unica(cmds)
+    paginas.append(cmds)
+    return _compilar_pdf_paginas(paginas)
 
 
 def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_categorias):
     """Gera PDF executivo consolidado do Painel Geral / BI Operacional FAEG."""
     cmds = []
+    paginas = []
 
     def rect(x, y_top, w, h, r, g, b):
         y = 842 - y_top - h
@@ -2223,9 +2258,38 @@ def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_cat
             f"BT {font} {size} Tf {r:.3f} {g:.3f} {b:.3f} rg {x:.1f} {y:.1f} Td ({_pdf_esc(txt)}) Tj ET"
         )
 
+    def pagina_continuacao(titulo):
+        nonlocal cmds
+        paginas.append(cmds)
+        cmds = []
+        rect(0, 0, 595, 76, 0.051, 0.149, 0.235)
+        rect(0, 76, 595, 5, 0.953, 0.302, 0.145)
+        text(40, 34, "FAEG - RELATORIO EXECUTIVO CONSOLIDADO (BI)", size=14, bold=True, r=1, g=1, b=1)
+        text(40, 54, f"Filtro aplicado: {resumo_geral['filtro_desc']}", size=9,
+             r=0.671, g=0.808, b=0.882)
+        rect(40, 103, 515, 22, 0.914, 0.914, 0.914)
+        text(48, 118, titulo, size=10, bold=True)
+        return 150
+
+    def cabecalho_ranking(y_linha):
+        rect(40, y_linha - 12, 515, 18, 0.051, 0.149, 0.235)
+        text(46, y_linha, "Cliente", size=8, bold=True, r=1, g=1, b=1)
+        text(245, y_linha, "Viagens", size=8, bold=True, r=1, g=1, b=1)
+        text(300, y_linha, "Receita", size=8, bold=True, r=1, g=1, b=1)
+        text(385, y_linha, "Despesas", size=8, bold=True, r=1, g=1, b=1)
+        text(470, y_linha, "Resultado", size=8, bold=True, r=1, g=1, b=1)
+        return y_linha + 18
+
+    def cabecalho_categorias(y_linha):
+        rect(40, y_linha - 12, 515, 18, 0.051, 0.149, 0.235)
+        text(46, y_linha, "Categoria de Despesa", size=8, bold=True, r=1, g=1, b=1)
+        text(330, y_linha, "Participacao (%)", size=8, bold=True, r=1, g=1, b=1)
+        text(455, y_linha, "Total Acumulado", size=8, bold=True, r=1, g=1, b=1)
+        return y_linha + 18
+
     rect(0, 0, 595, 76, 0.051, 0.149, 0.235)
     rect(0, 76, 595, 5, 0.953, 0.302, 0.145)
-    text(40, 34, "FAEG — RELATORIO EXECUTIVO CONSOLIDADO (BI)", size=14, bold=True, r=1, g=1, b=1)
+    text(40, 34, "FAEG - RELATORIO EXECUTIVO CONSOLIDADO (BI)", size=14, bold=True, r=1, g=1, b=1)
     text(
         40,
         54,
@@ -2262,19 +2326,15 @@ def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_cat
     text(48, y + 15, "2. DESEMPENHO POR CLIENTE (SEM RATEIO)", size=10, bold=True)
     y += 34
 
-    rect(40, y - 12, 515, 18, 0.051, 0.149, 0.235)
-    text(46, y, "Cliente", size=8, bold=True, r=1, g=1, b=1)
-    text(245, y, "Viagens", size=8, bold=True, r=1, g=1, b=1)
-    text(300, y, "Receita", size=8, bold=True, r=1, g=1, b=1)
-    text(385, y, "Despesas", size=8, bold=True, r=1, g=1, b=1)
-    text(470, y, "Resultado", size=8, bold=True, r=1, g=1, b=1)
-    y += 18
+    y = cabecalho_ranking(y)
 
     if not ranking_clientes:
         text(46, y, "Sem dados para exibir.", size=9)
         y += 18
     else:
-        for idx_c, rc in enumerate(ranking_clientes[:10]):
+        for idx_c, rc in enumerate(ranking_clientes):
+            if y > 785:
+                y = cabecalho_ranking(pagina_continuacao("2. DESEMPENHO POR CLIENTE (CONTINUACAO)"))
             if idx_c % 2 == 1:
                 rect(40, y - 11, 515, 16, 0.965, 0.972, 0.985)
             text(46, y, str(rc["cliente"])[:34], size=8)
@@ -2285,30 +2345,29 @@ def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_cat
             y += 16
 
     y += 14
-    rect(40, y, 515, 22, 0.914, 0.914, 0.914)
-    text(48, y + 15, "3. DESPESAS POR FRETE / CATEGORIA (SEM RATEIO)", size=10, bold=True)
-    y += 34
-
-    rect(40, y - 12, 515, 18, 0.051, 0.149, 0.235)
-    text(46, y, "Categoria de Despesa", size=8, bold=True, r=1, g=1, b=1)
-    text(330, y, "Participacao (%)", size=8, bold=True, r=1, g=1, b=1)
-    text(455, y, "Total Acumulado", size=8, bold=True, r=1, g=1, b=1)
-    y += 18
+    if y + 68 > 785:
+        y = pagina_continuacao("3. DESPESAS POR FRETE / CATEGORIA (SEM RATEIO)")
+    else:
+        rect(40, y, 515, 22, 0.914, 0.914, 0.914)
+        text(48, y + 15, "3. DESPESAS POR FRETE / CATEGORIA (SEM RATEIO)", size=10, bold=True)
+        y += 34
+    y = cabecalho_categorias(y)
 
     if not despesas_categorias:
         text(46, y, "Nenhuma despesa registrada no filtro atual.", size=9)
     else:
-        for idx_cat, dc in enumerate(despesas_categorias[:10]):
+        for idx_cat, dc in enumerate(despesas_categorias):
+            if y > 785:
+                y = cabecalho_categorias(pagina_continuacao("3. DESPESAS POR CATEGORIA (CONTINUACAO)"))
             if idx_cat % 2 == 1:
                 rect(40, y - 11, 515, 16, 0.965, 0.972, 0.985)
             text(46, y, str(dc["categoria"])[:42], size=8)
             text(340, y, dc["pct_fmt"], size=8)
             text(455, y, dc["total_fmt"], size=8, bold=True)
             y += 16
-            if y > 795:
-                break
 
-    return _compilar_pdf_pagina_unica(cmds)
+    paginas.append(cmds)
+    return _compilar_pdf_paginas(paginas)
 
 
 # ==============================================================================
@@ -2916,6 +2975,8 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 carregar_alertas_despesas_cruzadas.clear()
                 carregar_todos_abastecimentos.clear()
                 carregar_abastecimentos_veiculo.clear()
+                carregar_todos_recebimentos.clear()
+                carregar_recebimentos_viagem.clear()
                 st.toast(f"Viagem {codigo_digitado} salva com sucesso no Neon!", icon="✅")
                 st.rerun()
             else:
@@ -3039,6 +3100,9 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     carregar_todas_viagens_consulta.clear()
                     carregar_todas_despesas_ciclo.clear()
                     carregar_alertas_despesas_cruzadas.clear()
+                    # Código e ID do frete aparecem também nas exportações de recebimentos.
+                    carregar_todos_recebimentos.clear()
+                    carregar_recebimentos_viagem.clear()
                     st.toast(f"Alterações da viagem {codigo_digitado} atualizadas!", icon="✅")
                     st.rerun()
     except IntegrityError:
@@ -6005,20 +6069,26 @@ with st.container(border=True):
                         unsafe_allow_html=True,
                     )
 
-                with st.form("form_cad_mot", clear_on_submit=True):
+                # Chaves mudam apenas após sucesso ou troca de registro editado.
+                # Em erro de validação/duplicidade, todos os campos permanecem preenchidos.
+                prefixo_mot = f"cad_mot_{edit_mot_id or 'novo'}_{st.session_state.get('versao_cad_mot', 0)}"
+                with st.form("form_cad_mot", clear_on_submit=False):
                     mc1, mc2, mc3 = st.columns([2.6, 1.3, 1.3])
                     m_nome = mc1.text_input(
                         "Nome Completo *",
+                        key=f"{prefixo_mot}_nome",
                         placeholder="Ex: Carlos Eduardo Mendes",
                         value=mot_edit_obj["nome_completo"] if mot_edit_obj else "",
                     )
                     m_cpf = mc2.text_input(
                         "CPF *",
+                        key=f"{prefixo_mot}_cpf",
                         placeholder="000.000.000-00",
                         value=mot_edit_obj["cpf"] if mot_edit_obj else "",
                     )
                     m_tel = mc3.text_input(
                         "Telefone / WhatsApp",
+                        key=f"{prefixo_mot}_telefone",
                         placeholder="(11) 99999-9999",
                         value=(mot_edit_obj.get("telefone_contato") or "") if mot_edit_obj else "",
                     )
@@ -6026,6 +6096,7 @@ with st.container(border=True):
                     mc4, mc5, mc6, mc7 = st.columns([1.4, 0.9, 1.2, 1.7])
                     m_cnh = mc4.text_input(
                         "Número CNH *",
+                        key=f"{prefixo_mot}_cnh",
                         placeholder="00000000000",
                         value=mot_edit_obj["cnh_numero"] if mot_edit_obj else "",
                     )
@@ -6035,9 +6106,10 @@ with st.container(border=True):
                         if mot_edit_obj and mot_edit_obj.get("cnh_categoria") in cats_cnh
                         else 2
                     )
-                    m_cat = mc5.selectbox("Categoria", cats_cnh, index=idx_cat_m)
+                    m_cat = mc5.selectbox("Categoria", cats_cnh, index=idx_cat_m, key=f"{prefixo_mot}_categoria")
                     m_val_cnh = mc6.date_input(
                         "Validade CNH",
+                        key=f"{prefixo_mot}_validade_cnh",
                         value=mot_edit_obj.get("cnh_validade") if mot_edit_obj else None,
                         format="DD/MM/YYYY",
                     )
@@ -6047,7 +6119,7 @@ with st.container(border=True):
                         if mot_edit_obj and mot_edit_obj.get("vinculo") in vinculos_ops
                         else 0
                     )
-                    m_vinc = mc7.selectbox("Vínculo", vinculos_ops, index=idx_vinc)
+                    m_vinc = mc7.selectbox("Vínculo", vinculos_ops, index=idx_vinc, key=f"{prefixo_mot}_vinculo")
 
                     btn_txt_mot = "Atualizar Motorista" if mot_edit_obj else "Cadastrar Motorista"
                     if st.form_submit_button(btn_txt_mot, use_container_width=True):
@@ -6081,6 +6153,7 @@ with st.container(border=True):
                                         )
                                     db.commit()
                                 carregar_listas_base.clear()
+                                st.session_state["versao_cad_mot"] = st.session_state.get("versao_cad_mot", 0) + 1
                                 st.toast("Motorista salvo com sucesso!", icon="✅")
                                 st.rerun()
                             except IntegrityError:
@@ -6167,15 +6240,18 @@ with st.container(border=True):
                         unsafe_allow_html=True,
                     )
 
-                with st.form("form_cad_vei", clear_on_submit=True):
+                prefixo_vei = f"cad_vei_{edit_vei_id or 'novo'}_{st.session_state.get('versao_cad_vei', 0)}"
+                with st.form("form_cad_vei", clear_on_submit=False):
                     vc1, vc2, vc3 = st.columns([2.6, 1.2, 1.4])
                     v_desc = vc1.text_input(
                         "Descrição / Marca / Modelo *",
+                        key=f"{prefixo_vei}_descricao",
                         placeholder="Ex: Scania R450 Highline",
                         value=vei_edit_obj["descricao_marca"] if vei_edit_obj else "",
                     )
                     v_placa = vc2.text_input(
                         "Placa *",
+                        key=f"{prefixo_vei}_placa",
                         placeholder="ABC1D23",
                         value=vei_edit_obj["placa"] if vei_edit_obj else "",
                     )
@@ -6185,16 +6261,18 @@ with st.container(border=True):
                         if vei_edit_obj and vei_edit_obj.get("tipo_veiculo") in tipos_v
                         else 0
                     )
-                    v_tipo = vc3.selectbox("Tipo de Veículo", tipos_v, index=idx_tv)
+                    v_tipo = vc3.selectbox("Tipo de Veículo", tipos_v, index=idx_tv, key=f"{prefixo_vei}_tipo")
 
                     vc4, vc5, vc6, vc7 = st.columns([1.6, 1.0, 1.3, 1.3])
                     v_renavam = vc4.text_input(
                         "RENAVAM",
+                        key=f"{prefixo_vei}_renavam",
                         placeholder="00000000000",
                         value=(vei_edit_obj.get("renavam") or "") if vei_edit_obj else "",
                     )
                     v_ano = vc5.number_input(
                         "Ano",
+                        key=f"{prefixo_vei}_ano",
                         min_value=1980,
                         max_value=2035,
                         step=1,
@@ -6202,6 +6280,7 @@ with st.container(border=True):
                     )
                     v_cap_kg = vc6.number_input(
                         "Capacidade (KG)",
+                        key=f"{prefixo_vei}_capacidade_kg",
                         min_value=0.0,
                         step=500.0,
                         format="%.2f",
@@ -6209,6 +6288,7 @@ with st.container(border=True):
                     )
                     v_cap_m3 = vc7.number_input(
                         "Volume (m³)",
+                        key=f"{prefixo_vei}_capacidade_m3",
                         min_value=0.0,
                         step=5.0,
                         format="%.2f",
@@ -6247,6 +6327,7 @@ with st.container(border=True):
                                         )
                                     db.commit()
                                 carregar_listas_base.clear()
+                                st.session_state["versao_cad_vei"] = st.session_state.get("versao_cad_vei", 0) + 1
                                 st.toast("Veículo salvo com sucesso!", icon="✅")
                                 st.rerun()
                             except IntegrityError:
@@ -6333,15 +6414,18 @@ with st.container(border=True):
                         unsafe_allow_html=True,
                     )
 
-                with st.form("form_cad_cli", clear_on_submit=True):
+                prefixo_cli = f"cad_cli_{edit_cli_id or 'novo'}_{st.session_state.get('versao_cad_cli', 0)}"
+                with st.form("form_cad_cli", clear_on_submit=False):
                     cc1, cc2 = st.columns(2)
                     c_razao = cc1.text_input(
                         "Razão Social *",
+                        key=f"{prefixo_cli}_razao",
                         placeholder="Ex: Indústria Metalúrgica Suzano Ltda",
                         value=cli_edit_obj["razao_social"] if cli_edit_obj else "",
                     )
                     c_fantasia = cc2.text_input(
                         "Nome Fantasia",
+                        key=f"{prefixo_cli}_fantasia",
                         placeholder="Ex: MetalSuzano",
                         value=(cli_edit_obj.get("nome_fantasia") or "") if cli_edit_obj else "",
                     )
@@ -6349,16 +6433,19 @@ with st.container(border=True):
                     cc3, cc4, cc5 = st.columns([1.6, 1.4, 1.0])
                     c_doc = cc3.text_input(
                         "CNPJ / CPF *",
+                        key=f"{prefixo_cli}_doc",
                         placeholder="00.000.000/0001-00",
                         value=cli_edit_obj["cnpj_cpf"] if cli_edit_obj else "",
                     )
                     c_ie = cc4.text_input(
                         "Inscrição Estadual",
+                        key=f"{prefixo_cli}_ie",
                         placeholder="Isento ou número IE",
                         value=(cli_edit_obj.get("inscricao_estadual") or "") if cli_edit_obj else "",
                     )
                     c_prazo = cc5.number_input(
                         "Prazo Pgto (Dias)",
+                        key=f"{prefixo_cli}_prazo",
                         min_value=0,
                         step=5,
                         value=to_int(cli_edit_obj.get("prazo_pagamento_dias"), 30) if cli_edit_obj else 30,
@@ -6367,16 +6454,19 @@ with st.container(border=True):
                     cc6, cc7, cc8 = st.columns([1.6, 1.3, 1.8])
                     c_resp = cc6.text_input(
                         "Responsável",
+                        key=f"{prefixo_cli}_responsavel",
                         placeholder="Ex: Mariana Costa",
                         value=(cli_edit_obj.get("responsavel_comercial") or "") if cli_edit_obj else "",
                     )
                     c_tel = cc7.text_input(
                         "Telefone",
+                        key=f"{prefixo_cli}_telefone",
                         placeholder="(11) 4748-9000",
                         value=(cli_edit_obj.get("telefone_comercial") or "") if cli_edit_obj else "",
                     )
                     c_email = cc8.text_input(
                         "E-mail",
+                        key=f"{prefixo_cli}_email",
                         placeholder="contato@empresa.com.br",
                         value=(cli_edit_obj.get("email_financeiro") or "") if cli_edit_obj else "",
                     )
@@ -6384,21 +6474,25 @@ with st.container(border=True):
                     ce1, ce2, ce3, ce4 = st.columns([1.1, 2.7, 1.5, 0.7])
                     c_cep = ce1.text_input(
                         "CEP",
+                        key=f"{prefixo_cli}_cep",
                         placeholder="00000-000",
                         value=(cli_edit_obj.get("cep") or "") if cli_edit_obj else "",
                     )
                     c_end = ce2.text_input(
                         "Endereço Completo",
+                        key=f"{prefixo_cli}_endereco",
                         placeholder="Av. Principal, 1000 - Centro",
                         value=(cli_edit_obj.get("endereco_completo") or "") if cli_edit_obj else "",
                     )
                     c_cid = ce3.text_input(
                         "Cidade",
+                        key=f"{prefixo_cli}_cidade",
                         placeholder="Ex: Suzano",
                         value=(cli_edit_obj.get("cidade") or "") if cli_edit_obj else "",
                     )
                     c_uf = ce4.text_input(
                         "UF",
+                        key=f"{prefixo_cli}_uf",
                         max_chars=2,
                         placeholder="SP",
                         value=(cli_edit_obj.get("uf") or "") if cli_edit_obj else "",
@@ -6446,6 +6540,7 @@ with st.container(border=True):
                                         )
                                     db.commit()
                                 carregar_listas_base.clear()
+                                st.session_state["versao_cad_cli"] = st.session_state.get("versao_cad_cli", 0) + 1
                                 st.toast("Cliente salvo com sucesso!", icon="✅")
                                 st.rerun()
                             except IntegrityError:
@@ -6764,15 +6859,18 @@ with st.container(border=True):
                         unsafe_allow_html=True,
                     )
 
-                with st.form("form_cad_forn", clear_on_submit=True):
+                prefixo_forn = f"cad_forn_{edit_forn_id or 'novo'}_{st.session_state.get('versao_cad_forn', 0)}"
+                with st.form("form_cad_forn", clear_on_submit=False):
                     fn1, fn2 = st.columns(2)
                     f_razao = fn1.text_input(
                         "Razão Social",
+                        key=f"{prefixo_forn}_razao",
                         placeholder="Ex: Auto Posto Graal Ltda",
                         value=(forn_edit_obj.get("razao_social") or "") if forn_edit_obj else "",
                     )
                     f_fantasia = fn2.text_input(
                         "Nome Fantasia *",
+                        key=f"{prefixo_forn}_fantasia",
                         placeholder="Ex: Posto Graal Dutra",
                         value=forn_edit_obj["nome_fantasia"] if forn_edit_obj else "",
                     )
@@ -6780,6 +6878,7 @@ with st.container(border=True):
                     fc1, fc2 = st.columns(2)
                     f_cnpj = fc1.text_input(
                         "CNPJ",
+                        key=f"{prefixo_forn}_cnpj",
                         placeholder="00.000.000/0001-00",
                         value=(forn_edit_obj.get("cnpj") or "") if forn_edit_obj else "",
                     )
@@ -6788,16 +6887,19 @@ with st.container(border=True):
                         if forn_edit_obj and forn_edit_obj.get("categoria_servico") in CATEGORIAS_DESPESA_FORNECEDOR
                         else 0
                     )
-                    f_cat = fc2.selectbox("Categoria", CATEGORIAS_DESPESA_FORNECEDOR, index=idx_cat_f)
+                    f_cat = fc2.selectbox("Categoria", CATEGORIAS_DESPESA_FORNECEDOR,
+                                          index=idx_cat_f, key=f"{prefixo_forn}_categoria")
 
                     fc3, fc4 = st.columns([4, 1.5])
                     f_cid = fc3.text_input(
                         "Cidade",
+                        key=f"{prefixo_forn}_cidade",
                         placeholder="Ex: Resende",
                         value=(forn_edit_obj.get("cidade") or "") if forn_edit_obj else "",
                     )
                     f_uf = fc4.text_input(
                         "UF",
+                        key=f"{prefixo_forn}_uf",
                         max_chars=2,
                         placeholder="RJ",
                         value=(forn_edit_obj.get("uf") or "") if forn_edit_obj else "",
@@ -6833,6 +6935,7 @@ with st.container(border=True):
                                         )
                                     db.commit()
                                 carregar_listas_base.clear()
+                                st.session_state["versao_cad_forn"] = st.session_state.get("versao_cad_forn", 0) + 1
                                 st.toast("Fornecedor salvo com sucesso!", icon="✅")
                                 st.rerun()
                             except IntegrityError:
