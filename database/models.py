@@ -235,6 +235,9 @@ class ViagemDespesa(Base):
     valor_unitario = Column(Numeric(12, 2), nullable=False)
     valor_total = Column(Numeric(12, 2), nullable=False)
     data_despesa = Column(Date)
+    # Leitura feita no posto (Diesel/ARLA), independente dos odômetros da viagem.
+    # NULL significa que a leitura não foi informada; não substituir por zero.
+    odometro_abastecimento = Column(Integer, nullable=True)
 
     viagem = relationship("Viagem", back_populates="despesas")
     fornecedor = relationship("Fornecedor", back_populates="despesas")
@@ -257,6 +260,7 @@ def sincronizar_colunas_banco():
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_origem VARCHAR(120);",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_destino VARCHAR(120);",
         "ALTER TABLE ciclos_operacionais ADD COLUMN IF NOT EXISTS km_deslocamentos_operacionais NUMERIC(12, 2) DEFAULT 0;",
+        "ALTER TABLE viagens_despesas ADD COLUMN IF NOT EXISTS odometro_abastecimento INTEGER;",
         "ALTER TABLE viagens ALTER COLUMN rota_resumo TYPE VARCHAR(250);",
         "ALTER TABLE viagens ALTER COLUMN nfe_carga TYPE VARCHAR(120);",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_viagens_codigo_viagem ON viagens (codigo_viagem);",

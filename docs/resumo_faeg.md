@@ -44,7 +44,7 @@ Exemplos e critérios de aceite estão documentados em [Regras de negócio](regr
 | Agrupamento | Novo cadastro reutiliza ciclo existente pelo número; mantém negociação e cliente independentes em `fretes_financeiro`. **Ciclos históricos repetidos não foram migrados** |
 | Fechamento | A prévia compara os valores negociados com a soma dos fretes anteriores e identifica códigos de ciclo ausentes ou divergentes. O fechamento real de despesas e recebimentos ainda não está implementado |
 | Recebimentos | Adiantamento mais saldo passam a ser apresentados como **total previsto**, sem confundir com pagamento confirmado; falta criar registro de recebimentos efetivos |
-| KM e abastecimento | Etapa 2 mantém o KM manual do frete; Etapa 8 soma esses trechos no ciclo e adiciona deslocamentos operacionais informados uma vez por ciclo. O odômetro é independente; falta registro específico de abastecimentos |
+| KM e abastecimento | Etapa 2 mantém o KM manual do frete; Etapa 8 soma os trechos no ciclo e os deslocamentos operacionais. Na Etapa 7, despesas de Diesel/ARLA podem receber um odômetro próprio, sem duplicar custos e sem alterar os odômetros inicial/final |
 | Segurança | Não foi identificada autenticação ou autorização de usuários no código revisado |
 | Testes | Não havia suíte automatizada de testes no pacote recebido |
 
@@ -61,6 +61,6 @@ Na planilha de referência de setembro/2026, a auditoria apontou: linha 10 sem I
 
 ## Próxima versão
 
-A próxima etapa é validar a soma de KM entre vários fretes do mesmo ciclo no PostgreSQL de testes e conferir que a alteração dos deslocamentos operacionais não duplica valores. A gravação Excel, os recebimentos efetivos e o odômetro específico dos abastecimentos continuam pendentes, com proteção dos dados existentes.
+A próxima etapa é fazer uma rodada integrada de testes no PostgreSQL de testes: vínculo frete/ciclo, soma de KM, lançamentos de combustível com odômetro próprio e DRE sem duplicação. A gravação Excel, os recebimentos efetivos e um cadastro específico de abastecimentos por veículo continuam pendentes, com proteção dos dados existentes.
 
 Para apresentação geral e instalação, consulte o [README](../README.md). Para a arquitetura técnica, consulte [Arquitetura do banco](arquitetura_banco.md).

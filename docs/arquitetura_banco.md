@@ -19,7 +19,7 @@ O Streamlit (`app.py`) acessa o PostgreSQL por sessões SQLAlchemy criadas em `d
 | `ciclos_financeiro` | `id_ciclo` (também FK) | Valores legados do ciclo; mantidos para compatibilidade histórica |
 | `viagens` | `id_viagem` | Frete/viagem com código, motorista, veículo, rota e documentos; `id_ciclo` pode ser compartilhado |
 | `fretes_financeiro` | `id_viagem` (também FK) | **Nova tabela** com cliente, negociação, percentuais e parcelas específicos do frete |
-| `viagens_despesas` | `id_despesa` | Despesa ligada a `id_viagem`; fornecedor é opcional |
+| `viagens_despesas` | `id_despesa` | Despesa ligada a `id_viagem`; fornecedor e `odometro_abastecimento` são opcionais; a leitura do posto é independente do odômetro da viagem |
 
 ### Relacionamentos definidos
 
@@ -49,6 +49,7 @@ Nesta proposta, a tela de cadastro passa a funcionar da seguinte maneira:
 4. Registros históricos ainda sem linha em `fretes_financeiro` continuam sendo exibidos a partir de `ciclos_financeiro` e do cliente do ciclo. O histórico **não é migrado nem reagrupado automaticamente**.
 5. A prévia da planilha identifica linhas de frete, de fechamento, ciclos com vários fretes e ciclos com vários clientes. A rotina `database/conciliacao_planilha.py` audita separadamente os fechamentos: compara os valores com os fretes anteriores, sinaliza IDs ausentes/divergentes, distingue possíveis totais gerais e destaca fretes ainda sem fechamento. A **gravação Excel permanece bloqueada**.
 6. O cálculo da Etapa 8 soma `viagens.km_rota_planejado` de todos os fretes do ciclo, sem duplicar o frete aberto para edição, e acrescenta **uma única vez** `ciclos_operacionais.km_deslocamentos_operacionais`. O odômetro inicial/final continua separado da quilometragem planejada.
+7. O abastecimento de Diesel ou ARLA é uma despesa existente da Etapa 7, agora com a leitura opcional `odometro_abastecimento`. O registro não cria outra despesa e não interfere nos odômetros inicial/final da viagem. Futuramente, uma entidade específica poderá detalhar consumo, fornecedor e odômetro por veículo, mantendo o vínculo com o mesmo lançamento financeiro.
 
 **Limitação:** ciclos duplicados já existentes na base não são mesclados; isso exige migração específica, conferência e backup. Despesas compartilhadas, recebimentos efetivos e fechamento por ciclo ainda não foram implementados.
 
@@ -83,6 +84,7 @@ Os códigos de negócio devem ser gerados e validados no banco de forma segura p
 
 - `database/models.py` usa `Base.metadata.create_all()` e comandos manuais `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. **Na primeira abertura do app alterado, `create_all()` tentará criar a nova tabela `fretes_financeiro` no banco configurado.**
 - A atualização do cálculo de KM acrescenta a coluna `km_deslocamentos_operacionais` em `ciclos_operacionais` por meio de `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`; essa alteração de esquema ocorre na inicialização do aplicativo atualizado.
+- O controle do odômetro no abastecimento acrescenta `odometro_abastecimento INTEGER NULL` à tabela `viagens_despesas`; essa coluna também é criada automaticamente na inicialização da nova versão.
 - `app.py` chama `sincronizar_colunas_banco()` na inicialização.
 - `database/diagnostico_ciclos.py` pode ser executado separadamente com `python -m database.diagnostico_ciclos`. Esse diagnóstico **não inicializa o app nem migra o banco**: faz exclusivamente consultas SQL em transação `READ ONLY`, identifica IDs de ciclo duplicados e diferencia os valores legados dos financeiros individuais. O resultado é exibido no terminal como JSON.
 - A string de conexão é lida da variável `DATABASE_URL` após `load_dotenv()`.

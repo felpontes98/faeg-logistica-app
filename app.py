@@ -37,13 +37,13 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def inicializar_banco_uma_vez(schema_v=4):
+def inicializar_banco_uma_vez(schema_v=5):
     """Garante que todas as tabelas e colunas novas existam no Neon sem alterar dados."""
     sincronizar_colunas_banco()
     return True
 
 
-inicializar_banco_uma_vez(schema_v=4)
+inicializar_banco_uma_vez(schema_v=5)
 
 # ==============================================================================
 # LISTAS PADRONIZADAS DO SISTEMA
@@ -1130,6 +1130,8 @@ def carregar_todas_viagens_consulta():
                     "Quantidade": to_float(d.quantidade),
                     "Valor Unitário (R$)": to_float(d.valor_unitario),
                     "Valor Total (R$)": vt,
+                    "Data do Abastecimento": d.data_despesa if d.tipo_despesa in {"Posto de Combustível", "Abast. ARLA"} else None,
+                    "Odômetro no Abastecimento (km)": d.odometro_abastecimento,
                 }
             )
 
@@ -1231,6 +1233,8 @@ def carregar_despesas_viagem(id_viagem):
                 "quantidade": d.quantidade,
                 "valor_unitario": d.valor_unitario,
                 "valor_total": d.valor_total,
+                "odometro_abastecimento": d.odometro_abastecimento,
+                "data_despesa": d.data_despesa,
             }
             for d in session.query(ViagemDespesa)
             .filter_by(id_viagem=id_viagem)
@@ -1924,6 +1928,8 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                             quantidade=dt["quantidade"],
                             valor_unitario=dt["valor_unitario"],
                             valor_total=dt["valor_total"],
+                            odometro_abastecimento=dt.get("odometro_abastecimento"),
+                            data_despesa=dt.get("data_despesa"),
                         )
                     )
                 session.commit()
@@ -2912,6 +2918,34 @@ with st.container(border=True):
             st.markdown('<div style="padding-top:1.35rem;"></div>', unsafe_allow_html=True)
             btn_add_desp = st.button("Adicionar à Lista", use_container_width=True, key="btn_add_despesa")
 
+        # A leitura no posto pertence a ESTE abastecimento. Não substituir nem
+        # utilizar como odômetro inicial/final da viagem na Etapa 8.
+        eh_combustivel = tipo_desp in {"Posto de Combustível", "Abast. ARLA"}
+        odometro_abast = None
+        data_abastecimento = None
+        if eh_combustivel:
+            data_abastecimento = st.date_input(
+                "DATA DO ABASTECIMENTO",
+                value=date.today(),
+                format="DD/MM/YYYY",
+                key="desp_data_abastecimento",
+            )
+            inf_odometro = st.checkbox(
+                "Informar odômetro registrado no abastecimento",
+                value=False,
+                key="desp_informar_odometro",
+                help="Opcional. Este valor é registrado junto à despesa de Diesel/ARLA e não altera o fechamento do odômetro da operação.",
+            )
+            if inf_odometro:
+                odometro_abast = st.number_input(
+                    "ODÔMETRO NO ABASTECIMENTO (KM)",
+                    min_value=0,
+                    step=1,
+                    value=0,
+                    key="desp_odometro_abastecimento",
+                )
+            st.caption("A quantidade deve representar os litros abastecidos e o valor unitário, o preço por litro. A despesa será contada uma única vez.")
+
         if btn_add_desp:
             if unit_desp <= 0:
                 st.warning("Informe um valor unitário maior que R$ 0,00.")
@@ -2926,6 +2960,8 @@ with st.container(border=True):
                             "quantidade": round(qtd_desp, 2),
                             "valor_unitario": round(unit_desp, 2),
                             "valor_total": v_tot_item,
+                            "odometro_abastecimento": odometro_abast,
+                            "data_despesa": data_abastecimento,
                         }
                     )
                     st.toast("Despesa adicionada à lista temporária!", icon="🧾")
@@ -2941,6 +2977,8 @@ with st.container(border=True):
                                 quantidade=round(qtd_desp, 2),
                                 valor_unitario=round(unit_desp, 2),
                                 valor_total=v_tot_item,
+                                odometro_abastecimento=odometro_abast,
+                                data_despesa=data_abastecimento,
                             )
                         )
                         db.commit()
@@ -2963,6 +3001,8 @@ with st.container(border=True):
                     "quantidade": to_float(d["quantidade"]),
                     "valor_unitario": to_float(d["valor_unitario"]),
                     "valor_total": to_float(d["valor_total"]),
+                    "odometro_abastecimento": d.get("odometro_abastecimento"),
+                    "data_despesa": d.get("data_despesa"),
                 }
                 for idx, d in enumerate(st.session_state.get("despesas_temp", []))
             ]
@@ -2978,6 +3018,8 @@ with st.container(border=True):
                     "quantidade": to_float(d["quantidade"]),
                     "valor_unitario": to_float(d["valor_unitario"]),
                     "valor_total": to_float(d["valor_total"]),
+                    "odometro_abastecimento": d.get("odometro_abastecimento"),
+                    "data_despesa": d.get("data_despesa"),
                 }
                 for idx, d in enumerate(desps_db)
             ]
@@ -2994,6 +3036,10 @@ with st.container(border=True):
                     unsafe_allow_html=True,
                 )
                 col_t2.markdown(f"{item['descricao_detalhe']}")
+                if item.get("data_despesa"):
+                    col_t2.caption(f"Data do abastecimento: {item['data_despesa'].strftime('%d/%m/%Y')}")
+                if item.get("odometro_abastecimento") is not None:
+                    col_t2.caption(f"Odômetro no abastecimento: {item['odometro_abastecimento']} km")
                 col_t3.markdown(f"{item['quantidade']:.2f} × {fmt_brl(item['valor_unitario'])}")
                 col_t4.markdown(f"**{fmt_brl(item['valor_total'])}**")
                 if col_t5.button("🗑️", key=f"del_desp_{viagem_sel_id}_{item['idx']}", help="Remover despesa"):

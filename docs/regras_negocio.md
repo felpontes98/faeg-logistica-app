@@ -73,11 +73,13 @@ Manter três conceitos independentes:
 | --- | --- | --- |
 | KM planejado (Maps) | Frete / trechos do ciclo | Planejamento e análise operacional |
 | Odômetro saída e chegada (opcionais) | Fechamento do individual ou ciclo | Apurar percurso real e comparar com o planejado |
-| Odômetro no abastecimento (quando disponível) | Registro do abastecimento | Histórico do veículo, consumo e manutenção |
+| Odômetro no abastecimento (quando disponível) | Despesa de Diesel/ARLA lançada na Etapa 7 | Histórico do veículo, consumo e manutenção |
 
 Se saída e chegada forem preenchidos para o mesmo veículo e intervalo, **KM real do percurso = odômetro de chegada − odômetro de saída**. Validar que a chegada não é inferior à saída e que leituras pertencem ao veículo correto. Se uma leitura faltar, mostrar **“KM real não informado”**.
 
 Leituras de abastecimento podem ajudar a conferir o histórico e, quando houver duas leituras confiáveis consecutivas, calcular a distância entre abastecimentos. **Não presumir** que essa distância seja automaticamente igual ao KM do ciclo ou do frete: abastecimentos podem ocorrer no meio de vários serviços.
+
+Na implementação atual, a Etapa 7 oferece a **data e a leitura opcional do odômetro em cada lançamento de abastecimento** (`Posto de Combustível` ou `Abast. ARLA`). A leitura é gravada em `viagens_despesas.odometro_abastecimento` (nulo quando não informado); a data utiliza `viagens_despesas.data_despesa`. A quantidade representa litros, o unitário representa R$/L e o valor total permanece uma única despesa, sem criação de um segundo custo de combustível.
 
 ## RN-06 — Despesas e abastecimento
 
