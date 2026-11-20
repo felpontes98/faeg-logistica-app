@@ -27,6 +27,13 @@ def calcular_indicadores_abastecimentos(registros):
         linha["custo_por_km"] = None
         linha["observacao"] = ""
 
+        # O custo cancelado continua auditável, mas não participa do histórico
+        # de consumo nem interrompe a sequência válida do veículo.
+        if linha.get("cancelado"):
+            linha["observacao"] = "Lançamento cancelado: excluído dos indicadores."
+            saida.append(linha)
+            continue
+
         if linha["tipo_combustivel"] == "Diesel":
             id_veiculo = linha["id_veiculo"]
             anterior = anterior_diesel.get(id_veiculo)

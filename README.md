@@ -9,12 +9,13 @@ Sistema web de apoio ao controle operacional e financeiro da FAEG — Soluções
 - Cadastros de veículos, motoristas, clientes, locais e fornecedores.
 - Fretes com rota, documentos e negociação individual; agrupamento por ciclo operacional.
 - KM Individual/Ciclo preenchido manualmente na Etapa 2 e soma dos KM do ciclo na Etapa 8, acrescida de deslocamentos operacionais informados uma vez.
-- Odômetros de saída/chegada da operação, distintos das leituras de abastecimento. Na Etapa 7, **ODÔMETRO NO ABASTECIMENTO (KM)** é um campo numérico sempre visível, sem checkbox; `0` no formulário significa leitura não informada e é salvo como `NULL`.
-- Histórico de Diesel e ARLA por **veículo**, inclusive sem frete selecionado, com métricas indicativas de distância, km/L e R$/km entre registros consecutivos de Diesel.
-- Despesas financeiras por frete e **despesas compartilhadas por ciclo** registradas separadamente na Etapa 7, com cancelamento auditável e sem lançamento automático de combustível a partir do histórico do veículo.
+- Odômetros de saída/chegada da operação, distintos das leituras de abastecimento. Na Etapa 7, ao selecionar Diesel ou ARLA, **ODÔMETRO NO ABASTECIMENTO (KM)** aparece como campo numérico direto, sem checkbox; `0` significa leitura não informada (`NULL`).
+- **Um único formulário para despesas e abastecimentos** na Etapa 7: informar litros, preço e odômetro no mesmo lançamento. O custo é atribuído a **um frete, a um ciclo ou provisoriamente a um veículo**, sem duas áreas para cadastrar combustível.
+- Histórico de Diesel e ARLA por **veículo**, inclusive sem frete selecionado, preenchido pelo próprio lançamento de despesa. A área de histórico é **somente consulta**, com estimativas de distância, km/L e R$/km entre registros consecutivos de Diesel.
+- Despesas financeiras por frete, **despesas compartilhadas por ciclo** e **despesas ainda sem frete/ciclo em `veiculos_despesas`**. Os gastos provisórios não entram no DRE até futura atribuição explícita; transferência automática ainda não foi implementada.
 - Prévia financeira do ciclo na Etapa 8 e relatório de fechamento gerencial por ciclo na Etapa 9: soma receitas negociadas, despesas dos fretes e **uma única vez** os gastos compartilhados do ID Ciclo. O BI filtrável por frete/cliente exclui gastos compartilhados enquanto não existir critério de rateio aprovado.
 - Registro de recebimentos efetivamente confirmados por frete na Etapa 4, com histórico de cancelamentos, total recebido e saldo em aberto por frete e por ciclo. O Excel inclui `Recebimentos_Fretes`.
-- Exportação Excel com `Fechamento_Ciclos` (despesas dos fretes e compartilhadas em colunas distintas) e `Despesas_Ciclo` (lançamentos ativos e cancelados).
+- Exportação Excel com `Fechamento_Ciclos` (despesas dos fretes e compartilhadas em colunas distintas), `Despesas_Ciclo`, `Despesas_Veiculo_Pendentes` e `Abastecimentos_Veiculos` com origem e situação.
 - Prévia e auditoria da planilha Excel. **A importação com gravação no banco permanece bloqueada.**
 
 ## Tecnologia

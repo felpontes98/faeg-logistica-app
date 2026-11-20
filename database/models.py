@@ -46,6 +46,7 @@ class Veiculo(Base):
 
     viagens = relationship("Viagem", back_populates="veiculo")
     abastecimentos = relationship("Abastecimento", back_populates="veiculo")
+    despesas_provisorias = relationship("VeiculoDespesa", back_populates="veiculo")
 
 
 class Cliente(Base):
@@ -260,7 +261,7 @@ class ViagemDespesa(Base):
     tipo_despesa = Column(String(80), nullable=False)
     descricao_detalhe = Column(String(200))
     quantidade = Column(Numeric(12, 2), default=1.0)
-    valor_unitario = Column(Numeric(12, 2), nullable=False)
+    valor_unitario = Column(Numeric(12, 4), nullable=False)
     valor_total = Column(Numeric(12, 2), nullable=False)
     data_despesa = Column(Date)
     # Leitura feita no posto (Diesel/ARLA), independente dos odômetros da viagem.
@@ -269,6 +270,32 @@ class ViagemDespesa(Base):
 
     viagem = relationship("Viagem", back_populates="despesas")
     fornecedor = relationship("Fornecedor", back_populates="despesas")
+
+
+class VeiculoDespesa(Base):
+    """Gasto com veículo identificado, mas ainda sem frete/ciclo de destino.
+
+    Não entra em DRE até uma futura atribuição explícita, sem rateio automático.
+    """
+
+    __tablename__ = "veiculos_despesas"
+
+    id_despesa_veiculo = Column(Integer, primary_key=True, autoincrement=True)
+    id_veiculo = Column(Integer, ForeignKey("veiculos.id_veiculo"), nullable=False, index=True)
+    id_fornecedor = Column(Integer, ForeignKey("fornecedores.id_fornecedor"), nullable=True)
+    tipo_despesa = Column(String(80), nullable=False)
+    descricao_detalhe = Column(String(200))
+    quantidade = Column(Numeric(12, 2), nullable=False, default=1.0)
+    valor_unitario = Column(Numeric(12, 4), nullable=False)
+    valor_total = Column(Numeric(12, 2), nullable=False)
+    data_despesa = Column(Date, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    cancelado = Column(Boolean, nullable=False, default=False)
+    data_cancelamento = Column(Date)
+    motivo_cancelamento = Column(String(200))
+
+    veiculo = relationship("Veiculo", back_populates="despesas_provisorias")
+    fornecedor = relationship("Fornecedor")
 
 
 class CicloDespesa(Base):
@@ -282,7 +309,7 @@ class CicloDespesa(Base):
     tipo_despesa = Column(String(80), nullable=False)
     descricao_detalhe = Column(String(200))
     quantidade = Column(Numeric(12, 2), nullable=False, default=1.0)
-    valor_unitario = Column(Numeric(12, 2), nullable=False)
+    valor_unitario = Column(Numeric(12, 4), nullable=False)
     valor_total = Column(Numeric(12, 2), nullable=False)
     data_despesa = Column(Date, nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
@@ -295,10 +322,10 @@ class CicloDespesa(Base):
 
 
 class Abastecimento(Base):
-    """Histórico de Diesel/ARLA por veículo, independente de frete ou ciclo.
+    """Visão de consumo gerada pelo mesmo lançamento financeiro de combustível.
 
-    Não contabilizar automaticamente no DRE: despesas financeiras da viagem
-    ficam em viagens_despesas e eventual rateio ainda precisa ser definido.
+    As FKs indicam onde o custo foi lançado UMA ÚNICA VEZ. Esta tabela não
+    acrescenta custos à DRE e não exige uma segunda entrada na interface.
     """
 
     __tablename__ = "abastecimentos"
@@ -306,12 +333,18 @@ class Abastecimento(Base):
     id_abastecimento = Column(Integer, primary_key=True, autoincrement=True)
     id_veiculo = Column(Integer, ForeignKey("veiculos.id_veiculo"), nullable=False, index=True)
     id_fornecedor = Column(Integer, ForeignKey("fornecedores.id_fornecedor"), nullable=True)
+    id_despesa_viagem = Column(Integer, ForeignKey("viagens_despesas.id_despesa"), nullable=True, unique=True)
+    id_despesa_ciclo = Column(Integer, ForeignKey("ciclos_despesas.id_despesa_ciclo"), nullable=True, unique=True)
+    id_despesa_veiculo = Column(Integer, ForeignKey("veiculos_despesas.id_despesa_veiculo"), nullable=True, unique=True)
     data_abastecimento = Column(Date, nullable=False)
     tipo_combustivel = Column(String(20), nullable=False)
     odometro = Column(Integer, nullable=True)
     litros = Column(Numeric(12, 2), nullable=False)
     preco_litro = Column(Numeric(12, 4), nullable=False)
     valor_total = Column(Numeric(12, 2), nullable=False)
+    cancelado = Column(Boolean, nullable=False, default=False)
+    data_cancelamento = Column(Date)
+    motivo_cancelamento = Column(String(200))
 
     veiculo = relationship("Veiculo", back_populates="abastecimentos")
     fornecedor = relationship("Fornecedor", back_populates="abastecimentos")
@@ -336,6 +369,17 @@ def sincronizar_colunas_banco():
         "ALTER TABLE ciclos_operacionais ADD COLUMN IF NOT EXISTS km_deslocamentos_operacionais NUMERIC(12, 2) DEFAULT 0;",
         "ALTER TABLE viagens_despesas ADD COLUMN IF NOT EXISTS data_despesa DATE;",
         "ALTER TABLE viagens_despesas ADD COLUMN IF NOT EXISTS odometro_abastecimento INTEGER;",
+        "ALTER TABLE viagens_despesas ALTER COLUMN valor_unitario TYPE NUMERIC(12, 4);",
+        "ALTER TABLE ciclos_despesas ALTER COLUMN valor_unitario TYPE NUMERIC(12, 4);",
+        "ALTER TABLE abastecimentos ADD COLUMN IF NOT EXISTS id_despesa_viagem INTEGER REFERENCES viagens_despesas(id_despesa);",
+        "ALTER TABLE abastecimentos ADD COLUMN IF NOT EXISTS id_despesa_ciclo INTEGER REFERENCES ciclos_despesas(id_despesa_ciclo);",
+        "ALTER TABLE abastecimentos ADD COLUMN IF NOT EXISTS id_despesa_veiculo INTEGER REFERENCES veiculos_despesas(id_despesa_veiculo);",
+        "ALTER TABLE abastecimentos ADD COLUMN IF NOT EXISTS cancelado BOOLEAN NOT NULL DEFAULT FALSE;",
+        "ALTER TABLE abastecimentos ADD COLUMN IF NOT EXISTS data_cancelamento DATE;",
+        "ALTER TABLE abastecimentos ADD COLUMN IF NOT EXISTS motivo_cancelamento VARCHAR(200);",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_abast_origem_frete ON abastecimentos (id_despesa_viagem) WHERE id_despesa_viagem IS NOT NULL;",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_abast_origem_ciclo ON abastecimentos (id_despesa_ciclo) WHERE id_despesa_ciclo IS NOT NULL;",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_abast_origem_veiculo ON abastecimentos (id_despesa_veiculo) WHERE id_despesa_veiculo IS NOT NULL;",
         "ALTER TABLE viagens ALTER COLUMN rota_resumo TYPE VARCHAR(250);",
         "ALTER TABLE viagens ALTER COLUMN nfe_carga TYPE VARCHAR(120);",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_viagens_codigo_viagem ON viagens (codigo_viagem);",

@@ -73,27 +73,27 @@ Manter três conceitos independentes:
 | --- | --- | --- |
 | KM planejado (Maps) | Frete / trechos do ciclo | Planejamento e análise operacional |
 | Odômetro saída e chegada (opcionais) | Fechamento do individual ou ciclo | Apurar percurso real e comparar com o planejado |
-| Odômetro no abastecimento (quando disponível) | Registro independente de Diesel/ARLA por veículo na Etapa 7 | Histórico do veículo, consumo e manutenção |
+| Odômetro no abastecimento (quando disponível) | Campo numérico do lançamento único de Diesel/ARLA na Etapa 7 | Alimentar o histórico por veículo, consumo e manutenção |
 
 Se saída e chegada forem preenchidos para o mesmo veículo e intervalo, **KM real do percurso = odômetro de chegada − odômetro de saída**. Validar que a chegada não é inferior à saída e que leituras pertencem ao veículo correto. Se uma leitura faltar, mostrar **“KM real não informado”**.
 
 Leituras de abastecimento podem ajudar a conferir o histórico e, quando houver duas leituras confiáveis consecutivas, calcular a distância entre abastecimentos. **Não presumir** que essa distância seja automaticamente igual ao KM do ciclo ou do frete: abastecimentos podem ocorrer no meio de vários serviços.
 
-Na implementação preparada, a Etapa 7 contém um **histórico de abastecimentos independente de ID de frete**, identificado por `id_veiculo`. Cada registro de `abastecimentos` conserva a data, tipo (Diesel/ARLA), litros, preço por litro, total, fornecedor opcional e odômetro opcional. Pode ser registrado mesmo com **zero viagens** no banco. O campo numérico **ODÔMETRO NO ABASTECIMENTO (KM)** permanece sempre visível, sem checkbox; digitar `0` significa leitura não informada (`NULL`), nunca um odômetro real de zero. ARLA fica no histórico, mas não entra na estimativa de consumo de Diesel.
+Na implementação preparada, a Etapa 7 contém **um único formulário para registrar despesa**, inclusive combustível, e um **histórico de abastecimentos somente para consulta**, identificado por `id_veiculo`. Ao selecionar Diesel/ARLA, aparecem juntos litros, preço por litro e o campo numérico **ODÔMETRO NO ABASTECIMENTO (KM)**, sem checkbox. Digitar `0` significa leitura não informada (`NULL`), nunca um odômetro medido de zero. O registro do custo gera simultaneamente a linha operacional `abastecimentos`, sem segundo lançamento manual. Pode ser registrado com **zero viagens** no banco escolhendo o destino provisório "Veículo". ARLA fica no histórico, mas não entra na estimativa de consumo de Diesel.
 
 O indicador `KM entre abastecimentos` é a diferença positiva entre odômetros de **dois registros consecutivos de Diesel do mesmo veículo**. O `KM/L indicativo` divide essa distância pelos litros do abastecimento mais recente, e `R$/KM indicativo` divide seu valor total pela distância. Somente são estimativas úteis quando há histórico completo de abastecimentos de **tanque cheio**; abastecimento parcial, registro omitido ou odômetro inconsistente invalidam a interpretação de consumo real. Sem duas leituras válidas, exibir indicador **não disponível**, nunca `0 km/L` fictício.
 
-O campo legado `viagens_despesas.odometro_abastecimento` não é excluído (compatibilidade com eventuais registros da versão anterior), mas **novos lançamentos** de odômetro são feitos em `abastecimentos`. Nada é migrado ou duplicado automaticamente; a Etapa 8 apresenta apenas um resumo indicativo de consumo do veículo, separado do fechamento do frete/ciclo.
+O campo `viagens_despesas.odometro_abastecimento` não é excluído. Em novos lançamentos vinculados ao frete, a leitura é guardada nessa despesa e projetada no registro operacional `abastecimentos`, **pelo mesmo clique**, sem segunda entrada. Abastecimentos legados independentes são mantidos, sem migração ou reclassificação automática; a Etapa 8 apresenta apenas resumo indicativo de consumo do veículo, separado do fechamento financeiro.
 
 ## RN-06 — Despesas e abastecimento
 
 - Cada despesa deve ter categoria, descrição, data, valor e associação clara a um **frete individual** ou a **um ciclo**.
 - Despesa de uso comum no ciclo entra **uma vez** no fechamento consolidado, sem cópia integral em cada frete.
-- A Etapa 7 permite cadastrar despesas comuns em `ciclos_despesas`, referenciadas pelo `id_ciclo` já salvo. Cancelamentos preservam o lançamento e o motivo, retirando-o dos cálculos. A prevenção de cadastro idêntico dentro do mesmo ciclo não detecta por si só um lançamento manual duplicado entre um frete e o ciclo: exige conferência humana.
+- A Etapa 7 possui **um formulário único** para despesas: padrão **Frete atual**, opção **Ciclo inteiro** (`ciclos_despesas`, apenas ciclo já salvo), opção **Veículo sem frete/ciclo** (`veiculos_despesas`, pendente). Despesas provisórias não entram em DRE nem no BI até atribuição explícita futura. Cancelamentos de despesas comuns/provisórias preservam o histórico e o motivo. A prevenção de cadastro idêntico dentro do mesmo destino não substitui conferência manual contra duplicidades entre destinos.
 - Caso seja necessário mostrar custo individual de cada frete do ciclo, estabelecer antes um critério de rateio acordado (por exemplo, participação na receita ou quilômetros), identificando o valor rateado como estimativa gerencial. **O rateio ainda não foi definido.**
 - Um abastecimento deve registrar data, veículo, posto/fornecedor, litros, preço por litro, valor e odômetro quando disponível. Diesel e ARLA devem ser distinguíveis.
 - Evitar lançamento em duplicidade quando o abastecimento também aparece como despesa financeira.
-- O histórico operacional `abastecimentos` **não gera automaticamente** um lançamento financeiro em `viagens_despesas` ou `ciclos_despesas` nem entra no DRE; quando o custo pertencer claramente a um frete ou ao ciclo inteiro, registrar manualmente a despesa financeira no local correspondente, sem duplicá-la. O vínculo provisório de despesas a veículo sem frete/ciclo e a alocação automática ainda não estão implementados.
+- **Ao lançar o combustível uma única vez**, a aplicação grava a despesa financeira no destino escolhido e um reflexo operacional no histórico `abastecimentos`. **Só a despesa financeira de frete ou ciclo entra no respectivo DRE**, não a linha de abastecimento. Para veículo ainda sem destino, o custo fica provisoriamente pendente, fora do DRE; a **transferência posterior para um frete/ciclo ainda não está implementada**. Não lançar a mesma nota manualmente em destinos diferentes.
 
 ## RN-07 — Fechamento e resultado operacional
 
@@ -130,7 +130,8 @@ Campos ausentes não devem ser substituídos por datas atuais ou valores zero se
 
 - [x] Eduardo definiu a separação entre KM Individual/Ciclo, deslocamentos operacionais e total planejado. A implementação ainda precisa de teste integrado.
 - [x] Gastos comuns podem ser registrados uma vez por ID do ciclo, sem rateio automático (implementação pendente de testes).
-- [ ] A equipe decide se e como fará o rateio individual e como gerenciar despesas provisórias por veículo sem operação vinculada.
+- [x] Registro provisório de despesas sem operação identificada por veículo, fora do DRE (implementação pendente de testes).
+- [ ] A equipe decide como atribuir posteriormente despesas provisórias a fretes/ciclos, e se haverá rateio individual.
 - [ ] A equipe aprova a nomenclatura final das situações operacional e financeira.
 - [ ] São preparados cenários reais anonimizados para teste individual e por ciclo.
 - [ ] Todas as alterações preservam histórico já cadastrado após teste de migração.

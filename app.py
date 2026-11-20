@@ -25,6 +25,7 @@ from database.models import (
     Motorista,
     RecebimentoFrete,
     Veiculo,
+    VeiculoDespesa,
     Viagem,
     ViagemDespesa,
     sincronizar_colunas_banco,
@@ -42,13 +43,13 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def inicializar_banco_uma_vez(schema_v=9):
+def inicializar_banco_uma_vez(schema_v=10):
     """Garante que todas as tabelas e colunas novas existam no Neon sem alterar dados."""
     sincronizar_colunas_banco()
     return True
 
 
-inicializar_banco_uma_vez(schema_v=9)
+inicializar_banco_uma_vez(schema_v=10)
 
 # ==============================================================================
 # LISTAS PADRONIZADAS DO SISTEMA
@@ -1173,6 +1174,31 @@ def carregar_todas_despesas_ciclo():
 
 
 @st.cache_data(ttl=300, show_spinner=False)
+def carregar_todas_despesas_veiculo():
+    """Despesas ainda sem destino financeiro, preservadas por veículo."""
+    with SessionLocal() as session:
+        return [
+            {
+                "id_despesa_veiculo": d.id_despesa_veiculo,
+                "id_veiculo": d.id_veiculo,
+                "id_fornecedor": d.id_fornecedor,
+                "tipo_despesa": d.tipo_despesa,
+                "descricao_detalhe": d.descricao_detalhe,
+                "quantidade": float(d.quantidade),
+                "valor_unitario": float(d.valor_unitario),
+                "valor_total": float(d.valor_total),
+                "data_despesa": d.data_despesa,
+                "cancelado": bool(d.cancelado),
+                "data_cancelamento": d.data_cancelamento,
+                "motivo_cancelamento": d.motivo_cancelamento,
+            }
+            for d in session.query(VeiculoDespesa)
+            .order_by(VeiculoDespesa.data_despesa, VeiculoDespesa.id_despesa_veiculo)
+            .all()
+        ]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
 def carregar_todas_viagens_consulta():
     """Carrega visão consolidada de todas as viagens, ciclos, receitas e despesas para Consultas e BI."""
     with SessionLocal() as session:
@@ -1340,12 +1366,18 @@ def carregar_todos_abastecimentos():
                 "id_abastecimento": a.id_abastecimento,
                 "id_veiculo": a.id_veiculo,
                 "id_fornecedor": a.id_fornecedor,
+                "id_despesa_viagem": a.id_despesa_viagem,
+                "id_despesa_ciclo": a.id_despesa_ciclo,
+                "id_despesa_veiculo": a.id_despesa_veiculo,
                 "data_abastecimento": a.data_abastecimento,
                 "tipo_combustivel": a.tipo_combustivel,
                 "odometro": a.odometro,
                 "litros": float(a.litros),
                 "preco_litro": float(a.preco_litro),
                 "valor_total": float(a.valor_total),
+                "cancelado": bool(a.cancelado),
+                "data_cancelamento": a.data_cancelamento,
+                "motivo_cancelamento": a.motivo_cancelamento,
             }
             for a in session.query(Abastecimento)
             .order_by(Abastecimento.data_abastecimento, Abastecimento.id_abastecimento)
@@ -1360,7 +1392,29 @@ def carregar_abastecimentos_veiculo(id_veiculo):
     return [a for a in carregar_todos_abastecimentos() if a["id_veiculo"] == id_veiculo]
 
 
-def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None, recebimentos=None, despesas_ciclo=None):
+def registrar_abastecimento_do_lancamento(session, dados, campo_origem, id_origem):
+    """Projeção operacional do MESMO custo financeiro, sem segundo registro na tela.
+
+    A tabela abastecimentos é só histórico/consumo; NÃO integra o somatório do DRE.
+    """
+    if dados["tipo_despesa"] not in {"Posto de Combustível", "Abast. ARLA"}:
+        return
+    if not dados.get("id_veiculo_abast"):
+        raise ValueError("Abastecimento requer veículo identificado.")
+    session.add(Abastecimento(
+        id_veiculo=dados["id_veiculo_abast"],
+        id_fornecedor=dados.get("id_fornecedor") or None,
+        data_abastecimento=dados["data_despesa"],
+        tipo_combustivel="ARLA" if dados["tipo_despesa"] == "Abast. ARLA" else "Diesel",
+        odometro=dados.get("odometro_abastecimento"),
+        litros=dados["quantidade"],
+        preco_litro=dados["valor_unitario"],
+        valor_total=dados["valor_total"],
+        **{campo_origem: id_origem},
+    ))
+
+
+def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None, recebimentos=None, despesas_ciclo=None, despesas_veiculo=None):
     """Gera arquivo Excel (.xlsx) completo com todas as viagens, despesas e cadastros do sistema."""
     buf = io.BytesIO()
 
@@ -1423,6 +1477,12 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
             "Litros": a["litros"],
             "Preço por Litro (R$)": a["preco_litro"],
             "Valor Total (R$)": a["valor_total"],
+            "Despesa Frete ID": a.get("id_despesa_viagem"),
+            "Despesa Ciclo ID": a.get("id_despesa_ciclo"),
+            "Despesa Veículo ID": a.get("id_despesa_veiculo"),
+            "Situação": "Cancelado" if a.get("cancelado") else "Ativo",
+            "Data Cancelamento": a["data_cancelamento"].strftime("%d/%m/%Y") if a.get("data_cancelamento") else None,
+            "Motivo Cancelamento": a.get("motivo_cancelamento"),
             "KM entre Diesel": a["km_intervalo"],
             "KM/L Indicativo": a["km_por_litro"],
             "R$/KM Indicativo": a["custo_por_km"],
@@ -1431,7 +1491,9 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         for a in (abastecimentos or [])
     ], columns=[
         "Data", "Placa", "Veículo ID", "Tipo", "Odômetro (km)", "Litros",
-        "Preço por Litro (R$)", "Valor Total (R$)", "KM entre Diesel",
+        "Preço por Litro (R$)", "Valor Total (R$)",
+        "Despesa Frete ID", "Despesa Ciclo ID", "Despesa Veículo ID",
+        "Situação", "Data Cancelamento", "Motivo Cancelamento", "KM entre Diesel",
         "KM/L Indicativo", "R$/KM Indicativo", "Observação",
     ])
     df_ciclos = pd.DataFrame([
@@ -1511,6 +1573,28 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         "Categoria", "Descrição", "Fornecedor", "Quantidade", "Valor Unitário (R$)",
         "Valor Total (R$)", "Situação", "Data Cancelamento", "Motivo Cancelamento",
     ])
+    df_despesas_veiculo = pd.DataFrame([
+        {
+            "ID Despesa Veículo": d["id_despesa_veiculo"],
+            "Placa": veiculos_map.get(d["id_veiculo"], "Não informada"),
+            "ID Veículo": d["id_veiculo"],
+            "Data": d["data_despesa"].strftime("%d/%m/%Y"),
+            "Categoria": d["tipo_despesa"],
+            "Descrição": d["descricao_detalhe"],
+            "Fornecedor": fornecedores_map.get(d["id_fornecedor"], "Não informado"),
+            "Quantidade": d["quantidade"],
+            "Valor Unitário (R$)": d["valor_unitario"],
+            "Valor Total (R$)": d["valor_total"],
+            "Situação": "Cancelada" if d["cancelado"] else "Pendente de atribuição",
+            "Data Cancelamento": d["data_cancelamento"].strftime("%d/%m/%Y") if d["data_cancelamento"] else None,
+            "Motivo Cancelamento": d["motivo_cancelamento"],
+        }
+        for d in (despesas_veiculo or [])
+    ], columns=[
+        "ID Despesa Veículo", "Placa", "ID Veículo", "Data", "Categoria", "Descrição",
+        "Fornecedor", "Quantidade", "Valor Unitário (R$)", "Valor Total (R$)",
+        "Situação", "Data Cancelamento", "Motivo Cancelamento",
+    ])
 
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         df_viagens.to_excel(writer, sheet_name="Viagens_e_Ciclos", index=False)
@@ -1524,6 +1608,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         df_ciclos.to_excel(writer, sheet_name="Fechamento_Ciclos", index=False)
         df_recebimentos.to_excel(writer, sheet_name="Recebimentos_Fretes", index=False)
         df_despesas_ciclo.to_excel(writer, sheet_name="Despesas_Ciclo", index=False)
+        df_despesas_veiculo.to_excel(writer, sheet_name="Despesas_Veiculo_Pendentes", index=False)
 
     return buf.getvalue()
 
@@ -2200,10 +2285,9 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 session.add(financeiro_frete)
 
                 for dt in st.session_state.get("despesas_temp", []):
-                    session.add(
-                        ViagemDespesa(
+                    desp_salva = ViagemDespesa(
                             id_viagem=vg.id_viagem,
-                            id_fornecedor=dt["id_fornecedor"] if dt["id_fornecedor"] != 0 else None,
+                            id_fornecedor=dt.get("id_fornecedor") or None,
                             tipo_despesa=dt["tipo_despesa"],
                             descricao_detalhe=dt["descricao_detalhe"],
                             quantidade=dt["quantidade"],
@@ -2211,8 +2295,15 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                             valor_total=dt["valor_total"],
                             odometro_abastecimento=dt.get("odometro_abastecimento"),
                             data_despesa=dt.get("data_despesa"),
-                        )
                     )
+                    session.add(desp_salva)
+                    session.flush()
+                    if dt["tipo_despesa"] in {"Posto de Combustível", "Abast. ARLA"}:
+                        dados_abast_temp = dict(dt)
+                        dados_abast_temp["id_veiculo_abast"] = dt.get("id_veiculo_abast") or vg.id_veiculo
+                        registrar_abastecimento_do_lancamento(
+                            session, dados_abast_temp, "id_despesa_viagem", desp_salva.id_despesa,
+                        )
                 session.commit()
                 st.session_state["viagem_ativa_id"] = vg.id_viagem
                 st.session_state["loaded_viagem_id"] = None
@@ -2221,6 +2312,8 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 carregar_despesas_viagem.clear()
                 carregar_todas_viagens_consulta.clear()
                 carregar_todas_despesas_ciclo.clear()
+                carregar_todos_abastecimentos.clear()
+                carregar_abastecimentos_veiculo.clear()
                 st.toast(f"Viagem {codigo_digitado} salva com sucesso no Neon!", icon="✅")
                 st.rerun()
             else:
@@ -3310,156 +3403,49 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
-        with st.expander("⛽ Controle de abastecimentos por veículo (sem ID de frete)", expanded=True):
-            st.caption(
-                "Histórico independente da viagem: informe cada abastecimento de Diesel ou ARLA "
-                "mesmo que não exista frete cadastrado. Não altera os odômetros inicial/final da operação."
-            )
-            if not veiculos_db:
-                st.info("Cadastre primeiro um veículo na Etapa 11 para registrar abastecimentos.")
-            else:
-                abast_vei_ops = {
-                    v["id_veiculo"]: f"{v['descricao_marca']} ({v['placa']})"
-                    for v in veiculos_db
-                }
-                abast_ids = list(abast_vei_ops.keys())
-                veic_em_edicao = get_campo("vei_id", 0)
-                abast_indice = abast_ids.index(veic_em_edicao) if veic_em_edicao in abast_ids else 0
-                with st.form("form_abastecimento_veiculo", clear_on_submit=False):
-                    a1, a2, a3 = st.columns([2.1, 1.1, 1.2])
-                    with a1:
-                        abast_veiculo = st.selectbox(
-                            "VEÍCULO / PLACA *",
-                            options=abast_ids,
-                            index=abast_indice,
-                            format_func=lambda x: abast_vei_ops[x],
-                            key="abast_id_veiculo",
-                        )
-                    with a2:
-                        abast_tipo = st.selectbox("COMBUSTÍVEL *", ["Diesel", "ARLA"], key="abast_tipo")
-                    with a3:
-                        abast_data = st.date_input(
-                            "DATA *", value=date.today(), format="DD/MM/YYYY", key="abast_data"
-                        )
-
-                    # Campo de odômetro sempre visível, com o mesmo padrão
-                    # numérico de Litros e Preço: sem checkbox para habilitar.
-                    b1, b2, b3 = st.columns([1.2, 1.4, 1.6])
-                    with b1:
-                        abast_litros = st.number_input(
-                            "LITROS *", min_value=0.01, value=1.0, step=1.0,
-                            format="%.2f", key="abast_litros"
-                        )
-                    with b2:
-                        abast_preco = st.number_input(
-                            "PREÇO / LITRO (R$) *", min_value=0.0, value=0.0,
-                            step=0.10, format="%.4f", key="abast_preco"
-                        )
-                    with b3:
-                        abast_odo_digitado = st.number_input(
-                            "ODÔMETRO NO ABASTECIMENTO (KM)",
-                            min_value=0, value=0, step=1,
-                            key="abast_odometro",
-                            help="Digite diretamente a leitura do painel do veículo. Deixe 0 somente se não tiver essa informação.",
-                        )
-                        abast_odometro = int(abast_odo_digitado) if abast_odo_digitado > 0 else None
-                    abast_forn_ops = {0: "Não informado"}
-                    abast_forn_ops.update({
-                        f["id_fornecedor"]: f["nome_fantasia"] for f in fornecedores_db
-                    })
-                    abast_fornecedor = st.selectbox(
-                        "POSTO / FORNECEDOR", options=list(abast_forn_ops),
-                        format_func=lambda x: abast_forn_ops[x], key="abast_fornecedor"
-                    )
-
-                    st.caption(f"Valor calculado deste abastecimento: {fmt_brl(abast_litros * abast_preco)}")
-                    salvar_abastecimento = st.form_submit_button(
-                        "Registrar Abastecimento no Histórico do Veículo",
-                        use_container_width=True,
-                    )
-
-                if salvar_abastecimento:
-                    if abast_preco <= 0:
-                        st.warning("Informe o preço por litro maior que R$ 0,00.")
-                    else:
-                        valor_abast = round(abast_litros * abast_preco, 2)
-                        with SessionLocal() as session:
-                            # Impede envio repetido idêntico pelo botão sem copiar
-                            # o gasto para nenhuma despesa financeira de viagem.
-                            duplicado = (
-                                session.query(Abastecimento)
-                                .filter_by(
-                                    id_veiculo=abast_veiculo,
-                                    tipo_combustivel=abast_tipo,
-                                    data_abastecimento=abast_data,
-                                    odometro=abast_odometro,
-                                    litros=round(abast_litros, 2),
-                                    valor_total=valor_abast,
-                                )
-                                .first()
-                            )
-                            if duplicado is not None:
-                                st.warning("Este mesmo abastecimento já consta no histórico do veículo.")
-                            else:
-                                session.add(Abastecimento(
-                                    id_veiculo=abast_veiculo,
-                                    id_fornecedor=abast_fornecedor or None,
-                                    tipo_combustivel=abast_tipo,
-                                    data_abastecimento=abast_data,
-                                    odometro=abast_odometro,
-                                    litros=round(abast_litros, 2),
-                                    preco_litro=round(abast_preco, 4),
-                                    valor_total=valor_abast,
-                                ))
-                                session.commit()
-                                carregar_todos_abastecimentos.clear()
-                                carregar_abastecimentos_veiculo.clear()
-                                st.toast("Abastecimento registrado para o veículo!", icon="⛽")
-                                st.rerun()
-
-                historico_abast = carregar_abastecimentos_veiculo(abast_veiculo)
-                if historico_abast:
-                    st.markdown("**Histórico de abastecimentos deste veículo**")
-                    forn_abast_map = {
-                        f["id_fornecedor"]: f["nome_fantasia"] for f in fornecedores_db
-                    }
-                    st.dataframe(
-                        pd.DataFrame([
-                            {
-                                "Data": a["data_abastecimento"].strftime("%d/%m/%Y"),
-                                "Combustível": a["tipo_combustivel"],
-                                "Posto": forn_abast_map.get(a["id_fornecedor"], "Não informado"),
-                                "Odômetro (km)": a["odometro"],
-                                "Litros": a["litros"],
-                                "R$/L": a["preco_litro"],
-                                "Total (R$)": a["valor_total"],
-                                "KM entre Diesel": a["km_intervalo"],
-                                "KM/L (indicativo)": a["km_por_litro"],
-                                "R$/KM (indicativo)": a["custo_por_km"],
-                                "Observações": a["observacao"],
-                            }
-                            for a in reversed(historico_abast)
-                        ]),
-                        hide_index=True,
-                        use_container_width=True,
-                    )
-                    st.caption(
-                        "KM/L e R$/KM usam a distância desde o abastecimento anterior de Diesel "
-                        "do mesmo veículo e os litros/valor do abastecimento atual. São estimativas "
-                        "válidas apenas quando os registros são consecutivos, com odômetros comparáveis "
-                        "e tanque cheio; ARLA não participa do cálculo de KM/L."
-                    )
-                else:
-                    st.info("Ainda não há abastecimentos registrados para este veículo.")
-
-            st.info(
-                "O histórico de abastecimento é um controle do veículo e NÃO entra "
-                "automaticamente no DRE. Para atribuir custo a um frete, use também o "
-                "lançamento financeiro de despesa abaixo. Só a despesa é somada ao DRE; "
-                "não há duplicação automática."
-            )
+        st.info(
+            "Um único lançamento para qualquer despesa, inclusive Diesel/ARLA. "
+            "Selecione abaixo se pertence ao frete, ao ciclo inteiro ou provisoriamente "
+            "ao veículo. O histórico de consumo é preenchido pelo mesmo registro de combustível, "
+            "sem cadastrar o gasto novamente."
+        )
 
         st.markdown('<div class="sec-subtitle">Adicionar Nova Despesa</div>', unsafe_allow_html=True)
+
+        with SessionLocal() as db:
+            ciclos_destino = {
+                c.id_ciclo: c.nome_operacao
+                for c in db.query(CicloOperacional)
+                .order_by(CicloOperacional.nome_operacao, CicloOperacional.id_ciclo).all()
+                if not c.nome_operacao.startswith("Individual - ")
+            }
+        veiculos_destino = {
+            v["id_veiculo"]: f"{v['descricao_marca']} ({v['placa']})"
+            for v in veiculos_db
+        }
+        opcoes_destino = ["Frete atual (ID Frete)"]
+        if ciclos_destino:
+            opcoes_destino.append("Ciclo inteiro (ID Ciclo)")
+        if veiculos_destino:
+            opcoes_destino.append("Veículo (sem frete/ciclo definido)")
+        destino_desp = st.selectbox(
+            "VINCULAR ESTA DESPESA A *", opcoes_destino,
+            key="desp_destino_lancamento",
+            help="O frete atual é o padrão. Uma despesa compartilhada não é copiada para cada frete.",
+        )
+        ciclo_desp_id = None
+        veiculo_desp_id = None
+        if destino_desp.startswith("Ciclo inteiro"):
+            ciclo_desp_id = st.selectbox(
+                "ID CICLO QUE RECEBERÁ ESTE CUSTO *", options=list(ciclos_destino),
+                format_func=lambda x: f"{ciclos_destino[x]} (ID interno {x})",
+                key="desp_ciclo_destino_unico",
+            )
+        elif destino_desp.startswith("Veículo"):
+            veiculo_desp_id = st.selectbox(
+                "VEÍCULO / PLACA *", options=list(veiculos_destino),
+                format_func=lambda x: veiculos_destino[x], key="desp_veiculo_destino_unico",
+            )
 
         # Linha 1: Campos de seleção e descrição largos para evitar corte de opções/placeholders
         c_d1, c_d2, c_d3 = st.columns([2.1, 2.5, 2.1])
@@ -3482,81 +3468,158 @@ with st.container(border=True):
                 key="desp_forn",
             )
 
-        # Linha 2: Quantidade, Valor Unitário, Total Calculado e Botão Adicionar
-        c_d4, c_d5, c_d6, c_d7 = st.columns([1.2, 1.3, 2.2, 2.0])
-        with c_d4:
-            qtd_desp = st.number_input("QTD / L", min_value=0.01, value=1.00, step=1.0, format="%.2f", key="desp_qtd")
-        with c_d5:
-            unit_desp = st.number_input("UNITÁRIO (R$)", min_value=0.00, value=0.00, step=10.0, format="%.2f", key="desp_unit")
-        with c_d6:
-            total_previsto_desp = qtd_desp * unit_desp
-            st.markdown(
-                f'<div style="padding-top:1.55rem; font-weight:800; color:#0D263C; font-size:0.86rem;">'
-                f'VALOR TOTAL: <span style="color:#F34D25; font-size:1.2rem;">{fmt_brl(total_previsto_desp)}</span>'
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-        with c_d7:
-            st.markdown('<div style="padding-top:1.35rem;"></div>', unsafe_allow_html=True)
-            btn_add_desp = st.button("Adicionar à Lista", use_container_width=True, key="btn_add_despesa")
-
-        # A despesa financeira permanece ligada ao frete; o histórico de
-        # odômetro/consumo passou para abastecimentos por veículo acima.
         eh_combustivel = tipo_desp in {"Posto de Combustível", "Abast. ARLA"}
-        odometro_abast = None
-        data_abastecimento = None
-        if eh_combustivel:
-            data_abastecimento = st.date_input(
-                "DATA DO ABASTECIMENTO",
-                value=date.today(),
-                format="DD/MM/YYYY",
-                key="desp_data_abastecimento",
-            )
+        # Litros, preço e ODÔMETRO são campos numéricos da MESMA despesa.
+        # Nenhum segundo formulário de abastecimento é necessário.
+        c_d4, c_d5, c_d6 = st.columns([1.3, 1.4, 1.6])
+        with c_d4:
+            qtd_desp = st.number_input("LITROS *" if eh_combustivel else "QUANTIDADE *", min_value=0.01, value=1.00, step=1.0, format="%.2f", key="desp_qtd")
+        with c_d5:
+            unit_desp = st.number_input("PREÇO / LITRO (R$) *" if eh_combustivel else "UNITÁRIO (R$) *", min_value=0.00, value=0.00, step=0.1 if eh_combustivel else 10.0, format="%.4f" if eh_combustivel else "%.2f", key="desp_unit")
+        with c_d6:
+            odometro_digitado = st.number_input(
+                "ODÔMETRO NO ABASTECIMENTO (KM)", min_value=0, value=0,
+                step=1, key="desp_odometro_abastecimento",
+                help="Digite diretamente a leitura do painel. Deixe 0 para não informado.",
+            ) if eh_combustivel else 0
+        odometro_abast = int(odometro_digitado) if odometro_digitado > 0 else None
+
+        veiculo_abast_id = veiculo_desp_id
+        if eh_combustivel and destino_desp.startswith("Frete"):
+            veiculo_abast_id = get_campo("vei_id", 0)
             st.caption(
-                "A quantidade representa litros e o unitário, R$/L. "
-                "Para registrar odômetro e acompanhar KM/L, use o controle por veículo acima. "
-                "Este lançamento entra no custo financeiro somente deste frete."
+                "Abastecimento do veículo do frete atual: "
+                + veiculos_destino.get(veiculo_abast_id, "veículo ainda não selecionado na Etapa 1")
             )
+        elif eh_combustivel and destino_desp.startswith("Ciclo"):
+            veiculo_abast_id = st.selectbox(
+                "VEÍCULO QUE FOI ABASTECIDO *", options=list(veiculos_destino),
+                format_func=lambda x: veiculos_destino[x], key="desp_veiculo_abast_ciclo",
+            ) if veiculos_destino else None
+
+        data_despesa_unica = st.date_input(
+            "DATA DO ABASTECIMENTO *" if eh_combustivel else "DATA DA DESPESA *",
+            value=date.today(), format="DD/MM/YYYY", key="desp_data_unica",
+        )
+        total_previsto_desp = round(qtd_desp * unit_desp, 2)
+        st.markdown(f"**VALOR TOTAL DESTE LANÇAMENTO: {fmt_brl(total_previsto_desp)}**")
+        if destino_desp.startswith("Veículo"):
+            st.caption("Este gasto permanecerá pendente por veículo e NÃO comporá o resultado de fretes/ciclos até uma vinculação explícita futura.")
+        elif destino_desp.startswith("Ciclo"):
+            st.caption("Este custo será contabilizado uma única vez no resultado do ciclo, sem rateio por frete.")
+        btn_add_desp = st.button("Registrar Despesa", use_container_width=True, key="btn_add_despesa")
 
         if btn_add_desp:
             if unit_desp <= 0:
                 st.warning("Informe um valor unitário maior que R$ 0,00.")
+            elif eh_combustivel and not veiculo_abast_id:
+                st.warning("Selecione primeiro o veículo correto para registrar o abastecimento.")
             else:
                 v_tot_item = round(qtd_desp * unit_desp, 2)
-                if viagem_sel_id == 0:
-                    st.session_state.setdefault("despesas_temp", []).append(
-                        {
-                            "id_fornecedor": forn_sel,
-                            "tipo_despesa": tipo_desp,
-                            "descricao_detalhe": desc_desp.strip() or tipo_desp,
-                            "quantidade": round(qtd_desp, 2),
-                            "valor_unitario": round(unit_desp, 2),
-                            "valor_total": v_tot_item,
-                            "odometro_abastecimento": odometro_abast,
-                            "data_despesa": data_abastecimento,
-                        }
+                dados_desp = {
+                    "id_fornecedor": forn_sel or None,
+                    "tipo_despesa": tipo_desp,
+                    "descricao_detalhe": desc_desp.strip() or tipo_desp,
+                    "quantidade": round(qtd_desp, 2),
+                    "valor_unitario": round(unit_desp, 4 if eh_combustivel else 2),
+                    "valor_total": v_tot_item,
+                    "odometro_abastecimento": odometro_abast,
+                    "data_despesa": data_despesa_unica,
+                    "id_veiculo_abast": veiculo_abast_id if eh_combustivel else None,
+                }
+                if destino_desp.startswith("Frete") and viagem_sel_id == 0:
+                    pendentes = st.session_state.setdefault("despesas_temp", [])
+                    ja_existe = eh_combustivel and any(
+                        all(d.get(k) == dados_desp[k] for k in (
+                            "tipo_despesa", "data_despesa", "quantidade",
+                            "valor_total", "odometro_abastecimento", "id_veiculo_abast",
+                        )) for d in pendentes
                     )
+                    if ja_existe:
+                        st.warning("Este abastecimento já está na lista temporária do frete.")
+                        st.stop()
+                    pendentes.append(dados_desp)
                     st.toast("Despesa adicionada à lista temporária!", icon="🧾")
                     st.rerun()
                 else:
                     with SessionLocal() as db:
-                        db.add(
-                            ViagemDespesa(
+                        if destino_desp.startswith("Frete"):
+                            existente = db.query(ViagemDespesa).filter_by(
+                                id_viagem=viagem_sel_id,
+                                tipo_despesa=tipo_desp,
+                                data_despesa=data_despesa_unica,
+                                quantidade=dados_desp["quantidade"],
+                                valor_total=v_tot_item,
+                                odometro_abastecimento=odometro_abast,
+                            ).first() if eh_combustivel else None
+                            if existente:
+                                st.warning("Este abastecimento já consta nas despesas deste frete.")
+                                st.stop()
+                            desp_obj = ViagemDespesa(
                                 id_viagem=viagem_sel_id,
                                 id_fornecedor=forn_sel if forn_sel != 0 else None,
                                 tipo_despesa=tipo_desp,
                                 descricao_detalhe=desc_desp.strip() or tipo_desp,
                                 quantidade=round(qtd_desp, 2),
-                                valor_unitario=round(unit_desp, 2),
+                                valor_unitario=dados_desp["valor_unitario"],
                                 valor_total=v_tot_item,
                                 odometro_abastecimento=odometro_abast,
-                                data_despesa=data_abastecimento,
+                                data_despesa=data_despesa_unica,
                             )
-                        )
+                            db.add(desp_obj)
+                            db.flush()
+                            origem_campo, origem_id = "id_despesa_viagem", desp_obj.id_despesa
+                        elif destino_desp.startswith("Ciclo"):
+                            existente = db.query(CicloDespesa).filter_by(
+                                id_ciclo=ciclo_desp_id,
+                                tipo_despesa=tipo_desp,
+                                descricao_detalhe=dados_desp["descricao_detalhe"],
+                                data_despesa=data_despesa_unica,
+                                valor_total=v_tot_item,
+                                cancelado=False,
+                            ).first()
+                            if existente:
+                                st.warning("Esta despesa já consta no ciclo. Confira antes de registrá-la novamente.")
+                                st.stop()
+                            desp_obj = CicloDespesa(id_ciclo=ciclo_desp_id, **{
+                                k: dados_desp[k] for k in (
+                                    "id_fornecedor", "tipo_despesa", "descricao_detalhe",
+                                    "quantidade", "valor_unitario", "valor_total", "data_despesa",
+                                )
+                            })
+                            db.add(desp_obj)
+                            db.flush()
+                            origem_campo, origem_id = "id_despesa_ciclo", desp_obj.id_despesa_ciclo
+                        else:
+                            existente = db.query(VeiculoDespesa).filter_by(
+                                id_veiculo=veiculo_desp_id,
+                                tipo_despesa=tipo_desp,
+                                descricao_detalhe=dados_desp["descricao_detalhe"],
+                                data_despesa=data_despesa_unica,
+                                valor_total=v_tot_item,
+                                cancelado=False,
+                            ).first()
+                            if existente:
+                                st.warning("Esta despesa já está pendente para este veículo.")
+                                st.stop()
+                            desp_obj = VeiculoDespesa(id_veiculo=veiculo_desp_id, **{
+                                k: dados_desp[k] for k in (
+                                    "id_fornecedor", "tipo_despesa", "descricao_detalhe",
+                                    "quantidade", "valor_unitario", "valor_total", "data_despesa",
+                                )
+                            })
+                            db.add(desp_obj)
+                            db.flush()
+                            origem_campo, origem_id = "id_despesa_veiculo", desp_obj.id_despesa_veiculo
+                        registrar_abastecimento_do_lancamento(db, dados_desp, origem_campo, origem_id)
                         db.commit()
                     carregar_despesas_viagem.clear()
                     carregar_todas_viagens_consulta.clear()
-                    st.toast("Despesa gravada no banco!", icon="✅")
+                    carregar_todas_despesas_ciclo.clear()
+                    carregar_todas_despesas_veiculo.clear()
+                    carregar_todos_abastecimentos.clear()
+                    carregar_abastecimentos_veiculo.clear()
+                    st.toast("Despesa registrada uma única vez no destino escolhido!", icon="✅")
                     st.rerun()
 
         st.markdown('<div class="sec-subtitle">Despesas Lançadas na Viagem</div>', unsafe_allow_html=True)
@@ -3609,7 +3672,8 @@ with st.container(border=True):
                 )
                 col_t2.markdown(f"{item['descricao_detalhe']}")
                 if item.get("data_despesa"):
-                    col_t2.caption(f"Data do abastecimento: {item['data_despesa'].strftime('%d/%m/%Y')}")
+                    data_tipo_rotulo = "Data do abastecimento" if item["tipo_despesa"] in {"Posto de Combustível", "Abast. ARLA"} else "Data da despesa"
+                    col_t2.caption(f"{data_tipo_rotulo}: {item['data_despesa'].strftime('%d/%m/%Y')}")
                 if item.get("odometro_abastecimento") is not None:
                     col_t2.caption(f"Odômetro no abastecimento: {item['odometro_abastecimento']} km")
                 col_t3.markdown(f"{item['quantidade']:.2f} × {fmt_brl(item['valor_unitario'])}")
@@ -3622,10 +3686,18 @@ with st.container(border=True):
                         with SessionLocal() as db:
                             obj_d = db.query(ViagemDespesa).filter_by(id_despesa=item["id_despesa"]).first()
                             if obj_d:
+                                # O histórico operacional derivado deve sair junto
+                                # com a despesa removida: não deixar um abastecimento
+                                # órfão interferir no cálculo de consumo.
+                                db.query(Abastecimento).filter_by(
+                                    id_despesa_viagem=obj_d.id_despesa
+                                ).delete(synchronize_session=False)
                                 db.delete(obj_d)
                                 db.commit()
                         carregar_despesas_viagem.clear()
                         carregar_todas_viagens_consulta.clear()
+                        carregar_todos_abastecimentos.clear()
+                        carregar_abastecimentos_veiculo.clear()
                         st.toast("Despesa removida!", icon="🗑️")
                         st.rerun()
 
@@ -3639,102 +3711,21 @@ with st.container(border=True):
                 unsafe_allow_html=True,
             )
 
-        with st.expander("🧾 Despesas compartilhadas do ciclo — lançar uma única vez", expanded=False):
+        with st.expander("🧾 Histórico das despesas compartilhadas dos ciclos (consulta/cancelamento)", expanded=False):
             st.caption(
-                "Use para um gasto que atende ao ciclo inteiro e não pertence integralmente "
-                "a um único frete. O lançamento é vinculado ao ID do ciclo, sem copiar o "
-                "valor para cada frete e sem rateio automático."
+                "Para NOVOS lançamentos, use apenas 'Adicionar Nova Despesa' acima, "
+                "selecionando 'Ciclo inteiro'. Esta área permite conferir e cancelar lançamentos."
             )
-            with SessionLocal() as session:
-                ciclos_cadastrados = [
-                    (c.id_ciclo, c.nome_operacao)
-                    for c in session.query(CicloOperacional)
-                    .order_by(CicloOperacional.nome_operacao, CicloOperacional.id_ciclo)
-                    .all()
-                    if not c.nome_operacao.startswith("Individual - ")
-                ]
-
-            if not ciclos_cadastrados:
+            if not ciclos_destino:
                 st.info("Ainda não há ciclos salvos. Salve primeiro um frete do tipo Ciclo para registrar uma despesa compartilhada.")
             else:
-                ciclos_dict = {ident: nome for ident, nome in ciclos_cadastrados}
-                with st.form("form_despesa_compartilhada_ciclo", clear_on_submit=False):
-                    dc1, dc2, dc3 = st.columns([2.1, 1.5, 1.2])
-                    with dc1:
-                        ciclo_desp_id = st.selectbox(
-                            "CICLO OPERACIONAL *",
-                            options=list(ciclos_dict),
-                            format_func=lambda x: f"{ciclos_dict[x]} (ID interno {x})",
-                            key="desp_ciclo_id",
-                        )
-                    with dc2:
-                        tipo_desp_ciclo = st.selectbox(
-                            "TIPO DE DESPESA *", CATEGORIAS_DESPESA_FORNECEDOR,
-                            key="desp_ciclo_tipo",
-                        )
-                    with dc3:
-                        data_desp_ciclo = st.date_input(
-                            "DATA *", value=date.today(), format="DD/MM/YYYY", key="desp_ciclo_data",
-                        )
-
-                    dc4, dc5, dc6 = st.columns([1.7, 1.0, 1.1])
-                    with dc4:
-                        desc_desp_ciclo = st.text_input(
-                            "DESCRIÇÃO / LOCAL", max_chars=200, key="desp_ciclo_desc",
-                        )
-                    with dc5:
-                        qtd_desp_ciclo = st.number_input(
-                            "QUANTIDADE / LITROS *", min_value=0.01, value=1.0,
-                            step=1.0, format="%.2f", key="desp_ciclo_qtd",
-                        )
-                    with dc6:
-                        valor_unit_ciclo = st.number_input(
-                            "UNITÁRIO (R$) *", min_value=0.0, value=0.0,
-                            step=10.0, format="%.2f", key="desp_ciclo_unitario",
-                        )
-                    fornecedor_ciclo = st.selectbox(
-                        "FORNECEDOR / POSTO", options=list(forn_ops),
-                        format_func=lambda x: forn_ops[x], key="desp_ciclo_fornecedor",
-                    )
-                    total_desp_ciclo = round(qtd_desp_ciclo * valor_unit_ciclo, 2)
-                    st.caption(f"Valor total compartilhado: {fmt_brl(total_desp_ciclo)}")
-                    btn_salvar_desp_ciclo = st.form_submit_button(
-                        "Registrar Despesa Compartilhada do Ciclo", use_container_width=True,
-                    )
-
-                if btn_salvar_desp_ciclo:
-                    if valor_unit_ciclo <= 0:
-                        st.warning("Informe um valor unitário maior que R$ 0,00.")
-                    else:
-                        with SessionLocal() as session:
-                            existente = session.query(CicloDespesa).filter_by(
-                                id_ciclo=ciclo_desp_id,
-                                tipo_despesa=tipo_desp_ciclo,
-                                descricao_detalhe=desc_desp_ciclo.strip() or tipo_desp_ciclo,
-                                data_despesa=data_desp_ciclo,
-                                valor_total=total_desp_ciclo,
-                                cancelado=False,
-                            ).first()
-                            if existente:
-                                st.warning("Esta despesa já consta no ciclo. Confira antes de registrar novamente.")
-                            else:
-                                session.add(CicloDespesa(
-                                    id_ciclo=ciclo_desp_id,
-                                    id_fornecedor=fornecedor_ciclo or None,
-                                    tipo_despesa=tipo_desp_ciclo,
-                                    descricao_detalhe=desc_desp_ciclo.strip() or tipo_desp_ciclo,
-                                    quantidade=round(qtd_desp_ciclo, 2),
-                                    valor_unitario=round(valor_unit_ciclo, 2),
-                                    valor_total=total_desp_ciclo,
-                                    data_despesa=data_desp_ciclo,
-                                ))
-                                session.commit()
-                                carregar_todas_despesas_ciclo.clear()
-                                st.toast("Despesa compartilhada registrada uma única vez no ciclo!", icon="✅")
-                                st.rerun()
-
+                ciclo_historico_id = st.selectbox(
+                    "SELECIONE O CICLO PARA CONFERÊNCIA", options=list(ciclos_destino),
+                    format_func=lambda x: f"{ciclos_destino[x]} (ID interno {x})",
+                    key="desp_ciclo_historico_id",
+                )
                 historico_desp_ciclo = [
-                    d for d in carregar_todas_despesas_ciclo() if d["id_ciclo"] == ciclo_desp_id
+                    d for d in carregar_todas_despesas_ciclo() if d["id_ciclo"] == ciclo_historico_id
                 ]
                 if historico_desp_ciclo:
                     st.dataframe(
@@ -3771,18 +3762,130 @@ with st.container(border=True):
                                 else:
                                     with SessionLocal() as session:
                                         objeto = session.query(CicloDespesa).filter_by(
-                                            id_despesa_ciclo=dc_cancel_id, id_ciclo=ciclo_desp_id, cancelado=False,
+                                            id_despesa_ciclo=dc_cancel_id, id_ciclo=ciclo_historico_id, cancelado=False,
                                         ).first()
                                         if objeto:
                                             objeto.cancelado = True
                                             objeto.data_cancelamento = date.today()
                                             objeto.motivo_cancelamento = dc_cancel_motivo.strip()
+                                            for ab in session.query(Abastecimento).filter_by(id_despesa_ciclo=dc_cancel_id).all():
+                                                ab.cancelado = True
+                                                ab.data_cancelamento = date.today()
+                                                ab.motivo_cancelamento = dc_cancel_motivo.strip()
                                             session.commit()
                                     carregar_todas_despesas_ciclo.clear()
+                                    carregar_todos_abastecimentos.clear()
+                                    carregar_abastecimentos_veiculo.clear()
                                     st.toast("Despesa cancelada, mantendo histórico!", icon="🧾")
                                     st.rerun()
                 else:
                     st.info("Nenhuma despesa compartilhada neste ciclo.")
+
+        with st.expander("🚐 Despesas pendentes por veículo (somente consulta/cancelamento)", expanded=False):
+            st.caption(
+                "São despesas lançadas pelo formulário único sem ID Frete/Ciclo definido. "
+                "Ficam fora do DRE até a futura atribuição explícita; não são rateadas."
+            )
+            pendentes_veiculo = carregar_todas_despesas_veiculo()
+            st.metric(
+                "TOTAL DE DESPESAS AINDA NÃO ATRIBUÍDAS",
+                fmt_brl(sum(d["valor_total"] for d in pendentes_veiculo if not d["cancelado"])),
+            )
+            if pendentes_veiculo:
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            "ID": d["id_despesa_veiculo"],
+                            "Data": d["data_despesa"].strftime("%d/%m/%Y"),
+                            "Veículo": veiculos_destino.get(d["id_veiculo"], f"#{d['id_veiculo']}"),
+                            "Categoria": d["tipo_despesa"],
+                            "Descrição": d["descricao_detalhe"],
+                            "Valor (R$)": d["valor_total"],
+                            "Situação": "Cancelada" if d["cancelado"] else "Pendente",
+                        }
+                        for d in reversed(pendentes_veiculo)
+                    ]), hide_index=True, use_container_width=True,
+                )
+                pendentes_ativos = {d["id_despesa_veiculo"]: d for d in pendentes_veiculo if not d["cancelado"]}
+                if pendentes_ativos:
+                    with st.expander("Cancelar despesa provisória incorreta"):
+                        desp_veic_cancel_id = st.selectbox(
+                            "DESPESA PENDENTE", options=list(pendentes_ativos),
+                            format_func=lambda x: f"#{x} — {fmt_brl(pendentes_ativos[x]['valor_total'])}",
+                            key="desp_veic_cancel_id",
+                        )
+                        motivo_veic_cancel = st.text_input(
+                            "MOTIVO DO CANCELAMENTO *", key="desp_veic_cancel_motivo", max_chars=200,
+                        )
+                        if st.button("Confirmar Cancelamento da Despesa Pendente", key="desp_veic_cancel_btn"):
+                            if len(motivo_veic_cancel.strip()) < 6:
+                                st.warning("Informe um motivo com pelo menos 6 caracteres.")
+                            else:
+                                with SessionLocal() as db:
+                                    pendente_obj = db.query(VeiculoDespesa).filter_by(
+                                        id_despesa_veiculo=desp_veic_cancel_id, cancelado=False,
+                                    ).first()
+                                    if pendente_obj:
+                                        pendente_obj.cancelado = True
+                                        pendente_obj.data_cancelamento = date.today()
+                                        pendente_obj.motivo_cancelamento = motivo_veic_cancel.strip()
+                                        for ab in db.query(Abastecimento).filter_by(id_despesa_veiculo=desp_veic_cancel_id).all():
+                                            ab.cancelado = True
+                                            ab.data_cancelamento = date.today()
+                                            ab.motivo_cancelamento = motivo_veic_cancel.strip()
+                                        db.commit()
+                                carregar_todas_despesas_veiculo.clear()
+                                carregar_todos_abastecimentos.clear()
+                                carregar_abastecimentos_veiculo.clear()
+                                st.toast("Despesa provisória cancelada, mantendo histórico.", icon="🧾")
+                                st.rerun()
+            else:
+                st.info("Nenhuma despesa provisória vinculada a veículos.")
+
+        with st.expander("⛽ Histórico de abastecimentos e consumo (somente consulta)", expanded=False):
+            st.caption(
+                "Não é necessário lançar combustível aqui. Cada abastecimento aparece quando "
+                "a despesa de Diesel ou ARLA é registrada acima, com veículo e odômetro. "
+                "A tabela operacional não acrescenta valor ao DRE."
+            )
+            if not veiculos_destino:
+                st.info("Cadastre um veículo na Etapa 11 para obter o histórico.")
+            else:
+                consulta_veic_id = st.selectbox(
+                    "VEÍCULO PARA CONSULTA", options=list(veiculos_destino),
+                    format_func=lambda x: veiculos_destino[x], key="desp_historico_veiculo",
+                )
+                abast_historico = carregar_abastecimentos_veiculo(consulta_veic_id)
+                if not abast_historico:
+                    st.info("Nenhum abastecimento registrado para este veículo.")
+                else:
+                    st.dataframe(pd.DataFrame([
+                        {
+                            "Data": a["data_abastecimento"].strftime("%d/%m/%Y"),
+                            "Combustível": a["tipo_combustivel"],
+                            "Odômetro (km)": a["odometro"],
+                            "Litros": a["litros"],
+                            "Valor (R$)": a["valor_total"],
+                            "KM entre Diesel": a["km_intervalo"],
+                            "KM/L (indicativo)": a["km_por_litro"],
+                            "R$/KM (indicativo)": a["custo_por_km"],
+                            "Origem": (
+                                "Frete" if a.get("id_despesa_viagem") else
+                                "Ciclo" if a.get("id_despesa_ciclo") else
+                                "Veículo (pendente)" if a.get("id_despesa_veiculo") else
+                                "Histórico anterior"
+                            ),
+                            "Situação": "Cancelado" if a["cancelado"] else "Ativo",
+                            "Observação": a["observacao"],
+                        }
+                        for a in reversed(abast_historico)
+                    ]), hide_index=True, use_container_width=True)
+                    st.caption(
+                        "KM/L e R$/KM são apenas indicadores entre dois registros consecutivos "
+                        "de Diesel do mesmo veículo. Abastecimentos parciais, registros faltantes "
+                        "ou odômetros inconsistentes não permitem afirmar consumo real; "
+                        "ARLA não entra no KM/L."
+                    )
 
         render_navegacao_rodape(6, MENU_ITENS)
 
@@ -4023,6 +4126,7 @@ with st.container(border=True):
             fechamentos_ciclos=consolidar_ciclos(todas_vg_exp, carregar_todas_despesas_ciclo()),
             recebimentos=carregar_todos_recebimentos(),
             despesas_ciclo=carregar_todas_despesas_ciclo(),
+            despesas_veiculo=carregar_todas_despesas_veiculo(),
         )
 
         tab_rel_viagem, tab_rel_geral, tab_rel_ciclos = st.tabs(
@@ -4596,6 +4700,7 @@ with st.container(border=True):
                     fechamentos_ciclos=consolidar_ciclos(todas_viagens, carregar_todas_despesas_ciclo()),
                     recebimentos=carregar_todos_recebimentos(),
                     despesas_ciclo=carregar_todas_despesas_ciclo(),
+                    despesas_veiculo=carregar_todas_despesas_veiculo(),
                 )
                 st.download_button(
                     "📥 Exportar Excel (.xlsx)",
