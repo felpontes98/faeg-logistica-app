@@ -16,7 +16,7 @@ Pela leitura do código-fonte, o aplicativo contempla:
 - Consulta de registros, indicadores, gráficos e exportações em Excel e PDF.
 - Modelos de dados SQLAlchemy com nove tabelas e conexão PostgreSQL.
 
-**Pontos em revisão antes do uso operacional definitivo:** vínculo real entre vários fretes e um ciclo; importação e conciliação do Excel; recebimentos efetivos separados dos valores previstos; quilometragem por ciclo e abastecimento; autenticação e permissões. Veja [Plano de melhorias](docs/plano_melhorias.md).
+**Pontos em revisão antes do uso operacional definitivo:** vínculo real entre vários fretes e um ciclo; importação e conciliação do Excel; recebimentos efetivos separados dos valores previstos; quilometragem por ciclo e abastecimento; autenticação e permissões. Consulte os [Requisitos](docs/requisitos.md) e a [Arquitetura do banco](docs/arquitetura_banco.md) para os detalhes.
 
 ## Tecnologias
 
@@ -78,12 +78,11 @@ Requisitos: Python 3.11 (ambiente de desenvolvimento utilizado no projeto), VSCo
 | [Requisitos](docs/requisitos.md) | Requisitos funcionais e critérios de aceite |
 | [Regras de negócio](docs/regras_negocio.md) | Definições de frete, ciclo, pagamentos, despesas e quilometragem |
 | [Arquitetura do banco](docs/arquitetura_banco.md) | Esquema atual e mudanças propostas |
-| [Plano de melhorias](docs/plano_melhorias.md) | Problemas identificados e ordem de correção |
-| [Aplicação pelo VSCode](docs/guia_vscode.md) | Como incorporar esta documentação ao GitHub com segurança |
 
 ## Equipe e contribuição
 
 - **Felipe Pontes** — Desenvolvimento de software.
 - **Larissa do Espírito Santo** — Desenvolvimento de software.
+- **Eduardo Pontes** — Processos operacionais, planilha-base e validação das regras de negócio.
 
 Antes de uma mudança em banco ou cálculo financeiro, registrar a regra, criar um exemplo de teste e avaliar o impacto nos dados existentes. A atualização documental não modifica o código de produção nem os dados gravados.
