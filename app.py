@@ -2846,6 +2846,15 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
         )
         return
 
+    data_coleta = get_campo("data_coleta")
+    data_entrega = get_campo("data_entrega")
+    if data_coleta is not None and data_entrega is not None and data_entrega < data_coleta:
+        st.error(
+            "A data de entrega não pode ser anterior à data de coleta. "
+            "Confira as datas nas Etapas 5 e 6 antes de salvar a viagem."
+        )
+        return
+
     odo_ini = to_int(get_campo("odo_ini", 0))
     odo_fin = to_int(get_campo("odo_fin", 0))
     if odo_ini > 0 and odo_fin > 0 and odo_fin < odo_ini:
