@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 
 from database.connection import SessionLocal
+from database.atribuicao_despesas import atribuir_despesa_veiculo, estornar_atribuicao_veiculo
 from database.controle_abastecimentos import calcular_indicadores_abastecimentos
 from database.fechamento_ciclos import consolidar_ciclos
 from database.importador_planilha import preparar_previa_importacao_faeg
@@ -26,6 +27,7 @@ from database.models import (
     RecebimentoFrete,
     Veiculo,
     VeiculoDespesa,
+    VeiculoDespesaAtribuicao,
     Viagem,
     ViagemDespesa,
     sincronizar_colunas_banco,
@@ -43,13 +45,13 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def inicializar_banco_uma_vez(schema_v=10):
+def inicializar_banco_uma_vez(schema_v=11):
     """Garante que todas as tabelas e colunas novas existam no Neon sem alterar dados."""
     sincronizar_colunas_banco()
     return True
 
 
-inicializar_banco_uma_vez(schema_v=10)
+inicializar_banco_uma_vez(schema_v=11)
 
 # ==============================================================================
 # LISTAS PADRONIZADAS DO SISTEMA
@@ -1191,11 +1193,46 @@ def carregar_todas_despesas_veiculo():
                 "cancelado": bool(d.cancelado),
                 "data_cancelamento": d.data_cancelamento,
                 "motivo_cancelamento": d.motivo_cancelamento,
+                "id_despesa_viagem_destino": d.id_despesa_viagem_destino,
+                "id_despesa_ciclo_destino": d.id_despesa_ciclo_destino,
+                "data_atribuicao": d.data_atribuicao,
             }
             for d in session.query(VeiculoDespesa)
             .order_by(VeiculoDespesa.data_despesa, VeiculoDespesa.id_despesa_veiculo)
             .all()
         ]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_historico_atribuicoes_veiculo():
+    """Trilha de atribuições e estornos independente da situação atual."""
+    with SessionLocal() as session:
+        return [
+            {
+                "id_evento": e.id_evento,
+                "id_despesa_veiculo": e.id_despesa_veiculo,
+                "acao": e.acao,
+                "tipo_destino": e.tipo_destino,
+                "id_destino": e.id_destino,
+                "id_lancamento_destino": e.id_lancamento_destino,
+                "data_evento": e.data_evento,
+                "motivo": e.motivo,
+            }
+            for e in session.query(VeiculoDespesaAtribuicao)
+            .order_by(VeiculoDespesaAtribuicao.data_evento, VeiculoDespesaAtribuicao.id_evento)
+            .all()
+        ]
+
+
+def limpar_caches_atribuicao():
+    """Renova indicadores após movimentar um custo entre destinos."""
+    carregar_todas_despesas_veiculo.clear()
+    carregar_historico_atribuicoes_veiculo.clear()
+    carregar_todas_despesas_ciclo.clear()
+    carregar_despesas_viagem.clear()
+    carregar_todas_viagens_consulta.clear()
+    carregar_todos_abastecimentos.clear()
+    carregar_abastecimentos_veiculo.clear()
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -1284,6 +1321,7 @@ def carregar_todas_viagens_consulta():
             lista.append(
                 {
                     "id_viagem": vg.id_viagem,
+                    "id_veiculo": vg.id_veiculo,
                     "id_ciclo": vg.id_ciclo,
                     "codigo_viagem": cod_vg,
                     "seq_num": extrair_numero_sequencial(cod_vg, vg.id_viagem),
@@ -1361,6 +1399,9 @@ def carregar_despesas_viagem(id_viagem):
 def carregar_todos_abastecimentos():
     """Histórico de abastecimentos por veículo, independente das viagens."""
     with SessionLocal() as session:
+        origem_veiculos = {
+            d.id_despesa_veiculo: d for d in session.query(VeiculoDespesa).all()
+        }
         registros = [
             {
                 "id_abastecimento": a.id_abastecimento,
@@ -1369,6 +1410,19 @@ def carregar_todos_abastecimentos():
                 "id_despesa_viagem": a.id_despesa_viagem,
                 "id_despesa_ciclo": a.id_despesa_ciclo,
                 "id_despesa_veiculo": a.id_despesa_veiculo,
+                "origem_financeira": (
+                    "Frete" if a.id_despesa_viagem else
+                    "Ciclo" if a.id_despesa_ciclo else
+                    "Veículo → Frete" if (
+                        a.id_despesa_veiculo and origem_veiculos.get(a.id_despesa_veiculo)
+                        and origem_veiculos[a.id_despesa_veiculo].id_despesa_viagem_destino
+                    ) else
+                    "Veículo → Ciclo" if (
+                        a.id_despesa_veiculo and origem_veiculos.get(a.id_despesa_veiculo)
+                        and origem_veiculos[a.id_despesa_veiculo].id_despesa_ciclo_destino
+                    ) else
+                    "Veículo (pendente)" if a.id_despesa_veiculo else "Histórico anterior"
+                ),
                 "data_abastecimento": a.data_abastecimento,
                 "tipo_combustivel": a.tipo_combustivel,
                 "odometro": a.odometro,
@@ -1414,7 +1468,7 @@ def registrar_abastecimento_do_lancamento(session, dados, campo_origem, id_orige
     ))
 
 
-def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None, recebimentos=None, despesas_ciclo=None, despesas_veiculo=None):
+def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None, recebimentos=None, despesas_ciclo=None, despesas_veiculo=None, atribuicoes_veiculo=None):
     """Gera arquivo Excel (.xlsx) completo com todas as viagens, despesas e cadastros do sistema."""
     buf = io.BytesIO()
 
@@ -1480,6 +1534,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
             "Despesa Frete ID": a.get("id_despesa_viagem"),
             "Despesa Ciclo ID": a.get("id_despesa_ciclo"),
             "Despesa Veículo ID": a.get("id_despesa_veiculo"),
+            "Origem Financeira": a.get("origem_financeira"),
             "Situação": "Cancelado" if a.get("cancelado") else "Ativo",
             "Data Cancelamento": a["data_cancelamento"].strftime("%d/%m/%Y") if a.get("data_cancelamento") else None,
             "Motivo Cancelamento": a.get("motivo_cancelamento"),
@@ -1492,7 +1547,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
     ], columns=[
         "Data", "Placa", "Veículo ID", "Tipo", "Odômetro (km)", "Litros",
         "Preço por Litro (R$)", "Valor Total (R$)",
-        "Despesa Frete ID", "Despesa Ciclo ID", "Despesa Veículo ID",
+        "Despesa Frete ID", "Despesa Ciclo ID", "Despesa Veículo ID", "Origem Financeira",
         "Situação", "Data Cancelamento", "Motivo Cancelamento", "KM entre Diesel",
         "KM/L Indicativo", "R$/KM Indicativo", "Observação",
     ])
@@ -1585,7 +1640,15 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
             "Quantidade": d["quantidade"],
             "Valor Unitário (R$)": d["valor_unitario"],
             "Valor Total (R$)": d["valor_total"],
-            "Situação": "Cancelada" if d["cancelado"] else "Pendente de atribuição",
+            "Situação": (
+                "Cancelada" if d["cancelado"] else
+                "Atribuída ao frete" if d["id_despesa_viagem_destino"] else
+                "Atribuída ao ciclo" if d["id_despesa_ciclo_destino"] else
+                "Pendente de atribuição"
+            ),
+            "ID Despesa Frete Destino": d["id_despesa_viagem_destino"],
+            "ID Despesa Ciclo Destino": d["id_despesa_ciclo_destino"],
+            "Data Atribuição": d["data_atribuicao"].strftime("%d/%m/%Y") if d["data_atribuicao"] else None,
             "Data Cancelamento": d["data_cancelamento"].strftime("%d/%m/%Y") if d["data_cancelamento"] else None,
             "Motivo Cancelamento": d["motivo_cancelamento"],
         }
@@ -1593,7 +1656,24 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
     ], columns=[
         "ID Despesa Veículo", "Placa", "ID Veículo", "Data", "Categoria", "Descrição",
         "Fornecedor", "Quantidade", "Valor Unitário (R$)", "Valor Total (R$)",
-        "Situação", "Data Cancelamento", "Motivo Cancelamento",
+        "Situação", "ID Despesa Frete Destino", "ID Despesa Ciclo Destino",
+        "Data Atribuição", "Data Cancelamento", "Motivo Cancelamento",
+    ])
+    df_atribuicoes = pd.DataFrame([
+        {
+            "ID Evento": e["id_evento"],
+            "ID Despesa Veículo": e["id_despesa_veiculo"],
+            "Ação": e["acao"],
+            "Tipo Destino": e["tipo_destino"],
+            "ID Frete/Ciclo Interno": e["id_destino"],
+            "ID Lançamento Destino": e["id_lancamento_destino"],
+            "Data/Hora": e["data_evento"].strftime("%d/%m/%Y %H:%M"),
+            "Justificativa": e["motivo"],
+        }
+        for e in (atribuicoes_veiculo or [])
+    ], columns=[
+        "ID Evento", "ID Despesa Veículo", "Ação", "Tipo Destino",
+        "ID Frete/Ciclo Interno", "ID Lançamento Destino", "Data/Hora", "Justificativa",
     ])
 
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
@@ -1608,7 +1688,8 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         df_ciclos.to_excel(writer, sheet_name="Fechamento_Ciclos", index=False)
         df_recebimentos.to_excel(writer, sheet_name="Recebimentos_Fretes", index=False)
         df_despesas_ciclo.to_excel(writer, sheet_name="Despesas_Ciclo", index=False)
-        df_despesas_veiculo.to_excel(writer, sheet_name="Despesas_Veiculo_Pendentes", index=False)
+        df_despesas_veiculo.to_excel(writer, sheet_name="Despesas_Veiculo", index=False)
+        df_atribuicoes.to_excel(writer, sheet_name="Atribuicoes_Despesas", index=False)
 
     return buf.getvalue()
 
@@ -2319,6 +2400,28 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
             else:
                 vg = session.query(Viagem).filter_by(id_viagem=id_viagem_atual).first()
                 if vg:
+                    # Uma despesa provisória já atribuída ao frete pertence ao
+                    # veículo original. Trocar o veículo sem estornar a atribuição
+                    # tornaria o vínculo financeiro inconsistente.
+                    if vg.id_veiculo != vei_id:
+                        atribuicao_incompativel = (
+                            session.query(VeiculoDespesa)
+                            .join(
+                                ViagemDespesa,
+                                VeiculoDespesa.id_despesa_viagem_destino == ViagemDespesa.id_despesa,
+                            )
+                            .filter(
+                                ViagemDespesa.id_viagem == vg.id_viagem,
+                                VeiculoDespesa.id_veiculo != vei_id,
+                            )
+                            .first()
+                        )
+                        if atribuicao_incompativel:
+                            st.error(
+                                "Este frete possui despesa provisória atribuída ao veículo anterior. "
+                                "Estorne a atribuição na Etapa 7 antes de alterar o veículo do frete."
+                            )
+                            return
                     ciclo_destino = obter_ciclo_para_salvamento(
                         session,
                         tipo_viagem_val,
@@ -3428,6 +3531,7 @@ with st.container(border=True):
             opcoes_destino.append("Ciclo inteiro (ID Ciclo)")
         if veiculos_destino:
             opcoes_destino.append("Veículo (sem frete/ciclo definido)")
+        st.markdown("**Vínculo financeiro**")
         destino_desp = st.selectbox(
             "VINCULAR ESTA DESPESA A *", opcoes_destino,
             key="desp_destino_lancamento",
@@ -3447,7 +3551,8 @@ with st.container(border=True):
                 format_func=lambda x: veiculos_destino[x], key="desp_veiculo_destino_unico",
             )
 
-        # Linha 1: Campos de seleção e descrição largos para evitar corte de opções/placeholders
+        # Um só formulário: vínculo, dados financeiros e complemento operacional.
+        st.markdown("**Dados da despesa**")
         c_d1, c_d2, c_d3 = st.columns([2.1, 2.5, 2.1])
         with c_d1:
             tipo_desp = st.selectbox("TIPO DE DESPESA", CATEGORIAS_DESPESA_FORNECEDOR, key="desp_tipo")
@@ -3469,19 +3574,25 @@ with st.container(border=True):
             )
 
         eh_combustivel = tipo_desp in {"Posto de Combustível", "Abast. ARLA"}
-        # Litros, preço e ODÔMETRO são campos numéricos da MESMA despesa.
-        # Nenhum segundo formulário de abastecimento é necessário.
-        c_d4, c_d5, c_d6 = st.columns([1.3, 1.4, 1.6])
+        if eh_combustivel:
+            st.caption("Abastecimento: litros, preço e odômetro no mesmo lançamento financeiro.")
+        # Sem campos vazios em despesas que não são combustível.
+        colunas_valores = st.columns([1.3, 1.4, 1.6] if eh_combustivel else [1, 1])
+        c_d4, c_d5 = colunas_valores[:2]
         with c_d4:
             qtd_desp = st.number_input("LITROS *" if eh_combustivel else "QUANTIDADE *", min_value=0.01, value=1.00, step=1.0, format="%.2f", key="desp_qtd")
         with c_d5:
             unit_desp = st.number_input("PREÇO / LITRO (R$) *" if eh_combustivel else "UNITÁRIO (R$) *", min_value=0.00, value=0.00, step=0.1 if eh_combustivel else 10.0, format="%.4f" if eh_combustivel else "%.2f", key="desp_unit")
-        with c_d6:
-            odometro_digitado = st.number_input(
-                "ODÔMETRO NO ABASTECIMENTO (KM)", min_value=0, value=0,
-                step=1, key="desp_odometro_abastecimento",
-                help="Digite diretamente a leitura do painel. Deixe 0 para não informado.",
-            ) if eh_combustivel else 0
+        if eh_combustivel:
+            c_d6 = colunas_valores[2]
+            with c_d6:
+                odometro_digitado = st.number_input(
+                    "ODÔMETRO NO ABASTECIMENTO (KM)", min_value=0, value=0,
+                    step=1, key="desp_odometro_abastecimento",
+                    help="Digite diretamente a leitura do painel. Deixe 0 para não informado.",
+                )
+        else:
+            odometro_digitado = 0
         odometro_abast = int(odometro_digitado) if odometro_digitado > 0 else None
 
         veiculo_abast_id = veiculo_desp_id
@@ -3686,20 +3797,26 @@ with st.container(border=True):
                         with SessionLocal() as db:
                             obj_d = db.query(ViagemDespesa).filter_by(id_despesa=item["id_despesa"]).first()
                             if obj_d:
-                                # O histórico operacional derivado deve sair junto
-                                # com a despesa removida: não deixar um abastecimento
-                                # órfão interferir no cálculo de consumo.
-                                db.query(Abastecimento).filter_by(
-                                    id_despesa_viagem=obj_d.id_despesa
-                                ).delete(synchronize_session=False)
-                                db.delete(obj_d)
-                                db.commit()
-                        carregar_despesas_viagem.clear()
-                        carregar_todas_viagens_consulta.clear()
-                        carregar_todos_abastecimentos.clear()
-                        carregar_abastecimentos_veiculo.clear()
-                        st.toast("Despesa removida!", icon="🗑️")
-                        st.rerun()
+                                origem_provisoria = db.query(VeiculoDespesa).filter_by(
+                                    id_despesa_viagem_destino=obj_d.id_despesa
+                                ).first()
+                                if origem_provisoria:
+                                    st.warning(
+                                        "Esta despesa veio de um veículo. Para corrigir, use "
+                                        "'Estornar atribuição' no histórico de despesas do veículo, "
+                                        "preservando a rastreabilidade."
+                                    )
+                                else:
+                                    # Abastecimento derivado sai junto com o custo
+                                    # removido; não deixar medição órfã no histórico.
+                                    db.query(Abastecimento).filter_by(
+                                        id_despesa_viagem=obj_d.id_despesa
+                                    ).delete(synchronize_session=False)
+                                    db.delete(obj_d)
+                                    db.commit()
+                                    limpar_caches_atribuicao()
+                                    st.toast("Despesa removida!", icon="🗑️")
+                                    st.rerun()
 
             st.markdown(
                 f"""
@@ -3765,31 +3882,48 @@ with st.container(border=True):
                                             id_despesa_ciclo=dc_cancel_id, id_ciclo=ciclo_historico_id, cancelado=False,
                                         ).first()
                                         if objeto:
-                                            objeto.cancelado = True
-                                            objeto.data_cancelamento = date.today()
-                                            objeto.motivo_cancelamento = dc_cancel_motivo.strip()
-                                            for ab in session.query(Abastecimento).filter_by(id_despesa_ciclo=dc_cancel_id).all():
-                                                ab.cancelado = True
-                                                ab.data_cancelamento = date.today()
-                                                ab.motivo_cancelamento = dc_cancel_motivo.strip()
-                                            session.commit()
-                                    carregar_todas_despesas_ciclo.clear()
-                                    carregar_todos_abastecimentos.clear()
-                                    carregar_abastecimentos_veiculo.clear()
-                                    st.toast("Despesa cancelada, mantendo histórico!", icon="🧾")
-                                    st.rerun()
+                                            origem_provisoria = session.query(VeiculoDespesa).filter_by(
+                                                id_despesa_ciclo_destino=dc_cancel_id
+                                            ).first()
+                                            if origem_provisoria:
+                                                st.warning(
+                                                    "Esta despesa foi atribuída a partir de um veículo. "
+                                                    "Use 'Estornar atribuição' no histórico do veículo "
+                                                    "para devolver o valor ao estado pendente."
+                                                )
+                                            else:
+                                                objeto.cancelado = True
+                                                objeto.data_cancelamento = date.today()
+                                                objeto.motivo_cancelamento = dc_cancel_motivo.strip()
+                                                for ab in session.query(Abastecimento).filter_by(id_despesa_ciclo=dc_cancel_id).all():
+                                                    ab.cancelado = True
+                                                    ab.data_cancelamento = date.today()
+                                                    ab.motivo_cancelamento = dc_cancel_motivo.strip()
+                                                session.commit()
+                                                limpar_caches_atribuicao()
+                                                st.toast("Despesa cancelada, mantendo histórico!", icon="🧾")
+                                                st.rerun()
                 else:
                     st.info("Nenhuma despesa compartilhada neste ciclo.")
 
-        with st.expander("🚐 Despesas pendentes por veículo (somente consulta/cancelamento)", expanded=False):
+        with st.expander("🚐 Despesas do veículo — conferir, atribuir ou estornar", expanded=False):
             st.caption(
-                "São despesas lançadas pelo formulário único sem ID Frete/Ciclo definido. "
-                "Ficam fora do DRE até a futura atribuição explícita; não são rateadas."
+                "Registre novas despesas SOMENTE no formulário acima. Aqui é possível "
+                "vincular uma despesa provisória a frete/ciclo salvo ou estornar a atribuição. "
+                "O histórico original e o abastecimento do veículo são preservados."
             )
             pendentes_veiculo = carregar_todas_despesas_veiculo()
+            pendentes_ativos = {
+                d["id_despesa_veiculo"]: d for d in pendentes_veiculo
+                if not d["cancelado"] and not d["id_despesa_viagem_destino"] and not d["id_despesa_ciclo_destino"]
+            }
+            despesas_atribuidas = {
+                d["id_despesa_veiculo"]: d for d in pendentes_veiculo
+                if not d["cancelado"] and (d["id_despesa_viagem_destino"] or d["id_despesa_ciclo_destino"])
+            }
             st.metric(
                 "TOTAL DE DESPESAS AINDA NÃO ATRIBUÍDAS",
-                fmt_brl(sum(d["valor_total"] for d in pendentes_veiculo if not d["cancelado"])),
+                fmt_brl(sum(d["valor_total"] for d in pendentes_ativos.values())),
             )
             if pendentes_veiculo:
                 st.dataframe(
@@ -3801,13 +3935,83 @@ with st.container(border=True):
                             "Categoria": d["tipo_despesa"],
                             "Descrição": d["descricao_detalhe"],
                             "Valor (R$)": d["valor_total"],
-                            "Situação": "Cancelada" if d["cancelado"] else "Pendente",
+                            "Situação": (
+                                "Cancelada" if d["cancelado"] else
+                                "Atribuída a frete" if d["id_despesa_viagem_destino"] else
+                                "Atribuída a ciclo" if d["id_despesa_ciclo_destino"] else
+                                "Pendente"
+                            ),
+                            "Data Atribuição": d["data_atribuicao"].strftime("%d/%m/%Y") if d["data_atribuicao"] else None,
                         }
                         for d in reversed(pendentes_veiculo)
                     ]), hide_index=True, use_container_width=True,
                 )
-                pendentes_ativos = {d["id_despesa_veiculo"]: d for d in pendentes_veiculo if not d["cancelado"]}
                 if pendentes_ativos:
+                    with st.expander("🔗 Atribuir despesa pendente a um frete ou ciclo", expanded=False):
+                        atribuir_id = st.selectbox(
+                            "DESPESA DE ORIGEM *", options=list(pendentes_ativos),
+                            format_func=lambda x: (
+                                f"#{x} — {veiculos_destino.get(pendentes_ativos[x]['id_veiculo'], '-')} "
+                                f"— {fmt_brl(pendentes_ativos[x]['valor_total'])}"
+                            ), key="atribuir_desp_veiculo_id",
+                        )
+                        atribuir_origem = pendentes_ativos[atribuir_id]
+                        atribuir_tipo = st.selectbox(
+                            "DESTINO FINANCEIRO *", ["Frete", "Ciclo"], key="atribuir_desp_tipo",
+                        )
+                        viagens_disponiveis, _ = carregar_todas_viagens_consulta()
+                        viagens_compativeis = [
+                            v for v in viagens_disponiveis if v["id_veiculo"] == atribuir_origem["id_veiculo"]
+                        ]
+                        if atribuir_tipo == "Frete":
+                            opcoes_atribuir = {
+                                v["id_viagem"]: f"{v['id_frete']} / {v['codigo_viagem']} — {v['cliente']}"
+                                for v in viagens_compativeis
+                            }
+                        else:
+                            opcoes_atribuir = {
+                                v["id_ciclo"]: f"{ciclos_destino[v['id_ciclo']]} (ID {v['id_ciclo']})"
+                                for v in viagens_compativeis
+                                if v["tipo_viagem"] == "Ciclo" and v["id_ciclo"] in ciclos_destino
+                            }
+                        if not opcoes_atribuir:
+                            st.info(
+                                "Não há destino compatível com este veículo. Salve antes um "
+                                "frete/ciclo que utilize a mesma placa. Nenhum custo será transferido."
+                            )
+                        else:
+                            atribuir_destino_id = st.selectbox(
+                                "ID DE DESTINO *", options=list(opcoes_atribuir),
+                                format_func=lambda x: opcoes_atribuir[x],
+                                key=f"atribuir_desp_destino_{atribuir_tipo}",
+                            )
+                            atribuir_motivo = st.text_input(
+                                "JUSTIFICATIVA DA ATRIBUIÇÃO *", max_chars=200,
+                                key="atribuir_desp_motivo",
+                                help="Descreva por que este custo pertence ao destino escolhido.",
+                            )
+                            st.caption(
+                                "Ao confirmar, o valor passará do estado pendente ao resultado do "
+                                f"{atribuir_tipo.lower()} selecionado. O histórico do abastecimento "
+                                "não será recriado nem somado duas vezes."
+                            )
+                            if st.button("Confirmar Atribuição", key="atribuir_desp_confirmar"):
+                                try:
+                                    with SessionLocal() as db:
+                                        atribuir_despesa_veiculo(
+                                            db, atribuir_id, atribuir_tipo,
+                                            atribuir_destino_id, atribuir_motivo,
+                                        )
+                                        db.commit()
+                                except ValueError as exc:
+                                    st.warning(str(exc))
+                                except Exception:
+                                    st.error("Não foi possível atribuir a despesa. Nenhuma transferência foi confirmada.")
+                                else:
+                                    limpar_caches_atribuicao()
+                                    st.toast("Despesa atribuída ao destino, com histórico preservado!", icon="✅")
+                                    st.rerun()
+
                     with st.expander("Cancelar despesa provisória incorreta"):
                         desp_veic_cancel_id = st.selectbox(
                             "DESPESA PENDENTE", options=list(pendentes_ativos),
@@ -3824,7 +4028,8 @@ with st.container(border=True):
                                 with SessionLocal() as db:
                                     pendente_obj = db.query(VeiculoDespesa).filter_by(
                                         id_despesa_veiculo=desp_veic_cancel_id, cancelado=False,
-                                    ).first()
+                                        id_despesa_viagem_destino=None, id_despesa_ciclo_destino=None,
+                                    ).with_for_update().first()
                                     if pendente_obj:
                                         pendente_obj.cancelado = True
                                         pendente_obj.data_cancelamento = date.today()
@@ -3834,11 +4039,57 @@ with st.container(border=True):
                                             ab.data_cancelamento = date.today()
                                             ab.motivo_cancelamento = motivo_veic_cancel.strip()
                                         db.commit()
-                                carregar_todas_despesas_veiculo.clear()
-                                carregar_todos_abastecimentos.clear()
-                                carregar_abastecimentos_veiculo.clear()
-                                st.toast("Despesa provisória cancelada, mantendo histórico.", icon="🧾")
+                                        limpar_caches_atribuicao()
+                                        st.toast("Despesa provisória cancelada, mantendo histórico.", icon="🧾")
+                                        st.rerun()
+
+                if despesas_atribuidas:
+                    with st.expander("↩️ Estornar atribuição e devolver a pendente", expanded=False):
+                        estornar_id = st.selectbox(
+                            "DESPESA ATRIBUÍDA *", options=list(despesas_atribuidas),
+                            format_func=lambda x: (
+                                f"#{x} — {fmt_brl(despesas_atribuidas[x]['valor_total'])} "
+                                f"— {'Frete' if despesas_atribuidas[x]['id_despesa_viagem_destino'] else 'Ciclo'}"
+                            ), key="estornar_desp_veiculo_id",
+                        )
+                        estornar_motivo = st.text_input(
+                            "JUSTIFICATIVA DO ESTORNO *", max_chars=200,
+                            key="estornar_desp_motivo",
+                        )
+                        st.caption(
+                            "O custo deixará o resultado do destino e voltará a ficar pendente "
+                            "no veículo. O histórico operacional de abastecimento não será "
+                            "duplicado. A movimentação será registrada para auditoria."
+                        )
+                        if st.button("Confirmar Estorno da Atribuição", key="estornar_desp_confirmar"):
+                            try:
+                                with SessionLocal() as db:
+                                    estornar_atribuicao_veiculo(db, estornar_id, estornar_motivo)
+                                    db.commit()
+                            except ValueError as exc:
+                                st.warning(str(exc))
+                            except Exception:
+                                st.error("Não foi possível estornar a atribuição. Nenhuma mudança foi confirmada.")
+                            else:
+                                limpar_caches_atribuicao()
+                                st.toast("Atribuição estornada; despesa voltou a pendente!", icon="✅")
                                 st.rerun()
+
+                historico_movimentacoes = carregar_historico_atribuicoes_veiculo()
+                if historico_movimentacoes:
+                    st.markdown("**Histórico de atribuições e estornos**")
+                    st.dataframe(pd.DataFrame([
+                        {
+                            "Data e Hora": e["data_evento"].strftime("%d/%m/%Y %H:%M"),
+                            "ID Despesa Veículo": e["id_despesa_veiculo"],
+                            "Ação": e["acao"],
+                            "Destino": e["tipo_destino"],
+                            "ID Frete/Ciclo Interno": e["id_destino"],
+                            "ID Lançamento no Destino": e["id_lancamento_destino"],
+                            "Justificativa": e["motivo"],
+                        }
+                        for e in reversed(historico_movimentacoes)
+                    ]), hide_index=True, use_container_width=True)
             else:
                 st.info("Nenhuma despesa provisória vinculada a veículos.")
 
@@ -3869,12 +4120,7 @@ with st.container(border=True):
                             "KM entre Diesel": a["km_intervalo"],
                             "KM/L (indicativo)": a["km_por_litro"],
                             "R$/KM (indicativo)": a["custo_por_km"],
-                            "Origem": (
-                                "Frete" if a.get("id_despesa_viagem") else
-                                "Ciclo" if a.get("id_despesa_ciclo") else
-                                "Veículo (pendente)" if a.get("id_despesa_veiculo") else
-                                "Histórico anterior"
-                            ),
+                            "Origem": a["origem_financeira"],
                             "Situação": "Cancelado" if a["cancelado"] else "Ativo",
                             "Observação": a["observacao"],
                         }
@@ -4127,6 +4373,7 @@ with st.container(border=True):
             recebimentos=carregar_todos_recebimentos(),
             despesas_ciclo=carregar_todas_despesas_ciclo(),
             despesas_veiculo=carregar_todas_despesas_veiculo(),
+            atribuicoes_veiculo=carregar_historico_atribuicoes_veiculo(),
         )
 
         tab_rel_viagem, tab_rel_geral, tab_rel_ciclos = st.tabs(
@@ -4701,6 +4948,7 @@ with st.container(border=True):
                     recebimentos=carregar_todos_recebimentos(),
                     despesas_ciclo=carregar_todas_despesas_ciclo(),
                     despesas_veiculo=carregar_todas_despesas_veiculo(),
+                    atribuicoes_veiculo=carregar_historico_atribuicoes_veiculo(),
                 )
                 st.download_button(
                     "📥 Exportar Excel (.xlsx)",

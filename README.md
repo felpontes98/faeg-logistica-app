@@ -12,10 +12,10 @@ Sistema web de apoio ao controle operacional e financeiro da FAEG — Soluções
 - Odômetros de saída/chegada da operação, distintos das leituras de abastecimento. Na Etapa 7, ao selecionar Diesel ou ARLA, **ODÔMETRO NO ABASTECIMENTO (KM)** aparece como campo numérico direto, sem checkbox; `0` significa leitura não informada (`NULL`).
 - **Um único formulário para despesas e abastecimentos** na Etapa 7: informar litros, preço e odômetro no mesmo lançamento. O custo é atribuído a **um frete, a um ciclo ou provisoriamente a um veículo**, sem duas áreas para cadastrar combustível.
 - Histórico de Diesel e ARLA por **veículo**, inclusive sem frete selecionado, preenchido pelo próprio lançamento de despesa. A área de histórico é **somente consulta**, com estimativas de distância, km/L e R$/km entre registros consecutivos de Diesel.
-- Despesas financeiras por frete, **despesas compartilhadas por ciclo** e **despesas ainda sem frete/ciclo em `veiculos_despesas`**. Os gastos provisórios não entram no DRE até futura atribuição explícita; transferência automática ainda não foi implementada.
+- Despesas financeiras por frete, **despesas compartilhadas por ciclo** e **despesas provisórias por veículo**. É possível atribuir explicitamente um gasto pendente a um frete/ciclo do mesmo veículo e estornar a atribuição com justificativa, preservando o registro original e uma trilha de eventos. Só o destino ativo entra no DRE.
 - Prévia financeira do ciclo na Etapa 8 e relatório de fechamento gerencial por ciclo na Etapa 9: soma receitas negociadas, despesas dos fretes e **uma única vez** os gastos compartilhados do ID Ciclo. O BI filtrável por frete/cliente exclui gastos compartilhados enquanto não existir critério de rateio aprovado.
 - Registro de recebimentos efetivamente confirmados por frete na Etapa 4, com histórico de cancelamentos, total recebido e saldo em aberto por frete e por ciclo. O Excel inclui `Recebimentos_Fretes`.
-- Exportação Excel com `Fechamento_Ciclos` (despesas dos fretes e compartilhadas em colunas distintas), `Despesas_Ciclo`, `Despesas_Veiculo_Pendentes` e `Abastecimentos_Veiculos` com origem e situação.
+- Exportação Excel com `Fechamento_Ciclos` (despesas dos fretes e compartilhadas em colunas distintas), `Despesas_Ciclo`, `Despesas_Veiculo`, `Atribuicoes_Despesas` e `Abastecimentos_Veiculos` com origem e situação.
 - Prévia e auditoria da planilha Excel. **A importação com gravação no banco permanece bloqueada.**
 
 ## Tecnologia
@@ -31,6 +31,7 @@ Python, Streamlit, Pandas, SQLAlchemy, PostgreSQL (`psycopg`) e OpenPyXL. O app 
 | [`database/models.py`](database/models.py) | Modelos, criação de tabelas e atualização de colunas |
 | [`database/controle_abastecimentos.py`](database/controle_abastecimentos.py) | Indicadores de consumo a partir do histórico por veículo |
 | [`database/fechamento_ciclos.py`](database/fechamento_ciclos.py) | Consolidação gerencial de fretes por ID de ciclo, sem duplicação de despesas |
+| [`database/atribuicao_despesas.py`](database/atribuicao_despesas.py) | Atribuição e estorno auditáveis de despesas provisórias do veículo para frete/ciclo |
 | [`database/importador_planilha.py`](database/importador_planilha.py) | Prévia controlada da importação Excel |
 | [`database/conciliacao_planilha.py`](database/conciliacao_planilha.py) | Auditoria de fretes e fechamentos na planilha |
 | [`database/diagnostico_ciclos.py`](database/diagnostico_ciclos.py) | Diagnóstico somente leitura dos ciclos no PostgreSQL |

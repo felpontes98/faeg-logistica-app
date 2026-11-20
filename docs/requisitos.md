@@ -32,8 +32,11 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 | RF-20 | Exibir odômetro de abastecimento como campo numérico normal, visível na Etapa 7, sem checkbox | Proposto; teste visual pendente |
 | RF-21 | Exportar `Despesas_Ciclo` com histórico e `Fechamento_Ciclos` com despesas de fretes e compartilhadas separadas | Proposto; teste pendente |
 | RF-22 | Usar apenas um formulário de despesa com destino Frete/Ciclo/Veículo e odômetro numérico para Diesel/ARLA; histórico somente consulta | Proposto; teste visual e integrado pendente |
-| RF-23 | Registrar custos provisoriamente vinculados ao veículo, inclusive sem frete, mantendo-os fora do DRE e permitindo cancelamento auditável | Proposto em `veiculos_despesas`; atribuição posterior ainda pendente |
-| RF-24 | Exportar despesas de veículo pendentes e a origem financeira/cancelamento dos abastecimentos | Proposto; teste pendente |
+| RF-23 | Registrar custos provisoriamente vinculados ao veículo, inclusive sem frete, mantendo-os fora do DRE e permitindo cancelamento auditável | Proposto em `veiculos_despesas`; teste pendente |
+| RF-24 | Exportar despesas do veículo (pendentes/atribuídas) e a origem financeira/cancelamento dos abastecimentos | Proposto; teste pendente |
+| RF-25 | Atribuir despesa pendente a frete/ciclo salvo do mesmo veículo, sem segundo histórico de abastecimento nem duplicação no DRE | Proposto em `atribuicao_despesas.py`; teste pendente |
+| RF-26 | Estornar atribuição, devolver o custo ao veículo e guardar histórico de ações com justificativa | Proposto em `veiculos_despesas_atribuicoes`; teste pendente |
+| RF-27 | Manter único cadastro de despesas, com seções de vínculo e detalhes; permitir consulta/atribuição/cancelamento em áreas separadas de histórico | Proposto; teste visual pendente |
 
 ## Critérios de aceite dos cálculos
 
@@ -55,6 +58,8 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 16. **Odômetro visível no lançamento de combustível:** campo numérico ao lado de litros/preço no **mesmo formulário de despesas**, sem checkbox ou segunda área de lançamento. `0` representa **não informado** e deve persistir como `NULL`; a ausência não permite estimar km/L.
 17. **Despesa compartilhada:** somente em ciclo previamente salvo. Registrar uma vez por `id_ciclo`, sem lançar a mesma despesa no frete; lançar custo novo e cancelar custo incorreto sem exclusão física. A exportação deve mostrar todos os lançamentos e os dois componentes do total do ciclo. Não realizar rateio automático.
 18. **Despesa provisória por veículo:** cadastrar mesmo com zero fretes, mantendo valor, data, fornecedor, categoria, placa e eventual odômetro. O valor não integra DRE até a atribuição futura por processo aprovado. Cancelamento mantém data/motivo e exclui o abastecimento associado dos cálculos de consumo.
+19. **Atribuição:** somente registro pendente ativo; selecionar frete salvo do mesmo veículo, ou ciclo salvo com ao menos um frete desse veículo. Confirmar com justificativa mínima; criar o lançamento financeiro de destino e marcar a origem como atribuída. O `abastecimentos` existente permanece único. Recusar aparente duplicidade e segunda atribuição da mesma origem.
+20. **Estorno:** devolver despesa atribuída ao estado pendente com justificativa e evento permanente. O lançamento financeiro do frete é removido; o do ciclo é cancelado mantendo histórico. O custo não deve permanecer contabilizado no destino após o estorno. Despesas atribuídas não podem ser excluídas por atalhos das telas de frete/ciclo. Enquanto houver gasto de veículo atribuído a um frete, alterar o veículo desse frete exige estornar a atribuição antes.
 
 ## Requisitos de integridade e implantação
 
@@ -81,6 +86,11 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - [ ] Conferir impedimento de lançamento idêntico no mesmo ciclo e verificar manualmente que o custo não foi também lançado a um frete.
 - [ ] Confirmar que não existe uma segunda área de cadastro de abastecimento, somente histórico para consulta e controle de cancelamentos.
 - [ ] Cancelar despesa provisória ou compartilhada de combustível; verificar que o histórico é mantido como cancelado e não influencia KM/L.
+- [ ] Atribuir provisória ao frete do mesmo veículo; conferir total do frete, do ciclo e ausência de segundo registro em `Abastecimentos_Veiculos`.
+- [ ] Atribuir provisória a custo compartilhado do ciclo; confirmar que o BI filtrado por frete não ganhou custo alocado indevidamente.
+- [ ] Estornar os dois destinos e conferir retorno a pendente, saída do DRE e permanência do histórico em `Atribuicoes_Despesas`.
+- [ ] Verificar bloqueios de veículo divergente, atribuição duplicada e exclusão direta de custo já atribuído.
+- [ ] Tentar trocar o veículo de um frete que recebeu uma despesa provisória; confirmar bloqueio até que a atribuição seja estornada.
 - [ ] Simular dois fretes legados com um único financeiro de ciclo; conferir aviso e receita não duplicada.
 - [ ] Registrar adiantamento recebido real, saldo recebido e um pagamento parcial adicional; conferir valores por frete/ciclo.
 - [ ] Cancelar pagamento com motivo e conferir exclusão dos totais, sem apagar o histórico na Etapa 4 ou na aba `Recebimentos_Fretes`.
@@ -93,4 +103,4 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 
 ## Escopo explicitamente não encerrado
 
-Não presumir que a aplicação esteja pronta para produção por existir código. Faltam ao menos: homologação integrada, fechamento **formal** dos ciclos (status/confirmação), regra de rateio, **atribuição posterior de despesas provisórias por veículo a fretes/ciclos**, conciliação bancária e automatização de situações de pagamento, segurança de acesso e importação com gravação autorizada. A consolidação **gerencial parcial** por ciclo, o lançamento único de combustível/despesas e o registro manual de recebimentos já estão propostos.
+Não presumir que a aplicação esteja pronta para produção por existir código. Faltam ao menos: homologação integrada, fechamento **formal** dos ciclos (status/confirmação), regra de rateio, conciliação bancária e automatização de situações de pagamento, segurança de acesso e importação com gravação autorizada. A consolidação **gerencial parcial** por ciclo, o lançamento único de combustível/despesas, a atribuição/estorno de gastos de veículo e o registro manual de recebimentos já estão propostos.

@@ -24,7 +24,7 @@ Foi realizada uma leitura estática do código e da planilha de referência. O a
 | 10 | Consultas gerais |
 | 11 | Cadastros gerais |
 
-Os formulários, cadastros, consultas e relatórios estão presentes no código. A proposta inclui `fretes_financeiro`, o histórico por veículo `abastecimentos`, `recebimentos_frete`, `ciclos_despesas` e `veiculos_despesas`, totalizando **quatorze tabelas no ORM**. **A presença de uma tela ou de um modelo não equivale a homologação:** este código ainda precisa ser testado com uma cópia do PostgreSQL.
+Os formulários, cadastros, consultas e relatórios estão presentes no código. A proposta inclui `fretes_financeiro`, o histórico por veículo `abastecimentos`, `recebimentos_frete`, `ciclos_despesas`, `veiculos_despesas` e `veiculos_despesas_atribuicoes`, totalizando **quinze tabelas no ORM**. **A presença de uma tela ou de um modelo não equivale a homologação:** este código ainda precisa ser testado com uma cópia do PostgreSQL.
 
 ## Decisões operacionais da FAEG
 
@@ -46,7 +46,7 @@ Exemplos e critérios de aceite estão documentados em [Regras de negócio](regr
 | Recebimentos | Adiantamento mais saldo são **parcelas previstas**, nunca tratados como pagamentos confirmados ou substitutos do negociado. A Etapa 4 ganhou registro manual de pagamentos efetivos por frete, com data, forma, referência e cancelamento auditável. Etapas 8 e 9, consultas e Excel exibem recebido e saldo a receber; a conciliação bancária ainda não existe |
 | KM e abastecimento | Etapa 2 mantém o KM manual do frete; Etapa 8 soma os trechos do ciclo e deslocamentos, compara com odômetros válidos e exibe consumo indicativo do veículo. Na Etapa 7, **não há duas áreas para registrar Diesel/ARLA**: litros, preço e odômetro numérico estão no lançamento único de despesa, que gera histórico por veículo automaticamente. O Excel exporta `Abastecimentos_Veiculos` com a origem do custo |
 | Despesas comuns | A Etapa 7 permite lançar e cancelar despesas por ID do ciclo, separadas de `viagens_despesas`. O fechamento do ciclo soma os dois componentes uma vez; o BI filtrável por cliente/frete não rateia custos comuns. O Excel exporta `Despesas_Ciclo` e detalha os componentes em `Fechamento_Ciclos` |
-| Gastos sem operação definida | O mesmo lançamento permite vincular provisoriamente o custo a um veículo (`veiculos_despesas`), mesmo com zero fretes. O valor fica fora de DRE/BI e aparece em `Despesas_Veiculo_Pendentes`; transferência posterior para frete/ciclo não foi implementada |
+| Gastos sem operação definida | O mesmo lançamento permite vincular provisoriamente o custo a um veículo (`veiculos_despesas`), mesmo com zero fretes. Enquanto pendente, o valor fica fora do DRE/BI. Na Etapa 7 é possível atribuir explicitamente ao frete/ciclo salvo do mesmo veículo ou estornar, com justificativa e histórico em `veiculos_despesas_atribuicoes`; Excel exporta `Despesas_Veiculo` e `Atribuicoes_Despesas` |
 | Segurança | Não foi identificada autenticação ou autorização de usuários no código revisado |
 | Testes | Não havia suíte automatizada de testes no pacote recebido |
 
@@ -63,6 +63,6 @@ Na planilha de referência de setembro/2026, a auditoria apontou: linha 10 sem I
 
 ## Próxima verificação após concluir os ajustes
 
-Eduardo decidiu reunir primeiro os ajustes e deixar os testes integrados para o final. Nessa fase deverão ser avaliados, em PostgreSQL de testes: vínculo frete/ciclo, soma de KM, odômetros opcionais, **lançamento único de combustível e despesa** sem formulário duplicado, cadastro provisório por veículo sem frete, indicadores consecutivos de Diesel/ARLA, fechamento parcial de ciclos, despesas compartilhadas/provisórias ativas/canceladas, recebimentos confirmados/cancelados e DRE sem duplicação. A gravação Excel, a conciliação bancária, a **atribuição posterior** de gastos provisórios e o rateio de custos compartilhados continuam pendentes. **As novas rotinas de abastecimentos, ciclos, despesas e recebimentos estão no código, mas não foram homologadas.**
+Eduardo decidiu reunir primeiro os ajustes e deixar os testes integrados para o final. Nessa fase deverão ser avaliados, em PostgreSQL de testes: vínculo frete/ciclo, soma de KM, odômetros opcionais, **lançamento único de combustível e despesa** sem formulário duplicado, cadastro provisório por veículo sem frete, **atribuição/estorno de custos ao frete/ciclo com auditoria e sem duplicação**, indicadores consecutivos Diesel/ARLA, fechamento parcial de ciclos, despesas compartilhadas/provisórias ativas/canceladas, recebimentos confirmados/cancelados e DRE. A gravação Excel, a conciliação bancária e o rateio de custos compartilhados continuam pendentes. **As novas rotinas de abastecimentos, ciclos, despesas, atribuições e recebimentos estão no código, mas não foram homologadas.**
 
 Para apresentação geral e instalação, consulte o [README](../README.md). Para a arquitetura técnica, consulte [Arquitetura do banco](arquitetura_banco.md).

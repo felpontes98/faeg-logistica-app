@@ -273,9 +273,9 @@ class ViagemDespesa(Base):
 
 
 class VeiculoDespesa(Base):
-    """Gasto com veículo identificado, mas ainda sem frete/ciclo de destino.
+    """Origem auditável do gasto: pendente ou atribuído uma vez a frete/ciclo.
 
-    Não entra em DRE até uma futura atribuição explícita, sem rateio automático.
+    A própria origem nunca entra no DRE: apenas o lançamento de destino.
     """
 
     __tablename__ = "veiculos_despesas"
@@ -293,9 +293,36 @@ class VeiculoDespesa(Base):
     cancelado = Column(Boolean, nullable=False, default=False)
     data_cancelamento = Column(Date)
     motivo_cancelamento = Column(String(200))
+    id_despesa_viagem_destino = Column(
+        Integer, ForeignKey("viagens_despesas.id_despesa"), nullable=True, unique=True,
+    )
+    id_despesa_ciclo_destino = Column(
+        Integer, ForeignKey("ciclos_despesas.id_despesa_ciclo"), nullable=True, unique=True,
+    )
+    data_atribuicao = Column(Date)
 
     veiculo = relationship("Veiculo", back_populates="despesas_provisorias")
     fornecedor = relationship("Fornecedor")
+    historico_atribuicoes = relationship("VeiculoDespesaAtribuicao", back_populates="despesa_origem")
+
+
+class VeiculoDespesaAtribuicao(Base):
+    """Evento de atribuição/estorno, imutável mesmo quando um destino é removido."""
+
+    __tablename__ = "veiculos_despesas_atribuicoes"
+
+    id_evento = Column(Integer, primary_key=True, autoincrement=True)
+    id_despesa_veiculo = Column(
+        Integer, ForeignKey("veiculos_despesas.id_despesa_veiculo"), nullable=False, index=True,
+    )
+    acao = Column(String(25), nullable=False)
+    tipo_destino = Column(String(20), nullable=False)
+    id_destino = Column(Integer, nullable=False)
+    id_lancamento_destino = Column(Integer, nullable=False)
+    data_evento = Column(DateTime, default=datetime.utcnow, nullable=False)
+    motivo = Column(String(200), nullable=False)
+
+    despesa_origem = relationship("VeiculoDespesa", back_populates="historico_atribuicoes")
 
 
 class CicloDespesa(Base):
@@ -377,6 +404,11 @@ def sincronizar_colunas_banco():
         "ALTER TABLE abastecimentos ADD COLUMN IF NOT EXISTS cancelado BOOLEAN NOT NULL DEFAULT FALSE;",
         "ALTER TABLE abastecimentos ADD COLUMN IF NOT EXISTS data_cancelamento DATE;",
         "ALTER TABLE abastecimentos ADD COLUMN IF NOT EXISTS motivo_cancelamento VARCHAR(200);",
+        "ALTER TABLE veiculos_despesas ADD COLUMN IF NOT EXISTS id_despesa_viagem_destino INTEGER REFERENCES viagens_despesas(id_despesa);",
+        "ALTER TABLE veiculos_despesas ADD COLUMN IF NOT EXISTS id_despesa_ciclo_destino INTEGER REFERENCES ciclos_despesas(id_despesa_ciclo);",
+        "ALTER TABLE veiculos_despesas ADD COLUMN IF NOT EXISTS data_atribuicao DATE;",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_veiculo_despesa_frete_destino ON veiculos_despesas (id_despesa_viagem_destino) WHERE id_despesa_viagem_destino IS NOT NULL;",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_veiculo_despesa_ciclo_destino ON veiculos_despesas (id_despesa_ciclo_destino) WHERE id_despesa_ciclo_destino IS NOT NULL;",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_abast_origem_frete ON abastecimentos (id_despesa_viagem) WHERE id_despesa_viagem IS NOT NULL;",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_abast_origem_ciclo ON abastecimentos (id_despesa_ciclo) WHERE id_despesa_ciclo IS NOT NULL;",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_abast_origem_veiculo ON abastecimentos (id_despesa_veiculo) WHERE id_despesa_veiculo IS NOT NULL;",

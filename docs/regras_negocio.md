@@ -89,11 +89,11 @@ O campo `viagens_despesas.odometro_abastecimento` não é excluído. Em novos la
 
 - Cada despesa deve ter categoria, descrição, data, valor e associação clara a um **frete individual** ou a **um ciclo**.
 - Despesa de uso comum no ciclo entra **uma vez** no fechamento consolidado, sem cópia integral em cada frete.
-- A Etapa 7 possui **um formulário único** para despesas: padrão **Frete atual**, opção **Ciclo inteiro** (`ciclos_despesas`, apenas ciclo já salvo), opção **Veículo sem frete/ciclo** (`veiculos_despesas`, pendente). Despesas provisórias não entram em DRE nem no BI até atribuição explícita futura. Cancelamentos de despesas comuns/provisórias preservam o histórico e o motivo. A prevenção de cadastro idêntico dentro do mesmo destino não substitui conferência manual contra duplicidades entre destinos.
+- A Etapa 7 possui **um formulário único** para despesas, com campos agrupados em **Vínculo financeiro** e **Dados da despesa**: padrão **Frete atual**, opção **Ciclo inteiro** (`ciclos_despesas`, apenas ciclo salvo), opção **Veículo sem frete/ciclo** (`veiculos_despesas`, pendente). Despesas provisórias não entram em DRE/BI enquanto pendentes. A **atribuição posterior** a frete/ciclo é uma ação explícita, com justificativa, exclusiva para destinos do mesmo veículo; o custo passa ao destino, nunca é duplicado. Cancelamentos de gastos comuns/provisórios preservam histórico e motivo. A proteção de lançamentos semelhantes não elimina a necessidade de conferência humana.
 - Caso seja necessário mostrar custo individual de cada frete do ciclo, estabelecer antes um critério de rateio acordado (por exemplo, participação na receita ou quilômetros), identificando o valor rateado como estimativa gerencial. **O rateio ainda não foi definido.**
 - Um abastecimento deve registrar data, veículo, posto/fornecedor, litros, preço por litro, valor e odômetro quando disponível. Diesel e ARLA devem ser distinguíveis.
 - Evitar lançamento em duplicidade quando o abastecimento também aparece como despesa financeira.
-- **Ao lançar o combustível uma única vez**, a aplicação grava a despesa financeira no destino escolhido e um reflexo operacional no histórico `abastecimentos`. **Só a despesa financeira de frete ou ciclo entra no respectivo DRE**, não a linha de abastecimento. Para veículo ainda sem destino, o custo fica provisoriamente pendente, fora do DRE; a **transferência posterior para um frete/ciclo ainda não está implementada**. Não lançar a mesma nota manualmente em destinos diferentes.
+- **Ao lançar o combustível uma única vez**, a aplicação grava a despesa financeira no destino escolhido e um reflexo operacional no histórico `abastecimentos`. **Só a despesa financeira de frete ou ciclo entra no respectivo DRE**, não a linha de abastecimento. Para veículo ainda sem destino, o custo fica pendente, fora do DRE. Quando for atribuído a um frete/ciclo salvo do mesmo veículo, o lançamento financeiro passa a contar no destino **sem recriar a linha de abastecimento**. Um estorno devolve o custo ao estado pendente, com evento auditável. Não lançar a mesma nota manualmente em destinos diferentes.
 
 ## RN-07 — Fechamento e resultado operacional
 
@@ -131,7 +131,8 @@ Campos ausentes não devem ser substituídos por datas atuais ou valores zero se
 - [x] Eduardo definiu a separação entre KM Individual/Ciclo, deslocamentos operacionais e total planejado. A implementação ainda precisa de teste integrado.
 - [x] Gastos comuns podem ser registrados uma vez por ID do ciclo, sem rateio automático (implementação pendente de testes).
 - [x] Registro provisório de despesas sem operação identificada por veículo, fora do DRE (implementação pendente de testes).
-- [ ] A equipe decide como atribuir posteriormente despesas provisórias a fretes/ciclos, e se haverá rateio individual.
+- [x] Atribuição manual e estorno auditável de despesas provisórias por veículo a fretes/ciclos compatíveis (implementação pendente de testes).
+- [ ] A equipe decide se haverá rateio de custos compartilhados entre os fretes e aprova seu critério.
 - [ ] A equipe aprova a nomenclatura final das situações operacional e financeira.
 - [ ] São preparados cenários reais anonimizados para teste individual e por ciclo.
 - [ ] Todas as alterações preservam histórico já cadastrado após teste de migração.

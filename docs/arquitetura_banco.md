@@ -6,7 +6,7 @@
 
 O Streamlit (`app.py`) acessa o PostgreSQL por sessões SQLAlchemy criadas em `database/connection.py`. Os modelos são definidos em `database/models.py`; o importador lê arquivos Excel por `database/importador_planilha.py`.
 
-### Tabelas no mapeamento ORM proposto (14 no total)
+### Tabelas no mapeamento ORM proposto (15 no total)
 
 | Tabela | Chave primária | Finalidade e vínculo principal |
 | --- | --- | --- |
@@ -22,7 +22,8 @@ O Streamlit (`app.py`) acessa o PostgreSQL por sessões SQLAlchemy criadas em `d
 | `recebimentos_frete` | `id_recebimento` | Pagamentos efetivos, cada um associado a um frete via `id_viagem`, com data, valor, forma, referência e status de cancelamento |
 | `viagens_despesas` | `id_despesa` | Despesa financeira ligada a `id_viagem`; fornecedor e campo legado `odometro_abastecimento` são opcionais |
 | `ciclos_despesas` | `id_despesa_ciclo` | Despesa compartilhada associada uma vez ao `id_ciclo`, com fornecedor opcional e cancelamento auditável; não é distribuída por frete |
-| `veiculos_despesas` | `id_despesa_veiculo` | Gasto provisoriamente atribuído ao veículo, **ainda fora dos resultados por frete/ciclo**, com cancelamento auditável |
+| `veiculos_despesas` | `id_despesa_veiculo` | Origem de gasto do veículo: **pendente fora dos resultados** ou atribuído a frete/ciclo (contabilizado apenas no destino), com cancelamento auditável |
+| `veiculos_despesas_atribuicoes` | `id_evento` | Eventos imutáveis de atribuição/estorno com destino, data/hora e justificativa |
 | `abastecimentos` | `id_abastecimento` | Visão operacional de Diesel/ARLA por veículo, criada a partir da **mesma despesa**, com vínculo à despesa de frete/ciclo/veículo, odômetro e cancelamento |
 
 ### Relacionamentos definidos
@@ -40,6 +41,7 @@ erDiagram
     VEICULOS ||--o{ VIAGENS : utiliza
     VEICULOS ||--o{ ABASTECIMENTOS : abastece
     VEICULOS ||--o{ VEICULOS_DESPESAS : pendente
+    VEICULOS_DESPESAS ||--o{ VEICULOS_DESPESAS_ATRIBUICOES : audita
     VIAGENS ||--o{ VIAGENS_DESPESAS : possui
     CICLOS_OPERACIONAIS ||--o{ CICLOS_DESPESAS : recebe
     FORNECEDORES ||--o{ VIAGENS_DESPESAS : fornece
@@ -68,9 +70,10 @@ Nesta proposta, a tela de cadastro passa a funcionar da seguinte maneira:
 10. Quando um mesmo `ciclos_financeiro` legado serve de fonte para vários fretes sem `fretes_financeiro`, a receita legada não entra repetidamente nos totais do BI ou do ciclo. Os fretes são sinalizados como pendentes de individualização, mantendo os registros originais.
 11. A nova tabela `recebimentos_frete` conserva pagamentos efetivos por `id_viagem` com data, valor, tipo, forma e referência opcional; o histórico inclui cancelamentos com data e motivo. A Etapa 4 grava esses registros apenas depois que o frete existe. Um cancelamento lógico exclui o valor dos cálculos sem apagar a linha. A Etapa 8 e a Etapa 9 leem os recebimentos confirmados por frete e por ciclo. O Excel exporta o histórico completo em `Recebimentos_Fretes`.
 12. A tabela `ciclos_despesas` guarda gastos comuns por **ID interno do ciclo**, cadastrados na Etapa 7 depois de existir um ciclo salvo. Valores ativos entram uma vez no fechamento do ciclo; cancelamentos deixam data, motivo e valor original. O Excel possui `Despesas_Ciclo` (inclusive cancelados), e `Fechamento_Ciclos` separa despesas de fretes e despesas compartilhadas. O BI filtrado por frete/cliente mantém apenas as despesas atribuídas aos fretes, pois não existe rateio aprovado.
-13. A tabela `veiculos_despesas` guarda **gastos ainda sem frete/ciclo atribuído**: aparecem em consulta/cancelamento e exportação `Despesas_Veiculo_Pendentes`, sem compor DRE ou BI. Sua atribuição posterior a um frete/ciclo dependerá de rotina explícita, ainda não desenvolvida. Cancelar um gasto compartilhado/provisório cancela também o respectivo histórico operacional, mantendo o registro para auditoria. Excluir uma despesa de frete ainda segue a exclusão física existente e remove o abastecimento derivado.
+13. A tabela `veiculos_despesas` guarda a origem de gastos do veículo: pendentes, atribuídos ou cancelados. O arquivo Excel inclui `Despesas_Veiculo`, e somente gastos **pendentes** permanecem fora do DRE/BI. A Etapa 7 permite **atribuir um gasto pendente ao ID Frete ou ID Ciclo que contenha o mesmo veículo**, com justificativa, criando apenas o lançamento financeiro no destino, sem duplicar o histórico de abastecimento. A origem não é somada novamente no DRE. É possível **estornar a atribuição**, devolvendo o custo ao estado pendente. Cada movimentação gera evento em `veiculos_despesas_atribuicoes`, exportado em `Atribuicoes_Despesas`.
+14. Para não perder a trilha de auditoria, despesas de frete/ciclo provenientes de `veiculos_despesas` só podem ser corrigidas via **estorno da atribuição**. No estorno de frete, o lançamento financeiro de destino é removido e o evento preserva seu ID; no de ciclo, o lançamento é cancelado logicamente. O abastecimento operacional original segue vinculado à despesa do veículo e não é duplicado. Cancelar a própria despesa provisória só é permitido enquanto não estiver atribuída.
 
-**Limitação:** ciclos duplicados já existentes na base não são mesclados; isso exige migração específica, conferência e backup. O **resumo gerencial**, o **registro manual de recebimentos**, o **lançamento único de combustível/despesa** e as **despesas provisórias por veículo** foram preparados no código. **Atribuição posterior dos gastos provisórios a fretes/ciclos, rateio, conciliação bancária, estornos externos e fechamento formal com alteração de status** não foram implementados.
+**Limitação:** ciclos duplicados já existentes na base não são mesclados; isso exige migração específica, conferência e backup. O **resumo gerencial**, os **recebimentos**, o **lançamento único de combustível/despesa** e a **atribuição/estorno manual de gastos do veículo** foram preparados no código. **Rateio automático, conciliação bancária, estornos externos e fechamento formal com alteração de status** não foram implementados.
 
 **Critério de segurança:** a proximidade entre uma linha de fechamento e os fretes anteriores é utilizada para sugerir a correspondência na auditoria. Ela **não autoriza corrigir automaticamente** o ID do ciclo nem transferir valores ou despesas. Linhas interpretadas como total geral não são somadas como fretes adicionais.
 
@@ -83,7 +86,7 @@ Nesta proposta, a tela de cadastro passa a funcionar da seguinte maneira:
 | Vínculo frete-ciclo | `id_ciclo` opcional no frete; vários fretes podem referenciar o mesmo ciclo |
 | Conciliação e classificação de recebimentos | Confrontar `recebimentos_frete` com extratos bancários; situações financeiras automáticas e estornos por transferência externa |
 | Conferência cruzada de despesas | Prevenir que uma mesma despesa seja cadastrada manualmente tanto em `viagens_despesas` quanto em `ciclos_despesas`, além da proteção de duplicidade dentro de cada lançamento |
-| Alocação posterior de gastos provisórios | Transferir custos atualmente em `veiculos_despesas` a frete/ciclo com confirmação, mantendo rastro e sem duplicar valores no DRE |
+| Rateio posterior de gastos compartilhados | Critério aprovado para distribuir custos de um ciclo entre seus fretes, sem duplicar lançamentos ou confundir custo direto com rateio gerencial |
 | Fechamento | Cálculo derivado por frete ou ciclo: receita negociada, recebida, despesas, KM estimado e KM real disponível |
 
 Não é necessário criar todas essas tabelas imediatamente. A decisão exata do desenho deve ser validada com dados reais representativos, preservando identificadores e histórico já existentes.
@@ -108,6 +111,7 @@ Os códigos de negócio devem ser gerados e validados no banco de forma segura p
 - A tabela `recebimentos_frete` é criada por `Base.metadata.create_all()` na inicialização da versão 8. Nenhuma coluna de dados históricos é removida e os recebimentos não são deduzidos automaticamente das parcelas previstas.
 - A tabela `ciclos_despesas` é criada por `Base.metadata.create_all()` na inicialização da versão 9. Não redistribui custos existentes nem converte registros de abastecimento em despesas financeiras.
 - A versão 10 cria `veiculos_despesas`, adiciona FKs opcionais de origem e campos de cancelamento em `abastecimentos`, e amplia a precisão do valor unitário em `viagens_despesas` e `ciclos_despesas` para quatro decimais. A inicialização altera esquema, mas **não reclassifica nem copia automaticamente os dados legados**.
+- A versão 11 cria `veiculos_despesas_atribuicoes` e adiciona em `veiculos_despesas` duas FKs opcionais para o lançamento financeiro de destino e a data de atribuição. Não atribui gastos antigos automaticamente; somente ações explícitas na Etapa 7 produzem eventos.
 - `app.py` chama `sincronizar_colunas_banco()` na inicialização.
 - `database/diagnostico_ciclos.py` pode ser executado separadamente com `python -m database.diagnostico_ciclos`. Esse diagnóstico **não inicializa o app nem migra o banco**: faz exclusivamente consultas SQL em transação `READ ONLY`, identifica IDs de ciclo duplicados e diferencia os valores legados dos financeiros individuais. O resultado é exibido no terminal como JSON.
 - A string de conexão é lida da variável `DATABASE_URL` após `load_dotenv()`.
@@ -135,7 +139,11 @@ Os códigos de negócio devem ser gerados e validados no banco de forma segura p
 - [ ] Cancelar uma despesa de ciclo com motivo, conferir exclusão do total e permanência com situação cancelada em `Despesas_Ciclo`; checar prevenção de lançamento repetido.
 - [ ] Conferir o **único formulário** da Etapa 7: Diesel/ARLA com odômetro visível, litros e preço, destino Frete/Ciclo/Veículo, sem segunda área de cadastro.
 - [ ] Verificar que cada lançamento de combustível salva uma só despesa financeira e uma projeção `abastecimentos`, e que somente a primeira conta no DRE.
-- [ ] Salvar gasto provisório com zero fretes, cancelar e revisar as abas `Despesas_Veiculo_Pendentes` e `Abastecimentos_Veiculos` sem contagem duplicada.
+- [ ] Salvar gasto provisório com zero fretes, cancelar e revisar as abas `Despesas_Veiculo` e `Abastecimentos_Veiculos` sem contagem duplicada.
+- [ ] Atribuir uma despesa provisória a frete salvo do mesmo veículo, conferir que ela entra só uma vez no DRE, sem segundo abastecimento.
+- [ ] Atribuir a ciclo salvo do mesmo veículo, conferir que o total aparece uma vez no fechamento do ciclo, não no BI por frete.
+- [ ] Estornar ambas as atribuições, verificar exclusão dos respectivos totais, retorno a pendente e eventos de auditoria preservados em `Atribuicoes_Despesas`.
+- [ ] Tentar atribuir a frete de veículo diferente, atribuir duas vezes e remover diretamente um destino transferido: todas as tentativas devem ser bloqueadas.
 - [ ] Testar edição de dois fretes com clientes diferentes dentro do mesmo ciclo.
 - [ ] Contar ciclos e fretes importados e identificar ciclos duplicados pelo nome.
 - [ ] Verificar se já existem códigos `V1`, `V2` etc. vinculados a fretes históricos.
