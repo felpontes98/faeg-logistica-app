@@ -54,13 +54,14 @@ Uma alteração em uma classificação não deve apagar o cliente, o preço, a i
 
 Conforme a proposta operacional apresentada por Eduardo para o sistema:
 
-1. Na **Etapa 2 — Frete**, manter o campo **KM planejado**, preenchido manualmente a partir de consulta ao Maps.
-2. Em um **frete individual**, esse KM representa o percurso planejado do frete.
-3. Em um **ciclo**, informar no primeiro frete o KM previsto para o primeiro trecho, mesmo que seja o maior percurso. Nos demais fretes, informar o KM previsto dos trechos seguintes, na sequência real do deslocamento entre fretes.
-4. Na **Etapa 8 — Fechamento**, exibir a soma de todos os KM planejados dos fretes do ciclo.
-5. Antes de homologar, garantir que os trechos foram definidos sem lacunas ou sobreposições de trajeto; não somar rotas completas de fretes que incluam deslocamentos já contabilizados.
+1. Na **Etapa 2 — Frete**, **KM X ROTA PLANEJADO** é somente o título; **KM INDIVIDUAL / CICLO** é o campo numérico preenchido manualmente para o trecho do frete.
+2. Em um **frete individual**, o KM Planejado corresponde a esse campo.
+3. Em um **ciclo**, cada frete tem seu próprio KM Individual / Ciclo. Na Etapa 8, **KM PLANEJADO** é a soma dos KM dos fretes associados ao mesmo número de ciclo, considerando o valor ainda não salvo do frete em edição.
+4. **KM DESLOCAMENTOS OPERACIONAIS** é informado manualmente **uma vez por ciclo**, abrangendo os deslocamentos de saída, entre coletas/entregas e retorno que não estejam incluídos nos trechos individuais. O campo é independente do odômetro.
+5. **KM TOTAL PLANEJADO = KM PLANEJADO + KM DESLOCAMENTOS OPERACIONAIS**.
+6. Antes de homologar, garantir que os trechos foram definidos sem lacunas ou sobreposições. Não incluir duas vezes a mesma distância no frete e nos deslocamentos operacionais.
 
-**Exemplo ilustrativo:** primeiro trecho 280 km + segundo 120 km + terceiro 85 km = **485 km planejados no ciclo**.
+**Exemplo ilustrativo:** três fretes com 280, 120 e 85 km = **485 km planejados**. Se os deslocamentos operacionais não incluídos nesses fretes somarem 65 km, o **KM Total Planejado será 550 km**.
 
 Esse valor é estimado, não uma leitura real de odômetro. A ausência de KM deve ser sinalizada como dado faltante, não considerada automaticamente zero.
 

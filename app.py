@@ -37,13 +37,13 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def inicializar_banco_uma_vez(schema_v=3):
+def inicializar_banco_uma_vez(schema_v=4):
     """Garante que todas as tabelas e colunas novas existam no Neon sem alterar dados."""
     sincronizar_colunas_banco()
     return True
 
 
-inicializar_banco_uma_vez(schema_v=3)
+inicializar_banco_uma_vez(schema_v=4)
 
 # ==============================================================================
 # LISTAS PADRONIZADAS DO SISTEMA
@@ -802,6 +802,10 @@ def fmt_brl(val):
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def fmt_km(val):
+    return f"{to_float(val):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " km"
+
+
 def formatar_rotulo_cliente(c):
     partes_nome = [c["razao_social"]]
     if (
@@ -974,8 +978,33 @@ def on_tipo_viagem_change():
     sync_campo("w_tipo_viagem", "tipo_viagem")
     if get_campo("tipo_viagem", "Individual") == "Individual":
         st.session_state["form_data"]["ciclo_nome"] = ""
+        st.session_state["form_data"]["km_deslocamentos"] = 0.0
+        st.session_state["km_deslocamentos_editado"] = False
         if "w_ciclo_nome" in st.session_state:
             del st.session_state["w_ciclo_nome"]
+        if "w_km_deslocamentos" in st.session_state:
+            del st.session_state["w_km_deslocamentos"]
+
+
+def on_ciclo_nome_change():
+    """Ao selecionar um ciclo existente, recupera seu KM compartilhado."""
+    sync_campo("w_ciclo_nome", "ciclo_nome")
+    nome = (get_campo("ciclo_nome") or "").strip()
+    km_deslocamentos = 0.0
+    if nome and get_campo("tipo_viagem") == "Ciclo":
+        with SessionLocal() as session:
+            ciclo = localizar_ciclo_operacional(session, nome)
+            if ciclo is not None:
+                km_deslocamentos = to_float(ciclo.km_deslocamentos_operacionais)
+    st.session_state["form_data"]["km_deslocamentos"] = km_deslocamentos
+    st.session_state["km_deslocamentos_editado"] = False
+    if "w_km_deslocamentos" in st.session_state:
+        del st.session_state["w_km_deslocamentos"]
+
+
+def on_km_deslocamentos_change():
+    sync_campo("w_km_deslocamentos", "km_deslocamentos")
+    st.session_state["km_deslocamentos_editado"] = True
 
 
 # ==============================================================================
@@ -1600,6 +1629,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
         return
 
     limpar_widgets_viagem()
+    st.session_state["km_deslocamentos_editado"] = False
     if id_viagem_escolhida == 0:
         prox_cod = calcular_proximo_codigo_viagem(viagens_lista)
         st.session_state["form_data"] = {
@@ -1614,6 +1644,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
             "rota_origem": "",
             "rota_destino": "",
             "km_rota": 0.0,
+            "km_deslocamentos": 0.0,
             "tipo_material": "",
             "qt_volumes": 0,
             "volume_m3": 0.0,
@@ -1681,6 +1712,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
                     "rota_origem": origem_db,
                     "rota_destino": destino_db,
                     "km_rota": to_float(vg.km_rota_planejado),
+                    "km_deslocamentos": to_float(ciclo.km_deslocamentos_operacionais) if ciclo else 0.0,
                     "tipo_material": vg.tipo_material or "",
                     "qt_volumes": to_int(vg.qtde_volumes),
                     "volume_m3": to_float(vg.volume_m3),
@@ -1757,6 +1789,36 @@ def obter_ciclo_para_salvamento(session, tipo_viagem, nome_ciclo, id_cliente, da
     return novo
 
 
+def calcular_km_planejado_operacao(id_viagem_atual):
+    """Soma KM Individual/Ciclo de cada frete do grupo, sem duplicar o atual."""
+    km_atual = to_float(get_campo("km_rota", 0.0))
+    if get_campo("tipo_viagem", "Individual") != "Ciclo":
+        return round(km_atual, 2)
+    identificador = (get_campo("ciclo_nome") or "").strip()
+    if not identificador:
+        return round(km_atual, 2)
+
+    with SessionLocal() as session:
+        fretes_salvos = (
+            session.query(Viagem)
+            .join(CicloOperacional, Viagem.id_ciclo == CicloOperacional.id_ciclo)
+            .filter(func.lower(func.trim(CicloOperacional.nome_operacao)) == identificador.lower())
+            .all()
+        )
+        soma_outros = sum(
+            to_float(v.km_rota_planejado)
+            for v in fretes_salvos
+            if v.id_viagem != id_viagem_atual
+        )
+    return round(km_atual + soma_outros, 2)
+
+
+def salvar_km_deslocamentos_ciclo(ciclo):
+    """Atualiza o KM compartilhado apenas quando explicitamente informado."""
+    if st.session_state.get("km_deslocamentos_editado", False) or not ciclo.viagens:
+        ciclo.km_deslocamentos_operacionais = to_float(get_campo("km_deslocamentos", 0.0))
+
+
 def salvar_viagem_completa(id_viagem_atual, viagens_lista):
     mot_id = get_campo("mot_id", 0)
     vei_id = get_campo("vei_id", 0)
@@ -1810,6 +1872,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     cli_id,
                     get_campo("data_op", date.today()),
                 )
+                salvar_km_deslocamentos_ciclo(ciclo)
 
                 vg = Viagem(
                     id_ciclo=ciclo.id_ciclo,
@@ -1883,6 +1946,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                         get_campo("data_op", date.today()),
                         viagem=vg,
                     )
+                    salvar_km_deslocamentos_ciclo(ciclo_destino)
                     vg.id_ciclo = ciclo_destino.id_ciclo
                     vg.codigo_viagem = codigo_digitado
                     vg.id_motorista = mot_id
@@ -2181,8 +2245,7 @@ with st.container(border=True):
                 placeholder="Ex: CICLO-01" if eh_ciclo else "Bloqueado (Viagem Individual)",
                 disabled=not eh_ciclo,
                 key="w_ciclo_nome",
-                on_change=sync_campo,
-                args=("w_ciclo_nome", "ciclo_nome"),
+                on_change=on_ciclo_nome_change,
             )
         with c_data:
             st.date_input(
@@ -2320,10 +2383,12 @@ with st.container(border=True):
                 args=("w_rota_destino", "rota_destino"),
             )
         with f5:
+            st.caption("KM X ROTA PLANEJADO")
             st.number_input(
-                "KM X ROTA",
+                "KM INDIVIDUAL / CICLO",
                 min_value=0.0,
                 step=10.0,
+                help="Informe o KM previsto deste frete. Em um ciclo, o fechamento soma os trechos de todos os fretes.",
                 value=to_float(get_campo("km_rota", 0.0)),
                 key="w_km_rota",
                 on_change=sync_campo,
@@ -3006,6 +3071,29 @@ with st.container(border=True):
                 on_change=sync_campo,
                 args=("w_status_viagem", "status_viagem"),
             )
+
+        st.markdown('<div class="sec-subtitle">Quilometragem Planejada da Operação</div>', unsafe_allow_html=True)
+        km_planejado_op = calcular_km_planejado_operacao(viagem_sel_id)
+        k1, k2, k3 = st.columns(3)
+        with k1:
+            st.metric("KM PLANEJADO", fmt_km(km_planejado_op))
+            st.caption("Frete individual: KM informado na Etapa 2. Ciclo: soma dos KM dos seus fretes.")
+        with k2:
+            km_deslocamentos_op = st.number_input(
+                "KM DESLOCAMENTOS OPERACIONAIS",
+                min_value=0.0,
+                step=10.0,
+                format="%.2f",
+                value=to_float(get_campo("km_deslocamentos", 0.0)),
+                key="w_km_deslocamentos",
+                on_change=on_km_deslocamentos_change,
+                help="Valor manual único da operação: saída, deslocamentos entre coletas/entregas e retorno. Não some novamente os trechos já incluídos nos fretes.",
+            )
+            st.caption("Informe uma única vez por ciclo; os fretes compartilham esse valor.")
+        with k3:
+            km_total_previsto_op = round(km_planejado_op + km_deslocamentos_op, 2)
+            st.metric("KM TOTAL PLANEJADO", fmt_km(km_total_previsto_op))
+            st.caption("KM Planejado + KM Deslocamentos Operacionais.")
 
         v_neg_dre = to_float(get_campo("valor_negociado", 0.0))
         v_rec_dre = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))

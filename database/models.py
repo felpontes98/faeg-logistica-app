@@ -108,6 +108,9 @@ class CicloOperacional(Base):
     data_abertura = Column(Date)
     data_fechamento = Column(Date)
     status_ciclo = Column(String(50), default="Em Andamento")
+    # Deslocamentos de saída, entre coletas/entregas e retorno, informados uma
+    # única vez para o ciclo. Não confundir com os KM planejados de cada frete.
+    km_deslocamentos_operacionais = Column(Numeric(12, 2), default=0.0)
 
     cliente = relationship("Cliente", back_populates="ciclos")
     financeiro = relationship(
@@ -253,6 +256,7 @@ def sincronizar_colunas_banco():
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS tipo_viagem VARCHAR(30) DEFAULT 'Individual';",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_origem VARCHAR(120);",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_destino VARCHAR(120);",
+        "ALTER TABLE ciclos_operacionais ADD COLUMN IF NOT EXISTS km_deslocamentos_operacionais NUMERIC(12, 2) DEFAULT 0;",
         "ALTER TABLE viagens ALTER COLUMN rota_resumo TYPE VARCHAR(250);",
         "ALTER TABLE viagens ALTER COLUMN nfe_carga TYPE VARCHAR(120);",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_viagens_codigo_viagem ON viagens (codigo_viagem);",
