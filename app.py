@@ -572,6 +572,24 @@ st.markdown(
         text-transform: uppercase;
         letter-spacing: 0.04em;
     }
+    .ctx-status-group {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.28rem;
+        text-align: right;
+    }
+    .ctx-badge--paid {
+        background-color: #E8F5ED;
+        border-color: #91CDA8;
+        color: #17613D;
+    }
+    .ctx-operation-note {
+        color: #64748B;
+        font-size: 0.65rem;
+        font-weight: 600;
+        line-height: 1.25;
+    }
 
     div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div > .main-card-marker) {
         background-color: #FFFFFF;
@@ -971,6 +989,19 @@ def to_int(val, default=0):
 def fmt_brl(val):
     v = to_float(val, 0.0)
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def situacao_financeira_por_recebimentos(valor_negociado, total_recebido):
+    """Estado visual do pagamento; não altera a situação operacional nem grava no banco."""
+    negociado = round(max(0.0, to_float(valor_negociado)), 2)
+    recebido = round(max(0.0, to_float(total_recebido)), 2)
+    if recebido <= 0:
+        return None
+    if negociado <= 0:
+        return "Recebimento a Conferir"
+    if recebido >= negociado:
+        return "Pagamento Quitado"
+    return "Recebimento Parcial"
 
 
 def fmt_km(val):
@@ -3252,28 +3283,50 @@ rota_ctx = (
 )
 status_ctx = get_campo("status_viagem", "Aguardando Adiantamento")
 id_label_ctx = get_campo("id_viagem_label", prox_cod_sidebar)
+status_financeiro_ctx = None
+if viagem_sel_id != 0:
+    recebimentos_ctx = carregar_recebimentos_viagem(viagem_sel_id)
+    total_recebido_ctx = sum(r["valor_recebido"] for r in recebimentos_ctx if not r["cancelado"])
+    status_financeiro_ctx = situacao_financeira_por_recebimentos(
+        get_campo("valor_negociado", 0.0), total_recebido_ctx
+    )
+
+if status_financeiro_ctx:
+    texto_principal_ctx = status_financeiro_ctx
+    classe_financeira_ctx = " ctx-badge--paid" if status_financeiro_ctx == "Pagamento Quitado" else ""
+    # A Etapa 8 mantém seu status operacional. Se o rótulo antigo conflita
+    # com pagamentos confirmados, pedir revisão sem alterar dados salvos.
+    if status_ctx in {"Aguardando Adiantamento", "Adiantamento Recebido"}:
+        texto_operacional_ctx = "Situação operacional: conferir na Etapa 8"
+    else:
+        texto_operacional_ctx = f"Operação: {status_ctx}"
+else:
+    texto_principal_ctx = status_ctx
+    classe_financeira_ctx = ""
+    texto_operacional_ctx = "Situação da operação · Etapa 8"
 
 st.markdown(
     f"""
     <div class="top-context-bar">
         <div class="ctx-item">
             <span class="ctx-label">Código da Viagem</span>
-            <span class="ctx-val">{id_label_ctx}</span>
+            <span class="ctx-val">{escape(str(id_label_ctx))}</span>
         </div>
         <div class="ctx-item">
             <span class="ctx-label">Cliente Contratante</span>
-            <span class="ctx-val">{cli_nome_ctx}</span>
+            <span class="ctx-val">{escape(str(cli_nome_ctx))}</span>
         </div>
         <div class="ctx-item">
             <span class="ctx-label">Motorista Responsável</span>
-            <span class="ctx-val">{mot_nome_ctx}</span>
+            <span class="ctx-val">{escape(str(mot_nome_ctx))}</span>
         </div>
         <div class="ctx-item">
             <span class="ctx-label">Trecho / Rota</span>
-            <span class="ctx-val">{rota_ctx}</span>
+            <span class="ctx-val">{escape(str(rota_ctx))}</span>
         </div>
-        <div>
-            <span class="ctx-badge">{status_ctx}</span>
+        <div class="ctx-status-group">
+            <span class="ctx-badge{classe_financeira_ctx}">{escape(texto_principal_ctx)}</span>
+            <span class="ctx-operation-note">{escape(texto_operacional_ctx)}</span>
         </div>
     </div>
     """,
@@ -3832,10 +3885,11 @@ with st.container(border=True):
             )
         with a2:
             st.date_input(
-                "DATA ADIANTAMENTO",
+                "DATA ADIANTAMENTO (DD/MM/AAAA)",
                 value=get_campo("data_adiant"),
                 format="DD/MM/YYYY",
                 key="w_data_adiant",
+                help="Formato brasileiro: dia/mês/ano. No calendário, YYYY equivale a AAAA (ano com quatro dígitos).",
                 on_change=sync_campo,
                 args=("w_data_adiant", "data_adiant"),
             )
@@ -3863,10 +3917,11 @@ with st.container(border=True):
             )
         with s2:
             st.date_input(
-                "DATA SALDO",
+                "DATA SALDO (DD/MM/AAAA)",
                 value=get_campo("data_saldo"),
                 format="DD/MM/YYYY",
                 key="w_data_saldo",
+                help="Formato brasileiro: dia/mês/ano. No calendário, YYYY equivale a AAAA (ano com quatro dígitos).",
                 on_change=sync_campo,
                 args=("w_data_saldo", "data_saldo"),
             )
