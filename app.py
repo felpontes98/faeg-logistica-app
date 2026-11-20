@@ -1475,10 +1475,17 @@ def carregar_todas_viagens_consulta():
         viagens_raw = session.query(Viagem).order_by(Viagem.id_viagem.desc()).all()
         despesas_all = session.query(ViagemDespesa).all()
         recebidos_por_viagem = {}
-        for r in carregar_todos_recebimentos():
-            if not r["cancelado"]:
-                vid = r["id_viagem"]
-                recebidos_por_viagem[vid] = recebidos_por_viagem.get(vid, 0.0) + r["valor_recebido"]
+        # A consulta consolidada usa uma única sessão para viagens e recebimentos.
+        # Não mistura os dados atuais das viagens com outro cache de 5 minutos.
+        for id_viagem_receb, valor_recebido, cancelado in session.query(
+            RecebimentoFrete.id_viagem,
+            RecebimentoFrete.valor_recebido,
+            RecebimentoFrete.cancelado,
+        ).all():
+            if not cancelado:
+                recebidos_por_viagem[id_viagem_receb] = (
+                    recebidos_por_viagem.get(id_viagem_receb, 0.0) + float(valor_recebido)
+                )
         desp_por_viagem = {}
         desp_detalhadas = []
         cod_map = {vg.id_viagem: resolver_codigo_viagem(vg, vg.ciclo) for vg in viagens_raw}
@@ -4254,6 +4261,9 @@ with st.container(border=True):
 
         # Um só formulário: vínculo, dados financeiros e complemento operacional.
         st.markdown("**Dados da despesa**")
+        # Os campos de digitação são reiniciados somente após lançar com sucesso.
+        # Categoria, fornecedor, vínculo e data permanecem para lançamentos em sequência.
+        versao_campos_despesa = st.session_state.get("versao_campos_despesa", 0)
         c_d1, c_d2, c_d3 = st.columns([2.1, 2.5, 2.1])
         with c_d1:
             tipo_desp = st.selectbox("TIPO DE DESPESA", CATEGORIAS_DESPESA_FORNECEDOR, key="desp_tipo")
@@ -4261,7 +4271,7 @@ with st.container(border=True):
             desc_desp = st.text_input(
                 "DESCRIÇÃO / LOCAL",
                 placeholder="Ex: Abastecimento KM 120 / Pedágio",
-                key="desp_desc",
+                key=f"desp_desc_{versao_campos_despesa}",
             )
         with c_d3:
             forn_ops = {0: "Não informado"}
@@ -4281,15 +4291,15 @@ with st.container(border=True):
         colunas_valores = st.columns([1.3, 1.4, 1.6] if eh_combustivel else [1, 1])
         c_d4, c_d5 = colunas_valores[:2]
         with c_d4:
-            qtd_desp = st.number_input("LITROS *" if eh_combustivel else "QUANTIDADE *", min_value=0.01, value=1.00, step=1.0, format="%.2f", key="desp_qtd")
+            qtd_desp = st.number_input("LITROS *" if eh_combustivel else "QUANTIDADE *", min_value=0.01, value=1.00, step=1.0, format="%.2f", key=f"desp_qtd_{versao_campos_despesa}")
         with c_d5:
-            unit_desp = st.number_input("PREÇO / LITRO (R$) *" if eh_combustivel else "UNITÁRIO (R$) *", min_value=0.00, value=0.00, step=0.1 if eh_combustivel else 10.0, format="%.4f" if eh_combustivel else "%.2f", key="desp_unit")
+            unit_desp = st.number_input("PREÇO / LITRO (R$) *" if eh_combustivel else "UNITÁRIO (R$) *", min_value=0.00, value=0.00, step=0.1 if eh_combustivel else 10.0, format="%.4f" if eh_combustivel else "%.2f", key=f"desp_unit_{versao_campos_despesa}")
         if eh_combustivel:
             c_d6 = colunas_valores[2]
             with c_d6:
                 odometro_digitado = st.number_input(
                     "ODÔMETRO NO ABASTECIMENTO (KM)", min_value=0, value=0,
-                    step=1, key="desp_odometro_abastecimento",
+                    step=1, key=f"desp_odometro_abastecimento_{versao_campos_despesa}",
                     help="Digite diretamente a leitura do painel. Deixe 0 para não informado.",
                 )
         else:
@@ -4416,6 +4426,7 @@ with st.container(border=True):
                         st.warning("Esta despesa já está na lista temporária do frete.")
                         st.stop()
                     pendentes.append(dados_desp)
+                    st.session_state["versao_campos_despesa"] = versao_campos_despesa + 1
                     st.session_state["desp_similar_versao"] = st.session_state.get("desp_similar_versao", 0) + 1
                     st.toast("Despesa adicionada à lista temporária!", icon="🧾")
                     st.rerun()
@@ -4503,6 +4514,7 @@ with st.container(border=True):
                             origem_campo, origem_id = "id_despesa_veiculo", desp_obj.id_despesa_veiculo
                         registrar_abastecimento_do_lancamento(db, dados_desp, origem_campo, origem_id)
                         db.commit()
+                    st.session_state["versao_campos_despesa"] = versao_campos_despesa + 1
                     carregar_despesas_viagem.clear()
                     carregar_todas_viagens_consulta.clear()
                     carregar_todas_despesas_ciclo.clear()
