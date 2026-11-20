@@ -40,15 +40,17 @@ Exemplos e critérios de aceite estão documentados em [Regras de negócio](regr
 
 | Tema | Situação |
 | --- | --- |
-| Importação Excel | Prévia sem gravação validada com 34 fretes, 13 ciclos e 13 fechamentos. Gravação continua **bloqueada**, pois exige conciliação de despesas e do fechamento |
+| Importação Excel | Prévia sem gravação validada com 34 fretes e 13 ciclos. Das 13 linhas marcadas `FECHAMENTO`, a auditoria encontrou 12 fechamentos de fretes e 1 possível total geral. Gravação continua **bloqueada** |
 | Agrupamento | Novo cadastro reutiliza ciclo existente pelo número; mantém negociação e cliente independentes em `fretes_financeiro`. **Ciclos históricos repetidos não foram migrados** |
-| Fechamento | Linhas de `FECHAMENTO` são identificadas na prévia, mas não conciliadas com despesas e receitas consolidadas |
+| Fechamento | A prévia compara os valores negociados com a soma dos fretes anteriores e identifica códigos de ciclo ausentes ou divergentes. O fechamento real de despesas e recebimentos ainda não está implementado |
 | Recebimentos | Adiantamento mais saldo passam a ser apresentados como **total previsto**, sem confundir com pagamento confirmado; falta criar registro de recebimentos efetivos |
 | KM e abastecimento | Há campos de odômetro por viagem, mas não registro independente de abastecimentos |
 | Segurança | Não foi identificada autenticação ou autorização de usuários no código revisado |
 | Testes | Não havia suíte automatizada de testes no pacote recebido |
 
 **Atenção antes do deploy:** o app cria tabelas ausentes na inicialização. Portanto, a nova tabela será criada assim que o app modificado abrir uma conexão com o banco configurado. É obrigatório validar a versão em um banco de testes e ter backup antes de conectar ao banco oficial. Para as próximas tarefas, a equipe pode usar as Issues do GitHub, com base nos [Requisitos](requisitos.md) e na [Arquitetura do banco](arquitetura_banco.md).
+
+Na planilha de referência de setembro/2026, a auditoria apontou: linha 10 sem ID do ciclo no fechamento, linha 43 com ciclo declarado `V26-000008` embora os quatro fretes imediatamente anteriores indiquem `V26-000009`, linha 44 como possível total geral e frete `F26-000034` sem linha posterior de fechamento. **São avisos para conferência humana; nenhum código foi corrigido automaticamente.**
 
 ## Tecnologia e identidade visual
 

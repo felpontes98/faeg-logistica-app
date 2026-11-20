@@ -2124,6 +2124,24 @@ with st.container(border=True):
                     if analise.get("preview_df") is not None and not analise["preview_df"].empty:
                         st.dataframe(analise["preview_df"], use_container_width=True, hide_index=True)
 
+                    with st.expander("🔎 Conferência dos fechamentos e possíveis divergências", expanded=True):
+                        st.caption(
+                            f"Fechamentos associados a fretes: {resumo_pl['fechamentos_de_fretes']} | "
+                            f"Possíveis totais gerais: {resumo_pl['possiveis_resumos_gerais']} | "
+                            f"IDs de ciclo ausentes: {resumo_pl['ids_fechamento_ausentes']} | "
+                            f"IDs divergentes: {resumo_pl['ids_fechamento_divergentes']} | "
+                            f"Valores divergentes: {resumo_pl['valores_fechamento_divergentes']}"
+                        )
+                        fechamento_df = analise.get("preview_fechamentos_df")
+                        if fechamento_df is not None and not fechamento_df.empty:
+                            st.dataframe(fechamento_df, use_container_width=True, hide_index=True)
+                        if resumo_pl["fretes_sem_fechamento"]:
+                            st.info(
+                                f"Fretes sem linha posterior de fechamento: "
+                                f"{resumo_pl['fretes_sem_fechamento']}. "
+                                "Podem ser operações ainda em andamento."
+                            )
+
                     for aviso in analise.get("avisos", []):
                         st.warning(aviso)
 

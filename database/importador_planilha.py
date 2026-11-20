@@ -6,6 +6,7 @@ from datetime import date, datetime, time
 import openpyxl
 import pandas as pd
 
+from database.conciliacao_planilha import auditar_fechamentos_faeg
 from database.connection import SessionLocal
 from database.models import (
     CicloFinanceiro,
@@ -791,34 +792,15 @@ def analisar_planilha_faeg(file_bytes):
 
 
 def preparar_previa_importacao_faeg(file_bytes):
-    """Confere a planilha sem gravar no banco e separa fretes de fechamentos."""
+    """Confere fretes, fechamentos e divergências sem alterar a planilha ou o banco."""
     try:
         registros = analisar_planilha_faeg(file_bytes)
 
-        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
-        total_fechamentos = 0
-        abas_ignoradas = {"PARÂMETROS", "PARAMETROS", "CONFIG", "LISTAS", "APOIO"}
-        try:
-            for aba in wb.worksheets:
-                if aba.title.strip().upper() in abas_ignoradas:
-                    continue
-                linha_cabecalho = _encontrar_linha_cabecalho(aba)
-                cabecalhos = {
-                    _limpar_texto(aba.cell(linha_cabecalho, c).value).lower(): c
-                    for c in range(1, aba.max_column + 1)
-                }
-                col_id_frete = cabecalhos.get("id frete")
-                col_tipo = cabecalhos.get("tipo")
-                for linha in range(linha_cabecalho + 1, aba.max_row + 1):
-                    id_frete = _limpar_texto(aba.cell(linha, col_id_frete).value) if col_id_frete else ""
-                    tipo = _limpar_texto(aba.cell(linha, col_tipo).value) if col_tipo else ""
-                    if id_frete.upper().startswith("FECHAMENTO") or tipo.lower() == "fechamento":
-                        total_fechamentos += 1
-        finally:
-            wb.close()
-
         if not registros:
             return {"erro": "Nenhuma linha válida de frete foi encontrada no arquivo Excel."}
+
+        auditoria = auditar_fechamentos_faeg(file_bytes, registros)
+        resumo_fechamentos = auditoria["resumo"]
 
         fretes_por_ciclo = defaultdict(list)
         for registro in registros:
@@ -846,22 +828,57 @@ def preparar_previa_importacao_faeg(file_bytes):
             ]
         )
 
+        previa_fechamentos = pd.DataFrame(
+            [
+                {
+                    "Aba": item["aba"],
+                    "Linha": item["linha"],
+                    "Classificação": item["classificacao"],
+                    "Ciclo na linha": item["ciclo_declarado"] or "Não informado",
+                    "Ciclo dos fretes": item["ciclo_do_bloco"] or "-",
+                    "Qtd. fretes": item["quantidade_fretes"],
+                    "Receita dos fretes (R$)": item["receita_fretes"],
+                    "Valor do fechamento (R$)": item["receita_fechamento"],
+                    "Diferença (R$)": item["diferenca"],
+                    "Conferência": "; ".join(item["ocorrencias"]) or "Conferido",
+                }
+                for item in auditoria["linhas"]
+            ]
+        )
+
+        avisos = [
+            "A prévia é somente de leitura. Valores negociados não comprovam pagamento efetivo.",
+            "O vínculo entre cada fechamento e os fretes anteriores é uma sugestão de conferência, não uma correção automática.",
+            "A gravação da planilha no PostgreSQL continua bloqueada até a conciliação e os testes de migração.",
+        ]
+        if resumo_fechamentos["ids_ausentes"] or resumo_fechamentos["ids_divergentes"]:
+            avisos.append("Existem fechamentos com identificador de ciclo ausente ou diferente dos fretes correspondentes. Confira a tabela abaixo.")
+        if resumo_fechamentos["possiveis_resumos"]:
+            avisos.append("Há linha(s) sem fretes pendentes, possivelmente total geral. Esses valores não entram na receita dos fretes.")
+        if resumo_fechamentos["fretes_sem_fechamento"]:
+            avisos.append("Existem fretes sem uma linha posterior de fechamento. Eles podem representar ciclos em andamento.")
+
         return {
             "erro": None,
             "resumo": {
                 "total_fretes": len(registros),
                 "total_ciclos": len(ciclos),
-                "total_fechamentos": total_fechamentos,
+                "total_fechamentos": resumo_fechamentos["linhas_fechamento"],
+                "fechamentos_de_fretes": resumo_fechamentos["fechamentos_de_fretes"],
+                "possiveis_resumos_gerais": resumo_fechamentos["possiveis_resumos"],
+                "ids_fechamento_ausentes": resumo_fechamentos["ids_ausentes"],
+                "ids_fechamento_divergentes": resumo_fechamentos["ids_divergentes"],
+                "valores_fechamento_divergentes": resumo_fechamentos["valores_divergentes"],
+                "fretes_sem_fechamento": resumo_fechamentos["fretes_sem_fechamento"],
                 "ciclos_multifrete": ciclos_com_varios_fretes,
                 "ciclos_multicliente": ciclos_com_varios_clientes,
                 "receita_fretes": total_receita,
                 "despesas_fretes": total_despesas,
             },
             "preview_df": previa,
-            "avisos": [
-                "A prévia usa valores encontrados nas linhas dos fretes; despesas e totais de fechamento ainda não foram conciliados.",
-                "A gravação está bloqueada até a correção do agrupamento de vários fretes em um único ciclo operacional.",
-            ],
+            "preview_fechamentos_df": previa_fechamentos,
+            "fretes_sem_fechamento": auditoria["fretes_sem_fechamento"],
+            "avisos": avisos,
             "importacao_bloqueada": True,
         }
     except Exception:
