@@ -15,8 +15,8 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 | RF-03 | Agrupar vários fretes por ID de ciclo sem duplicar fretes de fechamento | Implementação parcial; teste pendente |
 | RF-04 | Conservar negociação, adiantamento e saldo por frete, mesmo em ciclos com clientes diferentes | Proposto em `fretes_financeiro`; teste pendente |
 | RF-05 | Registrar KM Individual/Ciclo manual por frete na Etapa 2 | Proposto; teste pendente |
-| RF-06 | Na Etapa 8, somar KM dos fretes do ciclo + deslocamentos operacionais digitados uma só vez | Proposto; teste pendente |
-| RF-07 | Registrar odômetro inicial/final opcional da operação, sem confundir com estimativa de KM | Proposto; teste pendente |
+| RF-06 | Na Etapa 8, somar KM dos fretes do ciclo + saída/entre coletas e retorno informados uma só vez na Etapa 2 | Proposto; teste pendente |
+| RF-07 | Registrar odômetros inicial/final opcionais da operação na Etapa 2 ou 8, usando os mesmos valores salvos, sem confundir com abastecimento | Proposto; teste pendente |
 | RF-08 | Registrar Diesel ou ARLA no formulário único da Etapa 7, inclusive sem viagem (destino provisório Veículo) | Proposto; teste pendente |
 | RF-09 | Exibir distância e KM/L/custo por KM indicativos entre abastecimentos consecutivos de Diesel do mesmo veículo | Proposto; teste pendente |
 | RF-10 | Associar a despesa de combustível a um único destino e gerar simultaneamente seu histórico operacional, sem duplicar no DRE | Proposto; teste pendente |
@@ -46,14 +46,17 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 | RF-34 | Na Etapa 8, somar KM planejado por ID interno do ciclo (não pelo nome), preservar o valor manual da Etapa 2 e sinalizar falta de KM no frete atual | Proposto; teste pendente |
 | RF-35 | Impedir salvar dois fretes distintos com o mesmo ID Frete e bloquear vínculo novo a nome de ciclo que identifique mais de um ID legado | Proposto; teste pendente |
 | RF-36 | Proteger vínculo histórico quando o último frete sair de um ciclo com despesa comum ativa ou quando a placa mudar com abastecimento já registrado | Proposto; teste pendente |
+| RF-37 | Acrescentar na Tela 2 os campos manuais de KM saída/entre coletas e KM retorno operacional, preservando o KM individual do frete e seu título de seção | Proposto; teste pendente |
+| RF-38 | Calcular KM Deslocamentos Operacionais somente na Tela 8 pela soma dos componentes da Tela 2, sem duplicar por frete do mesmo ciclo | Proposto; teste pendente |
+| RF-39 | Preservar o total de deslocamentos legado até discriminação manual e exportar componentes e leituras operacionais sem misturar odômetro de combustível | Proposto; teste pendente |
 
 ## Critérios de aceite dos cálculos
 
 1. **Frete individual:** `KM Planejado` recebe `KM Individual / Ciclo` do próprio frete.
 2. **Ciclo:** `KM Planejado` é a soma de `KM Individual / Ciclo` de todos os fretes do mesmo **ID interno do ciclo**, incluindo o valor ainda não salvo do frete em edição, sem contá-lo duas vezes. Ciclos com nome igual e IDs internos diferentes não são somados em conjunto.
-3. **Deslocamentos:** `KM Deslocamentos Operacionais` é um valor manual único do ciclo, referente a trechos ainda não incluídos nos fretes.
+3. **Deslocamentos:** `KM Deslocamentos Operacionais = KM de Saída e Deslocamento Entre Coletas + KM Operacional de Retorno`, digitados na **Etapa 2**. Os componentes são guardados uma só vez por ID de ciclo. Para registros históricos ainda sem componentes, mostrar o total antigo até discriminação manual.
 4. **Total:** `KM Total Planejado = KM Planejado + KM Deslocamentos Operacionais`.
-5. **Real:** quando os dois odômetros operacionais forem válidos, `KM Real = odômetro final − odômetro inicial`; sem as duas leituras, mostrar “Não informado”. Não aceitar final menor que inicial.
+5. **Real:** odômetros de início/fim podem ser digitados na Etapa 2 ou 8, compartilhando a mesma dupla de valores por frete. O KM real do frete é `odômetro final − odômetro inicial`, quando ambos são válidos. Para **KM Total Real do ciclo**, somar os intervalos reais de seus fretes apenas quando todos têm leituras válidas e os intervalos não se sobrepõem no mesmo veículo. Na ausência ou sobreposição, mostrar “Não calculável” e aviso; não comparar planejado do ciclo com real de um único frete.
 6. **Desvio:** quando o KM real estiver disponível, `Diferença = KM Real − KM Total Planejado`; exibir desvio percentual somente com planejado maior que zero.
 7. **Abastecimento:** é cadastrado **uma vez no formulário de despesas**, atribuído ao frete, ciclo ou provisoriamente ao veículo. O reflexo operacional por `id_veiculo` não exige que haja fretes no banco e não altera os odômetros iniciais/finais da operação.
 8. **Consumo:** apenas dois abastecimentos *consecutivos de Diesel* do mesmo veículo com odômetros crescentes permitem `KM entre abastecimentos`; `KM/L = distância / litros do abastecimento atual` e `R$/KM = valor atual / distância`. Informar que essa média é indicativa e pressupõe tanque cheio; ARLA é monitorado separadamente.
@@ -73,7 +76,8 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 22. **Exportação coerente:** a opção **Base Completa** da Etapa 10 exporta fretes, despesas, fechamentos e conferência da base inteira, mesmo que a tabela de consultas esteja filtrada. A aba `Conferencia_Financeira` discrimina o tratamento de cada parcela e recebido de fato não é somado à receita negociada.
 23. **Possíveis duplicidades:** comparar despesas de frete e despesas compartilhadas do ciclo correspondente por data, categoria, quantidade, valor, descrição, fornecedor e, quando possível, veículo/odômetro. Uma coincidência deve gerar aviso e exigir confirmação explícita de que os comprovantes são diferentes, sem alterar os registros automaticamente. A atribuição de despesa provisória também aplica a conferência e conserva sua justificativa. A etapa de relatórios deve listar as coincidências conhecidas e exportá-las em `Possiveis_Duplicidades`; a ausência de alertas não certifica que todos os custos sejam únicos.
 24. **Identificadores e histórico:** ID Frete preenchido não pode ser reutilizado por outro frete (independentemente de caixa/espaços); ciclos legados com mesmo nome e IDs diferentes não são escolhidos automaticamente para novo vínculo. Ao editar um frete existente, preservar a identidade do ciclo atual se o nome não mudou. O último frete de ciclo com despesas compartilhadas ativas não pode sair/renomear o ciclo sem tratamento explícito dessas despesas. A troca de placa é bloqueada se houver abastecimento ativo associado ao veículo anterior. O salvamento de frete novo também rejeita abastecimento temporário que pertença à outra placa.
-25. **Tela 2 e Tela 8:** `KM X ROTA PLANEJADO` é só título; `KM INDIVIDUAL / CICLO` é entrada manual do trecho. A Tela 8 apresenta memória de cálculo do planejado, deslocamentos adicionais e total. Não confundir esses valores com odômetro inicial/final da operação nem odômetro no abastecimento da Tela 7. Informar KM manual zero exige alerta de possível dado faltante.
+25. **Tela 2 e Tela 8:** `KM X ROTA PLANEJADO` é só título; a Tela 2 contém entradas manuais de KM saída/entre coletas, KM individual do frete, KM retorno e odômetros operacionais inicial/final. A Tela 8 calcula os agregados, o KM total real e o desvio, mas **mantém** os dois odômetros operacionais editáveis, sincronizados com a Tela 2 sobre os mesmos campos do banco. O odômetro no abastecimento continua na Tela 7 e não preenche automaticamente os odômetros do frete, pois pode corresponder a um momento intermediário. KM individual zerado deve ser sinalizado.
+26. **Migração dos deslocamentos legados:** quando os dois novos componentes de ciclo estão nulos no banco, preservar o valor antigo agregado, com aviso visual. Somente substituir por nova composição após edição explícita do formulário. Uma atualização de outro frete do ciclo não pode zerar silenciosamente o total anterior.
 
 ## Requisitos de integridade e implantação
 
@@ -110,7 +114,9 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - [ ] Conferir margem “Não calculável” para receita zero ou legado ambíguo, inclusive nos gráficos e PDF do BI.
 - [ ] Lançar custo semelhante em frete e ciclo do mesmo ID e comprovar o aviso, confirmação obrigatória e ausência de alteração automática do histórico.
 - [ ] Repetir no sentido inverso e verificar IDs na aba `Possiveis_Duplicidades`, inclusive com dados vazios.
-- [ ] Conferir Tela 2: título KM X ROTA PLANEJADO não digitável, KM INDIVIDUAL / CICLO manual; Tela 8: planejado por ID, deslocamentos únicos e total calculado.
+- [ ] Conferir Tela 2: título KM X ROTA PLANEJADO não digitável; saída/entre coletas, KM individual, retorno e dois odômetros são manuais; Tela 8: planejado por ID, saída + retorno única por ciclo, total planejado, total real e diferença calculados.
+- [ ] Abrir ciclo legado com deslocamento total mas sem os dois novos campos; garantir preservação ao salvar outro frete, aviso para discriminar e total atualizado só após edição dos componentes.
+- [ ] Conferir no Excel `Viagens_e_Ciclos` e `Fechamento_Ciclos` os campos discriminados, inclusive vazios em registros legados sem detalhamento.
 - [ ] Simular dois IDs internos com mesmo nome de ciclo e evitar soma por nome ou novo vínculo automático; preservar o ID original ao editar frete salvo.
 - [ ] Conferir alerta quando o KM manual na Etapa 2 ainda for zero e memória de cálculo na Etapa 8.
 - [ ] Tentar duplicar ID Frete, trocar placa com Diesel registrado, ou retirar último frete de ciclo com despesa ativa; conferir bloqueios sem alteração do histórico.
@@ -125,6 +131,7 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - [ ] Simular reenvio do mesmo comprovante, lançamento acima do negociado e frete ainda não salvo; conferir as proteções.
 - [ ] Conferir ausência de valor negociado, adiantamento/saldo previstos e ausência de odômetros sem contabilizar valores fictícios.
 - [ ] Salvar operação sem odômetros, com odômetros válidos e com odômetro final inferior ao inicial.
+- [ ] Em ciclo com dois fretes, verificar KM Real Rodado individual (topo da Tela 8) e KM Total Real consolidado, incluindo caso de odômetros ausentes e intervalos sobrepostos no mesmo veículo.
 - [ ] Conferir cenário de fechamento e exportação sem viagens e com viagens.
 - [ ] Conciliar amostra com a planilha, inspecionar as divergências já relatadas e verificar que nada foi importado sem autorização.
 - [ ] Realizar backup e ensaio de migração em banco de testes; somente depois avaliar o deploy no banco oficial.

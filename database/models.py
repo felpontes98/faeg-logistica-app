@@ -114,6 +114,10 @@ class CicloOperacional(Base):
     # Deslocamentos de saída, entre coletas/entregas e retorno, informados uma
     # única vez para o ciclo. Não confundir com os KM planejados de cada frete.
     km_deslocamentos_operacionais = Column(Numeric(12, 2), default=0.0)
+    # Campos manuais da Etapa 2. Nulos indicam registro legado ainda não
+    # discriminado; nesse caso preservamos o total anterior acima.
+    km_saida_entre_coletas = Column(Numeric(12, 2), nullable=True)
+    km_retorno_operacional = Column(Numeric(12, 2), nullable=True)
 
     cliente = relationship("Cliente", back_populates="ciclos")
     financeiro = relationship(
@@ -394,6 +398,8 @@ def sincronizar_colunas_banco():
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_origem VARCHAR(120);",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_destino VARCHAR(120);",
         "ALTER TABLE ciclos_operacionais ADD COLUMN IF NOT EXISTS km_deslocamentos_operacionais NUMERIC(12, 2) DEFAULT 0;",
+        "ALTER TABLE ciclos_operacionais ADD COLUMN IF NOT EXISTS km_saida_entre_coletas NUMERIC(12, 2);",
+        "ALTER TABLE ciclos_operacionais ADD COLUMN IF NOT EXISTS km_retorno_operacional NUMERIC(12, 2);",
         "ALTER TABLE viagens_despesas ADD COLUMN IF NOT EXISTS data_despesa DATE;",
         "ALTER TABLE viagens_despesas ADD COLUMN IF NOT EXISTS odometro_abastecimento INTEGER;",
         "ALTER TABLE viagens_despesas ALTER COLUMN valor_unitario TYPE NUMERIC(12, 4);",

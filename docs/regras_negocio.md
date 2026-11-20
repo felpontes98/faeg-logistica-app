@@ -54,12 +54,13 @@ Uma alteração em uma classificação não deve apagar o cliente, o preço, a i
 
 Conforme a proposta operacional apresentada por Eduardo para o sistema:
 
-1. Na **Etapa 2 — Frete**, **KM X ROTA PLANEJADO** é somente o título; **KM INDIVIDUAL / CICLO** é o campo numérico preenchido manualmente para o trecho do frete.
+1. Na **Etapa 2 — Frete**, **KM X ROTA PLANEJADO** é somente o título. O usuário informa manualmente **KM DE SAÍDA E DESLOCAMENTO ENTRE COLETAS**, **KM INDIVIDUAL / CICLO** e **KM OPERACIONAL DE RETORNO**. Os dois campos de deslocamento não podem incluir trechos já computados no KM individual do frete.
 2. Em um **frete individual**, o KM Planejado corresponde a esse campo.
 3. Em um **ciclo**, cada frete tem seu próprio KM Individual / Ciclo. Na Etapa 8, **KM PLANEJADO** é a soma dos KM dos fretes associados ao mesmo **ID interno do ciclo**, considerando o valor ainda não salvo do frete em edição. Nomes iguais em ciclos históricos diferentes **não** autorizam somá-los.
-4. **KM DESLOCAMENTOS OPERACIONAIS** é informado manualmente **uma vez por ciclo**, abrangendo os deslocamentos de saída, entre coletas/entregas e retorno que não estejam incluídos nos trechos individuais. Em viagem individual, refere-se apenas aos deslocamentos adicionais daquela operação. O campo é independente do odômetro.
+4. **KM DESLOCAMENTOS OPERACIONAIS** é calculado na Etapa 8: **KM de saída/entre coletas + KM operacional de retorno** informados na Etapa 2. Em ciclo, os dois componentes são compartilhados por **ID interno do ciclo**, cadastrados uma única vez e **não** somados novamente para cada frete. No individual, pertencem somente àquela operação.
 5. **KM TOTAL PLANEJADO = KM PLANEJADO + KM DESLOCAMENTOS OPERACIONAIS**.
 6. Antes de homologar, garantir que os trechos foram definidos sem lacunas ou sobreposições. Não incluir duas vezes a mesma distância no frete e nos deslocamentos operacionais.
+7. **Compatibilidade:** ciclos antigos que contêm apenas `km_deslocamentos_operacionais` mantêm o total salvo enquanto os dois componentes novos ainda não forem discriminados. Ao editar os novos campos na Etapa 2, o novo total substitui o legado; conferir ambos os valores antes de salvar.
 
 **Exemplo ilustrativo:** três fretes com 280, 120 e 85 km = **485 km planejados**. Se os deslocamentos operacionais não incluídos nesses fretes somarem 65 km, o **KM Total Planejado será 550 km**.
 
@@ -74,10 +75,10 @@ Manter três conceitos independentes:
 | Leitura | Onde registrar | Utilidade |
 | --- | --- | --- |
 | KM planejado (Maps) | Frete / trechos do ciclo | Planejamento e análise operacional |
-| Odômetro saída e chegada (opcionais) | Fechamento do individual ou ciclo | Apurar percurso real e comparar com o planejado |
+| Odômetro inicial e final da operação (opcionais) | Entrada manual na Etapa 2 **ou** na Etapa 8, no mesmo registro persistido | Apurar percurso real e comparar com o planejado |
 | Odômetro no abastecimento (quando disponível) | Campo numérico do lançamento único de Diesel/ARLA na Etapa 7 | Alimentar o histórico por veículo, consumo e manutenção |
 
-Se saída e chegada forem preenchidos para o mesmo veículo e intervalo, **KM real do percurso = odômetro de chegada − odômetro de saída**. Validar que a chegada não é inferior à saída e que leituras pertencem ao veículo correto. Se uma leitura faltar, mostrar **“KM real não informado”**.
+Se saída e chegada forem preenchidos para o mesmo veículo e intervalo, **KM real do percurso = odômetro de chegada − odômetro de saída**. Validar que a chegada não é inferior à saída e que leituras pertencem ao veículo correto. Se uma leitura faltar, mostrar **“KM real não informado”**. No ciclo, **KM TOTAL REAL** é a soma dos intervalos reais dos seus fretes, desde que todos tenham dois odômetros válidos e **não haja sobreposição de intervalos no mesmo veículo**; caso contrário, o consolidado não é calculável até conferência. **DIF. KM TOTAL PLANEJADO X REAL = total real − total planejado**. O campo superior `KM REAL RODADO` continua referindo-se ao frete em edição.
 
 Leituras de abastecimento podem ajudar a conferir o histórico e, quando houver duas leituras confiáveis consecutivas, calcular a distância entre abastecimentos. **Não presumir** que essa distância seja automaticamente igual ao KM do ciclo ou do frete: abastecimentos podem ocorrer no meio de vários serviços.
 

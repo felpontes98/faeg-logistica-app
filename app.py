@@ -991,18 +991,24 @@ def on_tipo_viagem_change():
     if get_campo("tipo_viagem", "Individual") == "Individual":
         st.session_state["form_data"]["ciclo_nome"] = ""
         st.session_state["form_data"]["km_deslocamentos"] = 0.0
-        st.session_state["km_deslocamentos_editado"] = False
+        st.session_state["form_data"]["km_saida_entre_coletas"] = 0.0
+        st.session_state["form_data"]["km_retorno_operacional"] = 0.0
+        st.session_state["form_data"]["km_componentes_discriminados"] = True
+        st.session_state["km_componentes_editados"] = False
         if "w_ciclo_nome" in st.session_state:
             del st.session_state["w_ciclo_nome"]
-        if "w_km_deslocamentos" in st.session_state:
-            del st.session_state["w_km_deslocamentos"]
+        for chave in ("w_km_saida_entre_coletas", "w_km_retorno_operacional"):
+            st.session_state.pop(chave, None)
 
 
 def on_ciclo_nome_change():
-    """Recupera KM compartilhado só quando o ID de ciclo é inequívoco."""
+    """Recupera componentes de KM compartilhados só com ID inequívoco."""
     sync_campo("w_ciclo_nome", "ciclo_nome")
     nome = (get_campo("ciclo_nome") or "").strip()
     km_deslocamentos = 0.0
+    km_saida = 0.0
+    km_retorno = 0.0
+    discriminados = True
     if nome and get_campo("tipo_viagem") == "Ciclo":
         with SessionLocal() as session:
             ciclo = None
@@ -1031,15 +1037,40 @@ def on_ciclo_nome_change():
                     )
             if ciclo is not None:
                 km_deslocamentos = to_float(ciclo.km_deslocamentos_operacionais)
+                discriminados = (
+                    ciclo.km_saida_entre_coletas is not None
+                    or ciclo.km_retorno_operacional is not None
+                )
+                km_saida = to_float(ciclo.km_saida_entre_coletas)
+                km_retorno = to_float(ciclo.km_retorno_operacional)
     st.session_state["form_data"]["km_deslocamentos"] = km_deslocamentos
-    st.session_state["km_deslocamentos_editado"] = False
-    if "w_km_deslocamentos" in st.session_state:
-        del st.session_state["w_km_deslocamentos"]
+    st.session_state["form_data"]["km_saida_entre_coletas"] = km_saida
+    st.session_state["form_data"]["km_retorno_operacional"] = km_retorno
+    st.session_state["form_data"]["km_componentes_discriminados"] = discriminados
+    st.session_state["km_componentes_editados"] = False
+    for chave in ("w_km_saida_entre_coletas", "w_km_retorno_operacional"):
+        st.session_state.pop(chave, None)
 
 
-def on_km_deslocamentos_change():
-    sync_campo("w_km_deslocamentos", "km_deslocamentos")
-    st.session_state["km_deslocamentos_editado"] = True
+def on_km_componente_change(chave_widget, campo):
+    """O valor composto passa a substituir o total legado só após edição."""
+    sync_campo(chave_widget, campo)
+    st.session_state["km_componentes_editados"] = True
+    st.session_state["form_data"]["km_componentes_discriminados"] = True
+    st.session_state["form_data"]["km_deslocamentos"] = round(
+        to_float(get_campo("km_saida_entre_coletas", 0.0))
+        + to_float(get_campo("km_retorno_operacional", 0.0)), 2
+    )
+
+
+def calcular_km_deslocamentos_formulario():
+    """Preserva o total antigo até os dois campos novos serem informados."""
+    if get_campo("km_componentes_discriminados", True):
+        return round(
+            to_float(get_campo("km_saida_entre_coletas", 0.0))
+            + to_float(get_campo("km_retorno_operacional", 0.0)), 2
+        )
+    return round(to_float(get_campo("km_deslocamentos", 0.0)), 2)
 
 
 # ==============================================================================
@@ -1395,8 +1426,18 @@ def carregar_todas_viagens_consulta():
                     "total_despesas": tot_desp,
                     "km_rota_planejado": to_float(vg.km_rota_planejado),
                     "km_deslocamentos_operacionais": to_float(ciclo.km_deslocamentos_operacionais) if ciclo else 0.0,
+                    "km_saida_entre_coletas": (
+                        to_float(ciclo.km_saida_entre_coletas)
+                        if ciclo and ciclo.km_saida_entre_coletas is not None else None
+                    ),
+                    "km_retorno_operacional": (
+                        to_float(ciclo.km_retorno_operacional)
+                        if ciclo and ciclo.km_retorno_operacional is not None else None
+                    ),
                     "resultado_liquido": res_liq,
                     "km_rodado": km_real,
+                    "odometro_inicial": od_ini,
+                    "odometro_final": od_fim,
                     "custo_km": custo_km,
                     "margem_pct": margem,
                 }
@@ -1550,6 +1591,12 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
                     round(v["margem_pct"], 2)
                     if v["receita_base"] > 0 and not v["financeiro_legado_ambiguo"] else None
                 ),
+                "KM Individual / Ciclo": v["km_rota_planejado"],
+                "KM Saída / Entre Coletas (ciclo)": v["km_saida_entre_coletas"],
+                "KM Retorno Operacional (ciclo)": v["km_retorno_operacional"],
+                "KM Deslocamentos Total (ciclo)": v["km_deslocamentos_operacionais"],
+                "Odômetro Inicial (operação)": v["odometro_inicial"] or None,
+                "Odômetro Final (operação)": v["odometro_final"] or None,
                 "KM Rodado": v["km_rodado"],
                 "Custo por KM (R$)": round(v["custo_km"], 2) if v["custo_km"] is not None else None,
             }
@@ -1613,6 +1660,8 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
             "Despesas Financeiras (R$)": f["despesas_total"],
             "Resultado Operacional Parcial (R$)": f["resultado_operacional_parcial"],
             "KM Fretes Planejados": f["km_planejado_fretes"],
+            "KM Saída / Entre Coletas": f["km_saida_entre_coletas"],
+            "KM Retorno Operacional": f["km_retorno_operacional"],
             "KM Deslocamentos": f["km_deslocamentos_operacionais"],
             "KM Total Planejado": f["km_total_planejado"],
             "Fretes com Financeiro Legado Ambíguo": f["qtd_financeiros_legados_ambiguos"],
@@ -1625,7 +1674,8 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         "Recebido de Fato (R$)", "Saldo a Receber (R$)", "Excedente Recebido (R$)",
         "Despesas dos Fretes (R$)", "Despesas Compartilhadas (R$)",
         "Despesas Financeiras (R$)", "Resultado Operacional Parcial (R$)",
-        "KM Fretes Planejados", "KM Deslocamentos", "KM Total Planejado",
+        "KM Fretes Planejados", "KM Saída / Entre Coletas",
+        "KM Retorno Operacional", "KM Deslocamentos", "KM Total Planejado",
         "Fretes com Financeiro Legado Ambíguo",
     ])
     df_recebimentos = pd.DataFrame([
@@ -2146,7 +2196,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
         return
 
     limpar_widgets_viagem()
-    st.session_state["km_deslocamentos_editado"] = False
+    st.session_state["km_componentes_editados"] = False
     if id_viagem_escolhida == 0:
         prox_cod = calcular_proximo_codigo_viagem(viagens_lista)
         st.session_state["form_data"] = {
@@ -2162,6 +2212,9 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
             "rota_destino": "",
             "km_rota": 0.0,
             "km_deslocamentos": 0.0,
+            "km_saida_entre_coletas": 0.0,
+            "km_retorno_operacional": 0.0,
+            "km_componentes_discriminados": True,
             "tipo_material": "",
             "qt_volumes": 0,
             "volume_m3": 0.0,
@@ -2230,6 +2283,12 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
                     "rota_destino": destino_db,
                     "km_rota": to_float(vg.km_rota_planejado),
                     "km_deslocamentos": to_float(ciclo.km_deslocamentos_operacionais) if ciclo else 0.0,
+                    "km_saida_entre_coletas": to_float(ciclo.km_saida_entre_coletas) if ciclo else 0.0,
+                    "km_retorno_operacional": to_float(ciclo.km_retorno_operacional) if ciclo else 0.0,
+                    "km_componentes_discriminados": (
+                        ciclo.km_saida_entre_coletas is not None
+                        or ciclo.km_retorno_operacional is not None
+                    ) if ciclo else True,
                     "tipo_material": vg.tipo_material or "",
                     "qt_volumes": to_int(vg.qtde_volumes),
                     "volume_m3": to_float(vg.volume_m3),
@@ -2356,6 +2415,73 @@ def calcular_km_planejado_operacao(id_viagem_atual):
     return round(km_atual + soma_outros, 2)
 
 
+def calcular_km_total_real_operacao(id_viagem_atual, odo_inicial, odo_final):
+    """Consolida trechos reais por ID de ciclo, sem somar odômetros sobrepostos.
+
+    A dupla de odômetros no topo da Tela 8 refere-se ao frete atual. Para
+    compará-la com o planejamento consolidado de um ciclo, todos os outros
+    fretes precisam ter leituras válidas e intervalos não sobrepostos no
+    mesmo veículo. Leituras ausentes/ambíguas não geram totais fictícios.
+    """
+    inicio = to_int(odo_inicial)
+    fim = to_int(odo_final)
+    if inicio <= 0 or fim < inicio or fim <= 0:
+        return None
+    if get_campo("tipo_viagem", "Individual") != "Ciclo":
+        return fim - inicio
+
+    nome = (get_campo("ciclo_nome") or "").strip()
+    if not nome:
+        return None
+    with SessionLocal() as session:
+        ciclo = None
+        if id_viagem_atual:
+            atual = session.query(Viagem).filter_by(id_viagem=id_viagem_atual).first()
+            if (
+                atual is not None and atual.ciclo is not None
+                and atual.ciclo.nome_operacao.strip().casefold() == nome.casefold()
+            ):
+                ciclo = atual.ciclo
+        if ciclo is None:
+            candidatos = (
+                session.query(CicloOperacional)
+                .filter(func.lower(func.trim(CicloOperacional.nome_operacao)) == nome.lower())
+                .order_by(CicloOperacional.id_ciclo).limit(2).all()
+            )
+            if len(candidatos) > 1:
+                st.warning("KM Total Real indisponível: há mais de um ID interno para este nome de ciclo.")
+                return None
+            ciclo = candidatos[0] if candidatos else None
+        outros = (
+            session.query(Viagem).filter_by(id_ciclo=ciclo.id_ciclo).all()
+            if ciclo is not None else []
+        )
+
+        intervalos = [(get_campo("vei_id", 0), inicio, fim)]
+        for frete in outros:
+            if frete.id_viagem == id_viagem_atual:
+                continue
+            ini_outro = to_int(frete.odometro_inicial)
+            fim_outro = to_int(frete.odometro_final)
+            if ini_outro <= 0 or fim_outro <= 0 or fim_outro < ini_outro:
+                st.info(
+                    "O KM Total Real do ciclo ainda não pode ser calculado: "
+                    "existem fretes do mesmo ciclo sem odômetros válidos."
+                )
+                return None
+            intervalos.append((frete.id_veiculo, ini_outro, fim_outro))
+
+    for i, (veiculo_a, inicio_a, fim_a) in enumerate(intervalos):
+        for veiculo_b, inicio_b, fim_b in intervalos[i + 1:]:
+            if veiculo_a == veiculo_b and max(inicio_a, inicio_b) < min(fim_a, fim_b):
+                st.warning(
+                    "Os odômetros de fretes do ciclo apresentam intervalos sobrepostos "
+                    "no mesmo veículo. Confira as leituras antes de consolidar o KM Total Real."
+                )
+                return None
+    return sum(fim - inicio for _, inicio, fim in intervalos)
+
+
 def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual):
     """Considera fretes salvos e substitui o atual pelo formulário não salvo."""
     identificador = (get_campo("ciclo_nome") or "").strip()
@@ -2409,7 +2535,15 @@ def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual):
             if not r["cancelado"]
         ), 2),
         "km_rota_planejado": to_float(get_campo("km_rota", 0.0)),
-        "km_deslocamentos_operacionais": to_float(get_campo("km_deslocamentos", 0.0)),
+        "km_deslocamentos_operacionais": calcular_km_deslocamentos_formulario(),
+        "km_saida_entre_coletas": (
+            to_float(get_campo("km_saida_entre_coletas", 0.0))
+            if get_campo("km_componentes_discriminados", True) else None
+        ),
+        "km_retorno_operacional": (
+            to_float(get_campo("km_retorno_operacional", 0.0))
+            if get_campo("km_componentes_discriminados", True) else None
+        ),
         # Uma viagem antiga que só lê ciclos_financeiro permanece ambígua até
         # ser salva com seus próprios valores em fretes_financeiro.
         "financeiro_individual": ativo_salvo["financeiro_individual"] if ativo_salvo else True,
@@ -2419,13 +2553,16 @@ def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual):
 
 
 def salvar_km_deslocamentos_ciclo(ciclo):
-    """Atualiza o KM compartilhado apenas quando explicitamente informado."""
+    """Salva a composição uma vez por ciclo, preservando totais legados."""
     if (
         get_campo("tipo_viagem", "Individual") == "Individual"
-        or st.session_state.get("km_deslocamentos_editado", False)
+        or st.session_state.get("km_componentes_editados", False)
         or not ciclo.viagens
     ):
-        ciclo.km_deslocamentos_operacionais = to_float(get_campo("km_deslocamentos", 0.0))
+        ciclo.km_deslocamentos_operacionais = calcular_km_deslocamentos_formulario()
+        if get_campo("km_componentes_discriminados", True):
+            ciclo.km_saida_entre_coletas = to_float(get_campo("km_saida_entre_coletas", 0.0))
+            ciclo.km_retorno_operacional = to_float(get_campo("km_retorno_operacional", 0.0))
 
 
 def salvar_viagem_completa(id_viagem_atual, viagens_lista):
@@ -3087,7 +3224,7 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
-        f1, f2, f3, f4, f5 = st.columns([1.1, 1.3, 1.6, 1.6, 1.0])
+        f1, f2, f3, f4 = st.columns([1.1, 1.3, 1.6, 1.6])
         with f1:
             st.text_input(
                 "ID FRETE",
@@ -3127,12 +3264,31 @@ with st.container(border=True):
                 on_change=sync_campo,
                 args=("w_rota_destino", "rota_destino"),
             )
-        with f5:
-            st.markdown("**KM X ROTA PLANEJADO**")
+        st.markdown('<div class="sec-subtitle">KM X ROTA PLANEJADO</div>', unsafe_allow_html=True)
+        st.caption(
+            "Preencha os trechos manualmente. Em um ciclo, os deslocamentos de saída/entre "
+            "coletas e de retorno são compartilhados e entram uma única vez na Etapa 8. "
+            "Não inclua nesses campos o trecho já lançado no KM Individual / Ciclo."
+        )
+        km1, km2, km3 = st.columns(3)
+        with km1:
+            st.number_input(
+                "KM DE SAÍDA E DESLOCAMENTO ENTRE COLETAS",
+                min_value=0.0,
+                step=10.0,
+                format="%.2f",
+                value=to_float(get_campo("km_saida_entre_coletas", 0.0)),
+                key="w_km_saida_entre_coletas",
+                on_change=on_km_componente_change,
+                args=("w_km_saida_entre_coletas", "km_saida_entre_coletas"),
+                help="KM adicionais até a primeira coleta e entre coletas, excluindo os trechos já previstos em cada frete.",
+            )
+        with km2:
             st.number_input(
                 "KM INDIVIDUAL / CICLO",
                 min_value=0.0,
                 step=10.0,
+                format="%.2f",
                 help=(
                     "Campo manual: informe o KM previsto deste ID Frete. "
                     "Se a viagem fizer parte de um ciclo, a Etapa 8 somará o KM "
@@ -3142,6 +3298,52 @@ with st.container(border=True):
                 key="w_km_rota",
                 on_change=sync_campo,
                 args=("w_km_rota", "km_rota"),
+            )
+        with km3:
+            st.number_input(
+                "KM OPERACIONAL DE RETORNO",
+                min_value=0.0,
+                step=10.0,
+                format="%.2f",
+                value=to_float(get_campo("km_retorno_operacional", 0.0)),
+                key="w_km_retorno_operacional",
+                on_change=on_km_componente_change,
+                args=("w_km_retorno_operacional", "km_retorno_operacional"),
+                help="KM adicional de retorno após a última entrega, excluindo trechos já associados a fretes.",
+            )
+        if not get_campo("km_componentes_discriminados", True) and to_float(get_campo("km_deslocamentos", 0.0)) > 0:
+            st.info(
+                "Este ciclo tem KM de deslocamentos registrado na versão anterior, sem separar "
+                "saída e retorno. O total antigo será preservado até você preencher os dois "
+                "campos novos; confira a distribuição antes de salvar."
+            )
+
+        st.markdown('<div class="sec-subtitle">Odômetros da Operação</div>', unsafe_allow_html=True)
+        st.caption(
+            "Registre as leituras reais de início e fim da operação. Na Etapa 8, os valores "
+            "serão exibidos para calcular o KM real. O odômetro de cada abastecimento "
+            "continua no lançamento único da Etapa 7."
+        )
+        od1, od2 = st.columns(2)
+        with od1:
+            st.number_input(
+                "KM ODÔMETRO INICIAL",
+                min_value=0,
+                step=10,
+                value=to_int(get_campo("odo_ini", 0)),
+                key="w_odo_ini",
+                on_change=sync_campo,
+                args=("w_odo_ini", "odo_ini"),
+            )
+        with od2:
+            st.number_input(
+                "KM ODÔMETRO FINAL",
+                min_value=0,
+                step=10,
+                value=to_int(get_campo("odo_fin", 0)),
+                key="w_odo_fin",
+                on_change=sync_campo,
+                args=("w_odo_fin", "odo_fin"),
             )
 
         st.markdown('<div class="sec-subtitle">Detalhes da Carga</div>', unsafe_allow_html=True)
@@ -4529,12 +4731,14 @@ with st.container(border=True):
         )
 
         f1, f2, f3, f4 = st.columns([1.1, 1.1, 1.1, 1.7])
+        odo_ini_v = to_int(get_campo("odo_ini", 0))
+        odo_fin_v = to_int(get_campo("odo_fin", 0))
         with f1:
             odo_ini_v = st.number_input(
                 "ODÔMETRO INICIAL",
                 min_value=0,
                 step=10,
-                value=to_int(get_campo("odo_ini", 0)),
+                value=odo_ini_v,
                 key="w_odo_ini",
                 on_change=sync_campo,
                 args=("w_odo_ini", "odo_ini"),
@@ -4544,7 +4748,7 @@ with st.container(border=True):
                 "ODÔMETRO FINAL",
                 min_value=0,
                 step=10,
-                value=to_int(get_campo("odo_fin", 0)),
+                value=odo_fin_v,
                 key="w_odo_fin",
                 on_change=sync_campo,
                 args=("w_odo_fin", "odo_fin"),
@@ -4563,6 +4767,11 @@ with st.container(border=True):
             )
         if odo_ini_v > 0 and odo_fin_v > 0 and odo_fin_v < odo_ini_v:
             st.error("Leituras inconsistentes: odômetro final menor que o inicial.")
+        st.caption(
+            "Os mesmos odômetros da operação também podem ser preenchidos na Etapa 2 "
+            "(sem duplicar o dado). Leituras de abastecimento na Etapa 7 "
+            "são independentes e podem ocorrer no meio da viagem."
+        )
         with f4:
             st_atual = get_campo("status_viagem", "Aguardando Adiantamento")
             st.selectbox(
@@ -4584,20 +4793,19 @@ with st.container(border=True):
                 "ciclo = soma do KM manual dos fretes do mesmo ID interno."
             )
         with k2:
-            km_deslocamentos_op = st.number_input(
-                "KM DESLOCAMENTOS OPERACIONAIS",
-                min_value=0.0,
-                step=10.0,
-                format="%.2f",
-                value=to_float(get_campo("km_deslocamentos", 0.0)),
-                key="w_km_deslocamentos",
-                on_change=on_km_deslocamentos_change,
-                help="Valor manual da operação: saída, deslocamentos entre coletas/entregas e retorno. Para um ciclo, informe uma única vez; não repita KM dos fretes.",
-            )
-            if get_campo("tipo_viagem", "Individual") == "Ciclo":
-                st.caption("Informar uma única vez por ID Ciclo; todos os fretes compartilham esse valor.")
+            km_deslocamentos_op = calcular_km_deslocamentos_formulario()
+            st.metric("KM DESLOCAMENTOS OPERACIONAIS", fmt_km(km_deslocamentos_op))
+            if get_campo("km_componentes_discriminados", True):
+                st.caption(
+                    f"Saída/entre coletas: {fmt_km(get_campo('km_saida_entre_coletas', 0.0))} + "
+                    f"retorno: {fmt_km(get_campo('km_retorno_operacional', 0.0))}. "
+                    "Informados manualmente na Etapa 2; somados uma única vez por ciclo."
+                )
             else:
-                st.caption("Informar o deslocamento adicional desta viagem individual, se houver.")
+                st.caption(
+                    "Total registrado anteriormente, ainda sem discriminação em saída e retorno. "
+                    "Para detalhar, preencha ambos os campos na Etapa 2."
+                )
         with k3:
             km_total_previsto_op = round(km_planejado_op + km_deslocamentos_op, 2)
             st.metric("KM TOTAL PLANEJADO", fmt_km(km_total_previsto_op))
@@ -4615,16 +4823,29 @@ with st.container(border=True):
                 "de considerar o KM Total Planejado como completo."
             )
 
-        c_real_1, c_real_2 = st.columns(2)
-        if km_real_calc is not None:
-            diferenca_km = km_real_calc - km_total_previsto_op
-            c_real_1.metric("DIFERENÇA REAL − PLANEJADO", fmt_km(diferenca_km))
+        km_total_real_op = calcular_km_total_real_operacao(viagem_sel_id, odo_ini_v, odo_fin_v)
+        c_real_1, c_real_2, c_real_3 = st.columns(3)
+        if km_total_real_op is not None:
+            diferenca_km = km_total_real_op - km_total_previsto_op
+            c_real_1.metric("KM TOTAL REAL", fmt_km(km_total_real_op))
+            c_real_1.caption(
+                "Individual: odômetro final − inicial; ciclo: soma dos intervalos "
+                "válidos, sem sobreposição, de seus fretes."
+            )
+            c_real_2.metric("DIF. KM TOTAL PLANEJADO X REAL", fmt_km(diferenca_km))
+            c_real_2.caption("KM real − KM total planejado; positivo significa KM excedente.")
             if km_total_previsto_op > 0:
-                c_real_2.metric("DESVIO DO PLANEJADO", f"{(diferenca_km / km_total_previsto_op) * 100:+.1f}%")
+                c_real_3.metric("DESVIO DO PLANEJADO", f"{(diferenca_km / km_total_previsto_op) * 100:+.1f}%")
             else:
-                c_real_2.metric("DESVIO DO PLANEJADO", "Não calculável")
+                c_real_3.metric("DESVIO DO PLANEJADO", "Não calculável")
         else:
-            st.caption("Diferença e desvio indisponíveis enquanto não houver dois odômetros válidos.")
+            c_real_1.metric("KM TOTAL REAL", "Não informado")
+            c_real_2.metric("DIF. KM TOTAL PLANEJADO X REAL", "Não calculável")
+            c_real_3.metric("DESVIO DO PLANEJADO", "Não calculável")
+            st.caption(
+                "KM total real, diferença e desvio dependem de odômetros válidos em todos "
+                "os fretes do ciclo, sem intervalos sobrepostos no mesmo veículo."
+            )
 
         vei_km_id = get_campo("vei_id", 0)
         if vei_km_id:

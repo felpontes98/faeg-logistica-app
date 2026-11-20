@@ -66,6 +66,8 @@ def consolidar_ciclos(fretes, despesas_ciclo=None):
         # Na prévia, o frete em edição é anexado por último: seu valor manual
         # dos deslocamentos do ciclo deve prevalecer sobre o cache já salvo.
         deslocamentos = round(float(itens[-1].get("km_deslocamentos_operacionais") or 0), 2)
+        km_saida = itens[-1].get("km_saida_entre_coletas")
+        km_retorno = itens[-1].get("km_retorno_operacional")
         resultado = round(receita - despesas, 2)
         margem = round(resultado / receita * 100, 2) if receita > 0 else None
 
@@ -89,6 +91,8 @@ def consolidar_ciclos(fretes, despesas_ciclo=None):
             "resultado_operacional_parcial": resultado,
             "margem_operacional_pct": margem,
             "km_planejado_fretes": km_fretes,
+            "km_saida_entre_coletas": round(float(km_saida), 2) if km_saida is not None else None,
+            "km_retorno_operacional": round(float(km_retorno), 2) if km_retorno is not None else None,
             "km_deslocamentos_operacionais": deslocamentos,
             "km_total_planejado": round(km_fretes + deslocamentos, 2),
             "qtd_financeiros_legados_ambiguos": len(ambiguos),
