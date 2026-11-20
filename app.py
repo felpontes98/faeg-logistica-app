@@ -241,7 +241,7 @@ st.markdown(
         object-position: center;
         display: block;
         margin: 0 auto;
-        transform: translateY(-15px);
+        transform: translateY(-25px);
         filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
     }
     .sidebar-monogram-fallback {
