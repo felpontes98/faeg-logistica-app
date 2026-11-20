@@ -6,7 +6,7 @@ Desenvolver um sistema web para substituir progressivamente o preenchimento oper
 
 O projeto nasceu da operação real da **FAEG — Soluções Empresariais e Logísticas**, com processos e planilha-base apresentados por Eduardo Pontes. O desenvolvimento é conduzido por Felipe Pontes e Larissa do Espírito Santo no contexto do Startup Challenge UMC 2026.
 
-## Estado da versão analisada
+## Estado da versão preparada (pendente de homologação no banco)
 
 Foi realizada uma leitura estática do código e da planilha de referência. O aplicativo possui onze etapas na navegação:
 
@@ -24,7 +24,7 @@ Foi realizada uma leitura estática do código e da planilha de referência. O a
 | 10 | Consultas gerais |
 | 11 | Cadastros gerais |
 
-Os formulários, cadastros, consultas e relatórios estão presentes no código. O banco é modelado por SQLAlchemy em nove tabelas PostgreSQL. **A presença de uma tela não equivale a homologação funcional:** alguns fluxos precisam de correção e de testes com banco de dados.
+Os formulários, cadastros, consultas e relatórios estão presentes no código. A proposta atual acrescenta `fretes_financeiro`, totalizando **dez tabelas no ORM**. **A presença de uma tela ou de um modelo não equivale a homologação:** este código ainda precisa ser testado com uma cópia do PostgreSQL.
 
 ## Decisões operacionais da FAEG
 
@@ -40,15 +40,15 @@ Exemplos e critérios de aceite estão documentados em [Regras de negócio](regr
 
 | Tema | Situação |
 | --- | --- |
-| Importação Excel | A interface espera estrutura de resposta e parâmetros diferentes dos fornecidos pelo importador |
-| Agrupamento | O salvamento e o importador criam um novo registro de ciclo por frete |
-| Fechamento | Linhas de `FECHAMENTO` do Excel são ignoradas na importação atual |
-| Recebimentos | Total programado de adiantamento e saldo é rotulado como “Valor Total Recebido” |
+| Importação Excel | Prévia sem gravação validada com 34 fretes, 13 ciclos e 13 fechamentos. Gravação continua **bloqueada**, pois exige conciliação de despesas e do fechamento |
+| Agrupamento | Novo cadastro reutiliza ciclo existente pelo número; mantém negociação e cliente independentes em `fretes_financeiro`. **Ciclos históricos repetidos não foram migrados** |
+| Fechamento | Linhas de `FECHAMENTO` são identificadas na prévia, mas não conciliadas com despesas e receitas consolidadas |
+| Recebimentos | Adiantamento mais saldo passam a ser apresentados como **total previsto**, sem confundir com pagamento confirmado; falta criar registro de recebimentos efetivos |
 | KM e abastecimento | Há campos de odômetro por viagem, mas não registro independente de abastecimentos |
 | Segurança | Não foi identificada autenticação ou autorização de usuários no código revisado |
 | Testes | Não havia suíte automatizada de testes no pacote recebido |
 
-**Nenhum desses pontos foi alterado no código nesta revisão documental.** Para transformar essas pendências em atividades, a equipe pode usar as Issues do GitHub, com base nos [Requisitos](requisitos.md) e na [Arquitetura do banco](arquitetura_banco.md).
+**Atenção antes do deploy:** o app cria tabelas ausentes na inicialização. Portanto, a nova tabela será criada assim que o app modificado abrir uma conexão com o banco configurado. É obrigatório validar a versão em um banco de testes e ter backup antes de conectar ao banco oficial. Para as próximas tarefas, a equipe pode usar as Issues do GitHub, com base nos [Requisitos](requisitos.md) e na [Arquitetura do banco](arquitetura_banco.md).
 
 ## Tecnologia e identidade visual
 
@@ -59,6 +59,6 @@ Exemplos e critérios de aceite estão documentados em [Regras de negócio](regr
 
 ## Próxima versão
 
-A prioridade deve ser corrigir a importação e garantir segurança, depois adequar fretes/ciclos, fechamento, recebimentos e quilometragem. A modularização do aplicativo e a evolução do painel de indicadores vêm em seguida, preservando os dados existentes.
+A próxima etapa é validar o novo vínculo frete–ciclo no PostgreSQL de testes, reconciliar e reagrupar os ciclos históricos duplicados, se existirem, e só então reimplementar a gravação Excel. Fechamentos, recebimentos efetivos e quilometragem vêm em seguida, com proteção dos dados existentes.
 
 Para apresentação geral e instalação, consulte o [README](../README.md). Para a arquitetura técnica, consulte [Arquitetura do banco](arquitetura_banco.md).

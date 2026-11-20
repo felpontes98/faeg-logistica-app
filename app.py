@@ -8,13 +8,14 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 
 from database.connection import SessionLocal
 from database.importador_planilha import preparar_previa_importacao_faeg
 from database.models import (
-    CicloFinanceiro,
     CicloOperacional,
     Cliente,
+    FreteFinanceiro,
     Fornecedor,
     Local,
     Motorista,
@@ -94,6 +95,25 @@ def resolver_codigo_viagem(viagem_obj, ciclo_obj=None):
         if cod:
             return cod.upper()
     return f"V{viagem_obj.id_viagem}"
+
+
+def financeiro_e_cliente_do_frete(viagem):
+    """Usa os dados próprios do frete e preserva a leitura dos registros antigos."""
+    financeiro_novo = viagem.financeiro_frete
+    if financeiro_novo is not None:
+        return financeiro_novo, financeiro_novo.cliente
+    ciclo = viagem.ciclo
+    return (ciclo.financeiro, ciclo.cliente) if ciclo is not None else (None, None)
+
+
+def localizar_ciclo_operacional(session, identificador):
+    """Localiza um ciclo compartilhado por seu identificador, ignorando caixa e espaços."""
+    return (
+        session.query(CicloOperacional)
+        .filter(func.lower(func.trim(CicloOperacional.nome_operacao)) == identificador.strip().lower())
+        .order_by(CicloOperacional.id_ciclo.asc())
+        .first()
+    )
 
 
 def extrair_numero_sequencial(codigo_str, fallback_id=0):
@@ -1087,8 +1107,7 @@ def carregar_todas_viagens_consulta():
         lista = []
         for vg in viagens_raw:
             ciclo = vg.ciclo
-            fin = ciclo.financeiro if ciclo else None
-            cli = ciclo.cliente if ciclo else None
+            fin, cli = financeiro_e_cliente_do_frete(vg)
             mot = vg.motorista
             vei = vg.veiculo
             col = vg.local_coleta
@@ -1099,8 +1118,8 @@ def carregar_todas_viagens_consulta():
             v_neg = to_float(fin.valor_negociado_total) if fin else 0.0
             v_adi = to_float(fin.valor_adiantamento) if fin else 0.0
             v_sal = to_float(fin.valor_saldo) if fin else 0.0
-            total_rec = v_adi + v_sal
-            receita_base = v_neg if v_neg > 0 else total_rec
+            total_previsto = v_adi + v_sal
+            receita_base = v_neg if v_neg > 0 else total_previsto
             tot_desp = desp_por_viagem.get(vg.id_viagem, 0.0)
             res_liq = receita_base - tot_desp
             km_real = to_int(vg.km_real_rodado)
@@ -1155,7 +1174,7 @@ def carregar_todas_viagens_consulta():
                     "valor_negociado": v_neg,
                     "valor_adiantamento": v_adi,
                     "valor_saldo": v_sal,
-                    "total_recebido": total_rec,
+                    "total_previsto": total_previsto,
                     "receita_base": receita_base,
                     "total_despesas": tot_desp,
                     "resultado_liquido": res_liq,
@@ -1223,7 +1242,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
                 "Valor Negociado (R$)": v["valor_negociado"],
                 "Adiantamento (R$)": v["valor_adiantamento"],
                 "Saldo (R$)": v["valor_saldo"],
-                "Total Recebido (R$)": v["total_recebido"],
+                "Parcelas Previstas (R$)": v["total_previsto"],
                 "Despesas Totais (R$)": v["total_despesas"],
                 "Resultado Líquido (R$)": v["resultado_liquido"],
                 "Margem (%)": round(v["margem_pct"], 2),
@@ -1631,7 +1650,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
             vg = session.query(Viagem).filter_by(id_viagem=id_viagem_escolhida).first()
             if vg:
                 ciclo = vg.ciclo
-                fin = ciclo.financeiro if ciclo else None
+                fin, cli = financeiro_e_cliente_do_frete(vg)
                 ciclo_exib = ciclo.nome_operacao if ciclo else ""
                 if ciclo_exib.startswith("Individual - "):
                     ciclo_exib = ""
@@ -1670,7 +1689,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
                     "cte": vg.cte_numero or "",
                     "mdfe": vg.mdfe_numero or "",
                     "ciot": vg.ciot_numero or "",
-                    "cli_id": ciclo.id_cliente if ciclo else 0,
+                    "cli_id": cli.id_cliente if cli else 0,
                     "forma_contrat": fin.forma_contratacao if fin else OPCOES_ORIGEM_FRETE[0],
                     "valor_divulgado": to_float(fin.valor_divulgado) if fin else 0.0,
                     "valor_negociado": to_float(fin.valor_negociado_total) if fin else 0.0,
@@ -1695,6 +1714,47 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
         st.session_state["despesas_temp"] = []
 
     st.session_state["loaded_viagem_id"] = id_viagem_escolhida
+
+
+def preencher_financeiro_do_frete(financeiro, id_cliente):
+    """Atualiza apenas as condições comerciais do frete selecionado."""
+    financeiro.id_cliente = id_cliente
+    financeiro.forma_contratacao = get_campo("forma_contrat", OPCOES_ORIGEM_FRETE[0])
+    financeiro.valor_divulgado = to_float(get_campo("valor_divulgado", 0.0))
+    financeiro.valor_negociado_total = to_float(get_campo("valor_negociado", 0.0))
+    financeiro.perc_adiantamento = to_float(get_campo("perc_adiant", 0.0))
+    financeiro.data_prevista_adiantamento = get_campo("data_adiant")
+    financeiro.valor_adiantamento = to_float(get_campo("valor_adiant", 0.0))
+    financeiro.perc_saldo = to_float(get_campo("perc_saldo", 0.0))
+    financeiro.data_prevista_saldo = get_campo("data_saldo")
+    financeiro.valor_saldo = to_float(get_campo("valor_saldo", 0.0))
+
+
+def obter_ciclo_para_salvamento(session, tipo_viagem, nome_ciclo, id_cliente, data_operacao, viagem=None):
+    """Agrupa fretes por ciclo, mas não altera silenciosamente outros fretes do grupo."""
+    atual = viagem.ciclo if viagem is not None else None
+    if atual and atual.nome_operacao.strip().casefold() == nome_ciclo.casefold():
+        return atual
+
+    encontrado = localizar_ciclo_operacional(session, nome_ciclo) if tipo_viagem == "Ciclo" else None
+    if encontrado is not None:
+        return encontrado
+
+    # Se o ciclo antigo só tem este frete, renomeá-lo não afeta outros registros.
+    if atual is not None and len(atual.viagens) == 1:
+        atual.nome_operacao = nome_ciclo
+        atual.id_cliente = id_cliente  # Cliente de referência; o cliente real fica no frete.
+        return atual
+
+    novo = CicloOperacional(
+        id_cliente=id_cliente,
+        nome_operacao=nome_ciclo,
+        data_abertura=data_operacao,
+        status_ciclo="Em Andamento",
+    )
+    session.add(novo)
+    session.flush()
+    return novo
 
 
 def salvar_viagem_completa(id_viagem_atual, viagens_lista):
@@ -1743,28 +1803,13 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
     try:
         with SessionLocal() as session:
             if id_viagem_atual == 0:
-                ciclo = CicloOperacional(
-                    id_cliente=cli_id,
-                    nome_operacao=nome_ciclo,
-                    data_abertura=get_campo("data_op", date.today()),
-                    status_ciclo=f"COD::{codigo_digitado}",
+                ciclo = obter_ciclo_para_salvamento(
+                    session,
+                    tipo_viagem_val,
+                    nome_ciclo,
+                    cli_id,
+                    get_campo("data_op", date.today()),
                 )
-                session.add(ciclo)
-                session.flush()
-
-                fin = CicloFinanceiro(
-                    id_ciclo=ciclo.id_ciclo,
-                    forma_contratacao=get_campo("forma_contrat", OPCOES_ORIGEM_FRETE[0]),
-                    valor_divulgado=to_float(get_campo("valor_divulgado", 0.0)),
-                    valor_negociado_total=to_float(get_campo("valor_negociado", 0.0)),
-                    perc_adiantamento=to_float(get_campo("perc_adiant", 0.0)),
-                    data_prevista_adiantamento=get_campo("data_adiant"),
-                    valor_adiantamento=to_float(get_campo("valor_adiant", 0.0)),
-                    perc_saldo=to_float(get_campo("perc_saldo", 0.0)),
-                    data_prevista_saldo=get_campo("data_saldo"),
-                    valor_saldo=to_float(get_campo("valor_saldo", 0.0)),
-                )
-                session.add(fin)
 
                 vg = Viagem(
                     id_ciclo=ciclo.id_ciclo,
@@ -1802,6 +1847,10 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 session.add(vg)
                 session.flush()
 
+                financeiro_frete = FreteFinanceiro(id_viagem=vg.id_viagem, id_cliente=cli_id)
+                preencher_financeiro_do_frete(financeiro_frete, cli_id)
+                session.add(financeiro_frete)
+
                 for dt in st.session_state.get("despesas_temp", []):
                     session.add(
                         ViagemDespesa(
@@ -1826,6 +1875,15 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
             else:
                 vg = session.query(Viagem).filter_by(id_viagem=id_viagem_atual).first()
                 if vg:
+                    ciclo_destino = obter_ciclo_para_salvamento(
+                        session,
+                        tipo_viagem_val,
+                        nome_ciclo,
+                        cli_id,
+                        get_campo("data_op", date.today()),
+                        viagem=vg,
+                    )
+                    vg.id_ciclo = ciclo_destino.id_ciclo
                     vg.codigo_viagem = codigo_digitado
                     vg.id_motorista = mot_id
                     vg.id_veiculo = vei_id
@@ -1857,21 +1915,13 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     vg.odometro_final = odo_fin
                     vg.km_real_rodado = km_real
 
-                    if vg.ciclo:
-                        vg.ciclo.id_cliente = cli_id
-                        vg.ciclo.nome_operacao = nome_ciclo
-                        vg.ciclo.status_ciclo = f"COD::{codigo_digitado}"
-                        if vg.ciclo.financeiro:
-                            fin = vg.ciclo.financeiro
-                            fin.forma_contratacao = get_campo("forma_contrat", OPCOES_ORIGEM_FRETE[0])
-                            fin.valor_divulgado = to_float(get_campo("valor_divulgado", 0.0))
-                            fin.valor_negociado_total = to_float(get_campo("valor_negociado", 0.0))
-                            fin.perc_adiantamento = to_float(get_campo("perc_adiant", 0.0))
-                            fin.data_prevista_adiantamento = get_campo("data_adiant")
-                            fin.valor_adiantamento = to_float(get_campo("valor_adiant", 0.0))
-                            fin.perc_saldo = to_float(get_campo("perc_saldo", 0.0))
-                            fin.data_prevista_saldo = get_campo("data_saldo")
-                            fin.valor_saldo = to_float(get_campo("valor_saldo", 0.0))
+                    financeiro_frete = vg.financeiro_frete
+                    if financeiro_frete is None:
+                        # Primeiro salvamento de um frete legado: copia a visão para
+                        # a tabela individual, preservando o histórico do ciclo.
+                        financeiro_frete = FreteFinanceiro(id_viagem=vg.id_viagem, id_cliente=cli_id)
+                        session.add(financeiro_frete)
+                    preencher_financeiro_do_frete(financeiro_frete, cli_id)
                     session.commit()
                     st.session_state["loaded_viagem_id"] = None
                     carregar_listas_base.clear()
@@ -2060,6 +2110,11 @@ with st.container(border=True):
                     kp3.metric("Linhas de Fechamento", resumo_pl["total_fechamentos"])
                     kp4.metric("Receita dos Fretes", fmt_brl(resumo_pl["receita_fretes"]))
 
+                    st.info(
+                        f"Ciclos com mais de um frete: {resumo_pl['ciclos_multifrete']}. "
+                        f"Ciclos com clientes diferentes: {resumo_pl['ciclos_multicliente']}. "
+                        "O cliente e os valores são próprios de cada frete."
+                    )
                     st.caption(
                         "Despesas identificadas nas linhas dos fretes: "
                         f"{fmt_brl(resumo_pl['despesas_fretes'])}. "
@@ -2526,12 +2581,12 @@ with st.container(border=True):
                 on_change=on_val_saldo_change,
             )
 
-        total_rec_now = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))
+        total_previsto_now = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))
         st.markdown(
             f"""
             <div class="faeg-recebimento-banner">
-                <span class="faeg-recebimento-label">Valor Total Recebido (Adiant. + Saldo):</span>
-                <span class="faeg-recebimento-val">{fmt_brl(total_rec_now)}</span>
+                <span class="faeg-recebimento-label">Total Previsto (Adiant. + Saldo):</span>
+                <span class="faeg-recebimento-val">{fmt_brl(total_previsto_now)}</span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -2951,7 +3006,7 @@ with st.container(border=True):
             <div class="dre-box">
                 <div class="dre-header">Demonstrativo de Resultado da Viagem (DRE — FAEG)</div>
                 <div class="dre-row">
-                    <span style="color:#ABCEE1;">Receita Total (Frete Negociado / Recebido)</span>
+                    <span style="color:#ABCEE1;">Receita Prevista (Frete Negociado)</span>
                     <span style="font-weight:800; font-size:1.15rem;">{fmt_brl(receita_dre)}</span>
                 </div>
                 <div class="dre-row">

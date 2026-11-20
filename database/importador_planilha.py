@@ -1,5 +1,6 @@
 import io
 import re
+from collections import defaultdict
 from datetime import date, datetime, time
 
 import openpyxl
@@ -819,7 +820,16 @@ def preparar_previa_importacao_faeg(file_bytes):
         if not registros:
             return {"erro": "Nenhuma linha válida de frete foi encontrada no arquivo Excel."}
 
-        ciclos = {r["ciclo"] for r in registros if r["ciclo"]}
+        fretes_por_ciclo = defaultdict(list)
+        for registro in registros:
+            if registro["ciclo"]:
+                fretes_por_ciclo[registro["ciclo"].strip().upper()].append(registro)
+        ciclos = set(fretes_por_ciclo)
+        ciclos_com_varios_fretes = sum(len(fretes) > 1 for fretes in fretes_por_ciclo.values())
+        ciclos_com_varios_clientes = sum(
+            len({r["empresa"].strip().casefold() for r in fretes if r["empresa"].strip()}) > 1
+            for fretes in fretes_por_ciclo.values()
+        )
         total_receita = round(sum(r["receita_consolidada"] for r in registros), 2)
         total_despesas = round(sum(r["despesa_consolidada"] for r in registros), 2)
         previa = pd.DataFrame(
@@ -842,6 +852,8 @@ def preparar_previa_importacao_faeg(file_bytes):
                 "total_fretes": len(registros),
                 "total_ciclos": len(ciclos),
                 "total_fechamentos": total_fechamentos,
+                "ciclos_multifrete": ciclos_com_varios_fretes,
+                "ciclos_multicliente": ciclos_com_varios_clientes,
                 "receita_fretes": total_receita,
                 "despesas_fretes": total_despesas,
             },
@@ -863,6 +875,14 @@ def importar_planilha_para_banco(file_bytes, modo_duplicado="atualizar"):
     Grava todos os registros extraídos da planilha no PostgreSQL (Neon),
     criando automaticamente cadastros ausentes e conciliando receitas e despesas.
     """
+    # Segurança: este importador antigo ainda cria um ciclo para CADA frete e
+    # substitui despesas existentes. Não pode ser chamado até a conciliação ser
+    # implementada e validada em um banco de testes.
+    raise RuntimeError(
+        "Importação no banco bloqueada: use apenas a prévia até a rotina de "
+        "conciliação de fretes, ciclos e despesas ser homologada."
+    )
+
     registros = analisar_planilha_faeg(file_bytes)
     if not registros:
         return {

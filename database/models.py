@@ -187,6 +187,37 @@ class Viagem(Base):
         back_populates="viagem",
         cascade="all, delete-orphan",
     )
+    financeiro_frete = relationship(
+        "FreteFinanceiro",
+        back_populates="viagem",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class FreteFinanceiro(Base):
+    """Condições comerciais de UM frete, mesmo quando vários fretes compartilham o ciclo.
+
+    A tabela ciclos_financeiro permanece disponível para leitura de registros antigos.
+    Não se reescrevem registros históricos automaticamente.
+    """
+
+    __tablename__ = "fretes_financeiro"
+
+    id_viagem = Column(Integer, ForeignKey("viagens.id_viagem"), primary_key=True)
+    id_cliente = Column(Integer, ForeignKey("clientes.id_cliente"), nullable=False)
+    forma_contratacao = Column(String(80))
+    valor_divulgado = Column(Numeric(12, 2), default=0.0)
+    valor_negociado_total = Column(Numeric(12, 2), default=0.0)
+    perc_adiantamento = Column(Numeric(6, 2), default=0.0)
+    data_prevista_adiantamento = Column(Date)
+    valor_adiantamento = Column(Numeric(12, 2), default=0.0)
+    perc_saldo = Column(Numeric(6, 2), default=0.0)
+    data_prevista_saldo = Column(Date)
+    valor_saldo = Column(Numeric(12, 2), default=0.0)
+
+    viagem = relationship("Viagem", back_populates="financeiro_frete")
+    cliente = relationship("Cliente")
 
 
 class ViagemDespesa(Base):
