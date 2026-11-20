@@ -56,14 +56,16 @@ Conforme a proposta operacional apresentada por Eduardo para o sistema:
 
 1. Na **Etapa 2 — Frete**, **KM X ROTA PLANEJADO** é somente o título; **KM INDIVIDUAL / CICLO** é o campo numérico preenchido manualmente para o trecho do frete.
 2. Em um **frete individual**, o KM Planejado corresponde a esse campo.
-3. Em um **ciclo**, cada frete tem seu próprio KM Individual / Ciclo. Na Etapa 8, **KM PLANEJADO** é a soma dos KM dos fretes associados ao mesmo número de ciclo, considerando o valor ainda não salvo do frete em edição.
-4. **KM DESLOCAMENTOS OPERACIONAIS** é informado manualmente **uma vez por ciclo**, abrangendo os deslocamentos de saída, entre coletas/entregas e retorno que não estejam incluídos nos trechos individuais. O campo é independente do odômetro.
+3. Em um **ciclo**, cada frete tem seu próprio KM Individual / Ciclo. Na Etapa 8, **KM PLANEJADO** é a soma dos KM dos fretes associados ao mesmo **ID interno do ciclo**, considerando o valor ainda não salvo do frete em edição. Nomes iguais em ciclos históricos diferentes **não** autorizam somá-los.
+4. **KM DESLOCAMENTOS OPERACIONAIS** é informado manualmente **uma vez por ciclo**, abrangendo os deslocamentos de saída, entre coletas/entregas e retorno que não estejam incluídos nos trechos individuais. Em viagem individual, refere-se apenas aos deslocamentos adicionais daquela operação. O campo é independente do odômetro.
 5. **KM TOTAL PLANEJADO = KM PLANEJADO + KM DESLOCAMENTOS OPERACIONAIS**.
 6. Antes de homologar, garantir que os trechos foram definidos sem lacunas ou sobreposições. Não incluir duas vezes a mesma distância no frete e nos deslocamentos operacionais.
 
 **Exemplo ilustrativo:** três fretes com 280, 120 e 85 km = **485 km planejados**. Se os deslocamentos operacionais não incluídos nesses fretes somarem 65 km, o **KM Total Planejado será 550 km**.
 
 Esse valor é estimado, não uma leitura real de odômetro. A ausência de KM deve ser sinalizada como dado faltante, não considerada automaticamente zero.
+
+**Proteções de edição:** se o KM manual do frete atual permanece zero, a Etapa 8 alerta que a estimativa pode estar incompleta. Ao editar um frete já salvo, a prévia usa o ID interno de seu ciclo atual, enquanto um novo frete com número de ciclo homônimo em mais de um ID não é vinculado automaticamente. O KM compartilhado não é copiado de um ciclo ambíguo; ao transformar uma operação em Individual, os deslocamentos do ciclo antigo não devem ser carregados indevidamente.
 
 ## RN-05 — Odômetro de saída, chegada e abastecimento
 

@@ -8,7 +8,8 @@ Sistema web de apoio ao controle operacional e financeiro da FAEG — Soluções
 
 - Cadastros de veículos, motoristas, clientes, locais e fornecedores.
 - Fretes com rota, documentos e negociação individual; agrupamento por ciclo operacional.
-- KM Individual/Ciclo preenchido manualmente na Etapa 2 e soma dos KM do ciclo na Etapa 8, acrescida de deslocamentos operacionais informados uma vez.
+- **Tela 2:** “KM X ROTA PLANEJADO” é somente um título; “KM INDIVIDUAL / CICLO” é um campo manual de cada frete. **Tela 8:** “KM PLANEJADO” soma os trechos pelo **ID interno do ciclo**, “KM DESLOCAMENTOS OPERACIONAIS” é informado uma vez no ciclo, e “KM TOTAL PLANEJADO” soma ambos; os odômetros inicial/final continuam separados para KM real. Quando o frete ainda está sem KM manual, aparece aviso de conferência.
+- Ao editar fretes, há proteções contra reutilização de ID Frete, associação automática a nomes de ciclo históricos repetidos, troca da placa com abastecimento ativo e saída do último frete de ciclo com despesas compartilhadas ativas. Essas situações são apresentadas para correção humana, sem migrar dados silenciosamente.
 - Odômetros de saída/chegada da operação, distintos das leituras de abastecimento. Na Etapa 7, ao selecionar Diesel ou ARLA, **ODÔMETRO NO ABASTECIMENTO (KM)** aparece como campo numérico direto, sem checkbox; `0` significa leitura não informada (`NULL`).
 - **Um único formulário para despesas e abastecimentos** na Etapa 7: informar litros, preço e odômetro no mesmo lançamento. O custo é atribuído a **um frete, a um ciclo ou provisoriamente a um veículo**, sem duas áreas para cadastrar combustível.
 - Histórico de Diesel e ARLA por **veículo**, inclusive sem frete selecionado, preenchido pelo próprio lançamento de despesa. A área de histórico é **somente consulta**, com estimativas de distância, km/L e R$/km entre registros consecutivos de Diesel.

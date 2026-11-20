@@ -999,13 +999,36 @@ def on_tipo_viagem_change():
 
 
 def on_ciclo_nome_change():
-    """Ao selecionar um ciclo existente, recupera seu KM compartilhado."""
+    """Recupera KM compartilhado só quando o ID de ciclo é inequívoco."""
     sync_campo("w_ciclo_nome", "ciclo_nome")
     nome = (get_campo("ciclo_nome") or "").strip()
     km_deslocamentos = 0.0
     if nome and get_campo("tipo_viagem") == "Ciclo":
         with SessionLocal() as session:
-            ciclo = localizar_ciclo_operacional(session, nome)
+            ciclo = None
+            id_viagem_aberta = st.session_state.get("viagem_ativa_id", 0)
+            if id_viagem_aberta:
+                viagem_aberta = session.query(Viagem).filter_by(
+                    id_viagem=id_viagem_aberta,
+                ).first()
+                if (
+                    viagem_aberta is not None and viagem_aberta.ciclo is not None
+                    and viagem_aberta.ciclo.nome_operacao.strip().casefold() == nome.casefold()
+                ):
+                    ciclo = viagem_aberta.ciclo
+            if ciclo is None:
+                ciclos_encontrados = (
+                    session.query(CicloOperacional)
+                    .filter(func.lower(func.trim(CicloOperacional.nome_operacao)) == nome.lower())
+                    .order_by(CicloOperacional.id_ciclo).limit(2).all()
+                )
+                if len(ciclos_encontrados) == 1:
+                    ciclo = ciclos_encontrados[0]
+                elif len(ciclos_encontrados) > 1:
+                    st.warning(
+                        f"Há mais de um ID interno para o ciclo '{nome}'. "
+                        "O KM compartilhado não foi preenchido automaticamente."
+                    )
             if ciclo is not None:
                 km_deslocamentos = to_float(ciclo.km_deslocamentos_operacionais)
     st.session_state["form_data"]["km_deslocamentos"] = km_deslocamentos
@@ -2284,7 +2307,12 @@ def obter_ciclo_para_salvamento(session, tipo_viagem, nome_ciclo, id_cliente, da
 
 
 def calcular_km_planejado_operacao(id_viagem_atual):
-    """Soma KM Individual/Ciclo de cada frete do grupo, sem duplicar o atual."""
+    """Soma KM dos fretes do mesmo ID INTERNO do ciclo, sem duplicar o atual.
+
+    Nomes repetidos em ciclos históricos não autorizam juntar seus fretes.
+    Enquanto o frete é editado, o ciclo salvo atual tem prioridade se o nome
+    exibido ainda for o mesmo; para novos vínculos usa o primeiro ID localizado.
+    """
     km_atual = to_float(get_campo("km_rota", 0.0))
     if get_campo("tipo_viagem", "Individual") != "Ciclo":
         return round(km_atual, 2)
@@ -2293,12 +2321,33 @@ def calcular_km_planejado_operacao(id_viagem_atual):
         return round(km_atual, 2)
 
     with SessionLocal() as session:
-        fretes_salvos = (
-            session.query(Viagem)
-            .join(CicloOperacional, Viagem.id_ciclo == CicloOperacional.id_ciclo)
-            .filter(func.lower(func.trim(CicloOperacional.nome_operacao)) == identificador.lower())
-            .all()
-        )
+        ciclo_atual = None
+        if id_viagem_atual:
+            viagem_atual = session.query(Viagem).filter_by(id_viagem=id_viagem_atual).first()
+            if (
+                viagem_atual is not None and viagem_atual.ciclo is not None
+                and viagem_atual.ciclo.nome_operacao.strip().casefold() == identificador.casefold()
+            ):
+                ciclo_atual = viagem_atual.ciclo
+        if ciclo_atual is None:
+            ciclos_compativeis = (
+                session.query(CicloOperacional)
+                .filter(
+                    func.lower(func.trim(CicloOperacional.nome_operacao)) == identificador.lower()
+                )
+                .order_by(CicloOperacional.id_ciclo).limit(2).all()
+            )
+            if len(ciclos_compativeis) > 1:
+                st.warning(
+                    f"Existem ciclos diferentes com o nome '{identificador}'. "
+                    "O KM dos demais fretes não foi somado por aproximação de nome. "
+                    "Confira o ID do ciclo antes de salvar."
+                )
+                return round(km_atual, 2)
+            ciclo_atual = ciclos_compativeis[0] if ciclos_compativeis else None
+        if ciclo_atual is None:
+            return round(km_atual, 2)
+        fretes_salvos = session.query(Viagem).filter_by(id_ciclo=ciclo_atual.id_ciclo).all()
         soma_outros = sum(
             to_float(v.km_rota_planejado)
             for v in fretes_salvos
@@ -2319,8 +2368,21 @@ def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual):
         id_ciclo = ativo_salvo["id_ciclo"]
     else:
         with SessionLocal() as session:
-            existente = localizar_ciclo_operacional(session, identificador)
-            id_ciclo = existente.id_ciclo if existente is not None else None
+            existentes = (
+                session.query(CicloOperacional.id_ciclo)
+                .filter(
+                    func.lower(func.trim(CicloOperacional.nome_operacao)) == identificador.lower()
+                )
+                .limit(2).all()
+            )
+            if len(existentes) > 1:
+                st.warning(
+                    "A prévia financeira deste nome de ciclo está indisponível "
+                    "porque existem IDs internos duplicados. Confira a base antes "
+                    "de associar um novo frete."
+                )
+                return None
+            id_ciclo = existentes[0][0] if existentes else None
 
     outros = [
         v for v in todos
@@ -2358,7 +2420,11 @@ def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual):
 
 def salvar_km_deslocamentos_ciclo(ciclo):
     """Atualiza o KM compartilhado apenas quando explicitamente informado."""
-    if st.session_state.get("km_deslocamentos_editado", False) or not ciclo.viagens:
+    if (
+        get_campo("tipo_viagem", "Individual") == "Individual"
+        or st.session_state.get("km_deslocamentos_editado", False)
+        or not ciclo.viagens
+    ):
         ciclo.km_deslocamentos_operacionais = to_float(get_campo("km_deslocamentos", 0.0))
 
 
@@ -2371,6 +2437,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
     tipo_viagem_val = get_campo("tipo_viagem", "Individual")
     tipo_frete_val = get_campo("tipo_frete", "Dedicado")
     ciclo_num_val = (get_campo("ciclo_nome") or "").strip()
+    id_frete_digitado = (get_campo("id_frete") or "").strip()
 
     prox_cod = calcular_proximo_codigo_viagem(viagens_lista)
     codigo_digitado = (get_campo("id_viagem_label") or prox_cod).strip().upper()
@@ -2396,6 +2463,19 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
         st.error("Quando o Tipo de Viagem for 'Ciclo', preencha o 'Nº do Ciclo Operacional' na Etapa 1.")
         return
 
+    if id_viagem_atual == 0 and any(
+        d.get("tipo_despesa") in {"Posto de Combustível", "Abast. ARLA"}
+        and d.get("id_veiculo_abast")
+        and d["id_veiculo_abast"] != vei_id
+        for d in st.session_state.get("despesas_temp", [])
+    ):
+        st.error(
+            "Há abastecimento temporário associado a outro veículo. "
+            "Confira/remova esse lançamento na Etapa 7 antes de salvar o frete "
+            "com a nova placa; o histórico de consumo não será deslocado automaticamente."
+        )
+        return
+
     odo_ini = to_int(get_campo("odo_ini", 0))
     odo_fin = to_int(get_campo("odo_fin", 0))
     if odo_ini > 0 and odo_fin > 0 and odo_fin < odo_ini:
@@ -2411,6 +2491,46 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 
     try:
         with SessionLocal() as session:
+            if tipo_viagem_val == "Ciclo":
+                ciclo_atual_de_edicao = (
+                    session.query(Viagem).filter_by(id_viagem=id_viagem_atual).first()
+                    if id_viagem_atual else None
+                )
+                mesmo_ciclo_salvo = (
+                    ciclo_atual_de_edicao is not None
+                    and ciclo_atual_de_edicao.ciclo is not None
+                    and ciclo_atual_de_edicao.ciclo.nome_operacao.strip().casefold()
+                    == ciclo_num_val.casefold()
+                )
+                if not mesmo_ciclo_salvo:
+                    ciclos_com_mesmo_nome = (
+                        session.query(CicloOperacional.id_ciclo)
+                        .filter(func.lower(func.trim(CicloOperacional.nome_operacao)) == ciclo_num_val.lower())
+                        .limit(3).all()
+                    )
+                    if len(ciclos_com_mesmo_nome) > 1:
+                        ids = ", ".join(str(linha[0]) for linha in ciclos_com_mesmo_nome)
+                        st.error(
+                            f"O ciclo '{ciclo_num_val}' já possui mais de um ID interno "
+                            f"({ids}). Não é seguro vincular automaticamente um novo frete. "
+                            "Confira os ciclos históricos antes de escolher o destino."
+                        )
+                        return
+            # O ID Frete identifica um serviço, mesmo quando vários fretes
+            # integram o mesmo ciclo. Preservar históricos, mas não permitir
+            # que um novo salvamento replique um ID já utilizado.
+            if id_frete_digitado:
+                outro_frete = session.query(Viagem).filter(
+                    func.upper(func.trim(Viagem.id_frete_externo)) == id_frete_digitado.upper(),
+                    Viagem.id_viagem != id_viagem_atual,
+                ).first()
+                if outro_frete:
+                    st.error(
+                        f"O ID Frete '{id_frete_digitado}' já pertence à viagem "
+                        f"{outro_frete.codigo_viagem or outro_frete.id_viagem}. "
+                        "Cada frete precisa de identificador próprio, mesmo dentro de um ciclo."
+                    )
+                    return
             if id_viagem_atual == 0:
                 ciclo = obter_ciclo_para_salvamento(
                     session,
@@ -2428,7 +2548,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     id_local_coleta=col_id,
                     id_local_entrega=ent_id,
                     codigo_viagem=codigo_digitado,
-                    id_frete_externo=get_campo("id_frete") or None,
+                    id_frete_externo=id_frete_digitado or None,
                     status_viagem=get_campo("status_viagem", "Aguardando Adiantamento"),
                     tipo_viagem=tipo_viagem_val,
                     tipo_frete=tipo_frete_val,
@@ -2497,6 +2617,27 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
             else:
                 vg = session.query(Viagem).filter_by(id_viagem=id_viagem_atual).first()
                 if vg:
+                    # O último frete de um ciclo não pode ser removido/renomeado
+                    # enquanto houver despesas compartilhadas ativas naquele ID.
+                    # A transferência automática dessas despesas seria indevida.
+                    saindo_do_ciclo = (
+                        vg.ciclo is not None
+                        and (
+                            vg.ciclo.nome_operacao.strip().casefold() != nome_ciclo.casefold()
+                            or vg.tipo_viagem != tipo_viagem_val
+                        )
+                    )
+                    if saindo_do_ciclo and len(vg.ciclo.viagens) == 1:
+                        despesa_compartilhada_ativa = session.query(CicloDespesa).filter_by(
+                            id_ciclo=vg.id_ciclo, cancelado=False,
+                        ).first()
+                        if despesa_compartilhada_ativa:
+                            st.error(
+                                "Este é o último frete de um ciclo com despesas compartilhadas "
+                                "ativas. Confira/corrija essas despesas na Etapa 7 antes de "
+                                "alterar o ID do ciclo ou transformar o frete em Individual."
+                            )
+                            return
                     # Uma despesa provisória já atribuída ao frete pertence ao
                     # veículo original. Trocar o veículo sem estornar a atribuição
                     # tornaria o vínculo financeiro inconsistente.
@@ -2519,6 +2660,26 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                                 "Estorne a atribuição na Etapa 7 antes de alterar o veículo do frete."
                             )
                             return
+                        abastecimento_incompativel = (
+                            session.query(Abastecimento)
+                            .join(
+                                ViagemDespesa,
+                                Abastecimento.id_despesa_viagem == ViagemDespesa.id_despesa,
+                            )
+                            .filter(
+                                ViagemDespesa.id_viagem == vg.id_viagem,
+                                Abastecimento.cancelado.is_(False),
+                                Abastecimento.id_veiculo != vei_id,
+                            )
+                            .first()
+                        )
+                        if abastecimento_incompativel:
+                            st.error(
+                                "Este frete já possui abastecimento registrado para o veículo "
+                                "anterior. Confira/corrija esse lançamento na Etapa 7 antes de "
+                                "alterar o veículo; o histórico de consumo não será transferido."
+                            )
+                            return
                     ciclo_destino = obter_ciclo_para_salvamento(
                         session,
                         tipo_viagem_val,
@@ -2534,7 +2695,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     vg.id_veiculo = vei_id
                     vg.id_local_coleta = col_id
                     vg.id_local_entrega = ent_id
-                    vg.id_frete_externo = get_campo("id_frete") or None
+                    vg.id_frete_externo = id_frete_digitado or None
                     vg.status_viagem = get_campo("status_viagem", "Aguardando Adiantamento")
                     vg.tipo_viagem = tipo_viagem_val
                     vg.tipo_frete = tipo_frete_val
@@ -2932,6 +3093,7 @@ with st.container(border=True):
                 "ID FRETE",
                 value=get_campo("id_frete", ""),
                 placeholder="Ex: FRT-102",
+                help="Identificador próprio e único do serviço, independente do ID Ciclo. Não reutilize o mesmo ID em outro frete.",
                 key="w_id_frete",
                 on_change=sync_campo,
                 args=("w_id_frete", "id_frete"),
@@ -2966,12 +3128,16 @@ with st.container(border=True):
                 args=("w_rota_destino", "rota_destino"),
             )
         with f5:
-            st.caption("KM X ROTA PLANEJADO")
+            st.markdown("**KM X ROTA PLANEJADO**")
             st.number_input(
                 "KM INDIVIDUAL / CICLO",
                 min_value=0.0,
                 step=10.0,
-                help="Informe o KM previsto deste frete. Em um ciclo, o fechamento soma os trechos de todos os fretes.",
+                help=(
+                    "Campo manual: informe o KM previsto deste ID Frete. "
+                    "Se a viagem fizer parte de um ciclo, a Etapa 8 somará o KM "
+                    "dos fretes do mesmo ID interno do ciclo, sem repetir este trecho."
+                ),
                 value=to_float(get_campo("km_rota", 0.0)),
                 key="w_km_rota",
                 on_change=sync_campo,
@@ -4413,7 +4579,10 @@ with st.container(border=True):
         k1, k2, k3 = st.columns(3)
         with k1:
             st.metric("KM PLANEJADO", fmt_km(km_planejado_op))
-            st.caption("Frete individual: KM informado na Etapa 2. Ciclo: soma dos KM dos seus fretes.")
+            st.caption(
+                "Calculado automaticamente: individual = KM manual da Etapa 2; "
+                "ciclo = soma do KM manual dos fretes do mesmo ID interno."
+            )
         with k2:
             km_deslocamentos_op = st.number_input(
                 "KM DESLOCAMENTOS OPERACIONAIS",
@@ -4423,13 +4592,28 @@ with st.container(border=True):
                 value=to_float(get_campo("km_deslocamentos", 0.0)),
                 key="w_km_deslocamentos",
                 on_change=on_km_deslocamentos_change,
-                help="Valor manual único da operação: saída, deslocamentos entre coletas/entregas e retorno. Não some novamente os trechos já incluídos nos fretes.",
+                help="Valor manual da operação: saída, deslocamentos entre coletas/entregas e retorno. Para um ciclo, informe uma única vez; não repita KM dos fretes.",
             )
-            st.caption("Informe uma única vez por ciclo; os fretes compartilham esse valor.")
+            if get_campo("tipo_viagem", "Individual") == "Ciclo":
+                st.caption("Informar uma única vez por ID Ciclo; todos os fretes compartilham esse valor.")
+            else:
+                st.caption("Informar o deslocamento adicional desta viagem individual, se houver.")
         with k3:
             km_total_previsto_op = round(km_planejado_op + km_deslocamentos_op, 2)
             st.metric("KM TOTAL PLANEJADO", fmt_km(km_total_previsto_op))
             st.caption("KM Planejado + KM Deslocamentos Operacionais.")
+        st.caption(
+            f"Memória de cálculo: {fmt_km(km_planejado_op)} (trechos dos fretes) + "
+            f"{fmt_km(km_deslocamentos_op)} (deslocamentos) = "
+            f"{fmt_km(km_total_previsto_op)} planejados. "
+            "Os odômetros da operação são leituras reais independentes desta soma."
+        )
+        if to_float(get_campo("km_rota", 0.0)) <= 0:
+            st.warning(
+                "O campo KM INDIVIDUAL / CICLO do frete atual ainda está zerado "
+                "na Etapa 2. Confira se o trecho foi realmente planejado antes "
+                "de considerar o KM Total Planejado como completo."
+            )
 
         c_real_1, c_real_2 = st.columns(2)
         if km_real_calc is not None:
@@ -4511,7 +4695,10 @@ with st.container(border=True):
             st.markdown('<div class="sec-subtitle">Prévia do Fechamento Financeiro do Ciclo</div>', unsafe_allow_html=True)
             previa = montar_previa_financeira_ciclo(viagem_sel_id, custos_dre)
             if previa is None:
-                st.info("Informe o Nº do Ciclo Operacional na Etapa 1 para visualizar o consolidado.")
+                st.info(
+                    "Informe o Nº do Ciclo Operacional na Etapa 1. "
+                    "Se houver ciclos homônimos no banco, confira os respectivos IDs internos."
+                )
             else:
                 st.caption(
                     "Consolida os fretes do mesmo ID Ciclo, incluindo os valores ainda não salvos "

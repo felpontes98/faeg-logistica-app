@@ -43,11 +43,14 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 | RF-31 | Sinalizar despesas semelhantes entre frete e ciclo do mesmo ID e solicitar confirmação explícita quando forem comprovantes distintos | Proposto em `conferencia_duplicidades.py`; teste pendente |
 | RF-32 | Consultar indícios de repetição já cadastrados, sem alterar histórico, e exportar `Possiveis_Duplicidades` | Proposto; teste pendente |
 | RF-33 | Verificar repetição cruzada também durante atribuição de despesa provisória e impedir repetição imediata de gasto comum idêntico no mesmo frete | Proposto; teste pendente |
+| RF-34 | Na Etapa 8, somar KM planejado por ID interno do ciclo (não pelo nome), preservar o valor manual da Etapa 2 e sinalizar falta de KM no frete atual | Proposto; teste pendente |
+| RF-35 | Impedir salvar dois fretes distintos com o mesmo ID Frete e bloquear vínculo novo a nome de ciclo que identifique mais de um ID legado | Proposto; teste pendente |
+| RF-36 | Proteger vínculo histórico quando o último frete sair de um ciclo com despesa comum ativa ou quando a placa mudar com abastecimento já registrado | Proposto; teste pendente |
 
 ## Critérios de aceite dos cálculos
 
 1. **Frete individual:** `KM Planejado` recebe `KM Individual / Ciclo` do próprio frete.
-2. **Ciclo:** `KM Planejado` é a soma de `KM Individual / Ciclo` de todos os fretes do ID Ciclo, incluindo o valor ainda não salvo do frete em edição, sem contá-lo duas vezes.
+2. **Ciclo:** `KM Planejado` é a soma de `KM Individual / Ciclo` de todos os fretes do mesmo **ID interno do ciclo**, incluindo o valor ainda não salvo do frete em edição, sem contá-lo duas vezes. Ciclos com nome igual e IDs internos diferentes não são somados em conjunto.
 3. **Deslocamentos:** `KM Deslocamentos Operacionais` é um valor manual único do ciclo, referente a trechos ainda não incluídos nos fretes.
 4. **Total:** `KM Total Planejado = KM Planejado + KM Deslocamentos Operacionais`.
 5. **Real:** quando os dois odômetros operacionais forem válidos, `KM Real = odômetro final − odômetro inicial`; sem as duas leituras, mostrar “Não informado”. Não aceitar final menor que inicial.
@@ -69,6 +72,8 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 21. **Conferência da base inteira:** a despesa financeira gerencial é a soma das despesas diretas de fretes com as despesas compartilhadas ativas de ciclos. A receita considerada de fretes com financeiro legado ambíguo deve permanecer excluída, com aviso de resultado parcial/incompleto. Despesas de veículo pendentes são exibidas separadamente e não entram na soma; despesas atribuídas já constam no destino, nunca como uma segunda linha de custo. Se um ciclo possui despesa ativa, mas nenhum frete do tipo Ciclo, manter esse custo na conferência global e avisar sobre a necessidade de revisão. Margem só é calculável quando a receita é positiva e não há ambiguidade financeira na base considerada.
 22. **Exportação coerente:** a opção **Base Completa** da Etapa 10 exporta fretes, despesas, fechamentos e conferência da base inteira, mesmo que a tabela de consultas esteja filtrada. A aba `Conferencia_Financeira` discrimina o tratamento de cada parcela e recebido de fato não é somado à receita negociada.
 23. **Possíveis duplicidades:** comparar despesas de frete e despesas compartilhadas do ciclo correspondente por data, categoria, quantidade, valor, descrição, fornecedor e, quando possível, veículo/odômetro. Uma coincidência deve gerar aviso e exigir confirmação explícita de que os comprovantes são diferentes, sem alterar os registros automaticamente. A atribuição de despesa provisória também aplica a conferência e conserva sua justificativa. A etapa de relatórios deve listar as coincidências conhecidas e exportá-las em `Possiveis_Duplicidades`; a ausência de alertas não certifica que todos os custos sejam únicos.
+24. **Identificadores e histórico:** ID Frete preenchido não pode ser reutilizado por outro frete (independentemente de caixa/espaços); ciclos legados com mesmo nome e IDs diferentes não são escolhidos automaticamente para novo vínculo. Ao editar um frete existente, preservar a identidade do ciclo atual se o nome não mudou. O último frete de ciclo com despesas compartilhadas ativas não pode sair/renomear o ciclo sem tratamento explícito dessas despesas. A troca de placa é bloqueada se houver abastecimento ativo associado ao veículo anterior. O salvamento de frete novo também rejeita abastecimento temporário que pertença à outra placa.
+25. **Tela 2 e Tela 8:** `KM X ROTA PLANEJADO` é só título; `KM INDIVIDUAL / CICLO` é entrada manual do trecho. A Tela 8 apresenta memória de cálculo do planejado, deslocamentos adicionais e total. Não confundir esses valores com odômetro inicial/final da operação nem odômetro no abastecimento da Tela 7. Informar KM manual zero exige alerta de possível dado faltante.
 
 ## Requisitos de integridade e implantação
 
@@ -105,6 +110,11 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - [ ] Conferir margem “Não calculável” para receita zero ou legado ambíguo, inclusive nos gráficos e PDF do BI.
 - [ ] Lançar custo semelhante em frete e ciclo do mesmo ID e comprovar o aviso, confirmação obrigatória e ausência de alteração automática do histórico.
 - [ ] Repetir no sentido inverso e verificar IDs na aba `Possiveis_Duplicidades`, inclusive com dados vazios.
+- [ ] Conferir Tela 2: título KM X ROTA PLANEJADO não digitável, KM INDIVIDUAL / CICLO manual; Tela 8: planejado por ID, deslocamentos únicos e total calculado.
+- [ ] Simular dois IDs internos com mesmo nome de ciclo e evitar soma por nome ou novo vínculo automático; preservar o ID original ao editar frete salvo.
+- [ ] Conferir alerta quando o KM manual na Etapa 2 ainda for zero e memória de cálculo na Etapa 8.
+- [ ] Tentar duplicar ID Frete, trocar placa com Diesel registrado, ou retirar último frete de ciclo com despesa ativa; conferir bloqueios sem alteração do histórico.
+- [ ] Tentar salvar novo frete com Diesel temporário de outro veículo e trocar Ciclo→Individual com deslocamentos; conferir proteção da placa e dos KM.
 - [ ] Cadastrar dois abastecimentos legítimos com mesmo valor, mas leituras de odômetro diferentes, sem falso bloqueio de duplicidade cruzada.
 - [ ] Atribuir despesa provisória semelhante a custo existente em outro destino; conferir exigência de confirmação e justificativa.
 - [ ] Tentar lançar duas vezes a mesma despesa não combustível em frete salvo e em frete ainda temporário; verificar prevenção de repetição imediata.
