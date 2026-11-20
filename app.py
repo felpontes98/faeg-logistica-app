@@ -1,4 +1,5 @@
 import base64
+from html import escape
 import io
 import os
 import re
@@ -701,34 +702,58 @@ st.markdown(
         font-weight: 900;
     }
 
-    .kpi-consulta-grid {
+    /* Indicadores compactos: o mesmo padrão nas etapas 7, 8, 9 e 10. */
+    .faeg-indicators-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 0.9rem;
-        margin: 0.9rem 0 1.2rem 0;
+        grid-template-columns: repeat(var(--faeg-cols, 3), minmax(0, 1fr));
+        gap: 0.8rem;
+        margin: 0.65rem 0 1.1rem;
     }
-    .kpi-consulta-card {
-        background: #F8FAFC;
-        border: 1px solid #CBD5E1;
-        border-top: 4px solid #0D263C;
-        border-radius: 0.45rem;
+    .faeg-indicator-card {
+        min-width: 0;
+        background: #FFFFFF;
+        border: 1px solid #D6E1E9;
+        border-top: 3px solid #ABCEE1;
+        border-radius: 0.55rem;
         padding: 0.85rem 1rem;
+        box-shadow: 0 2px 6px rgba(13, 38, 60, 0.035);
     }
-    .kpi-consulta-card.orange {
+    .faeg-indicator-card.is-accent {
+        background: #FFF9F6;
         border-top-color: #F34D25;
     }
-    .kpi-consulta-lbl {
-        font-size: 0.68rem;
-        font-weight: 700;
-        color: #64748B;
+    .faeg-indicator-label {
+        color: #556B7C;
+        font-size: 0.67rem;
+        font-weight: 800;
+        letter-spacing: 0.045em;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        line-height: 1.4;
+        margin-bottom: 0.38rem;
     }
-    .kpi-consulta-val {
-        font-size: 1.2rem;
-        font-weight: 900;
+    .faeg-indicator-value {
         color: #0D263C;
-        margin-top: 0.2rem;
+        font-size: clamp(1.1rem, 1.5vw, 1.45rem);
+        font-weight: 800;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+        font-variant-numeric: tabular-nums;
+    }
+    .faeg-indicator-value.is-long {
+        font-size: clamp(0.94rem, 1.15vw, 1.12rem);
+        line-height: 1.35;
+    }
+    @media (max-width: 1150px) {
+        .faeg-indicators-grid[style*="--faeg-cols:4"],
+        .faeg-indicators-grid[style*="--faeg-cols:5"] {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 780px) {
+        .faeg-indicators-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px) {
+        .faeg-indicators-grid { grid-template-columns: minmax(0, 1fr); }
     }
 
     /* Painel de KM do fechamento: hierarquia clara, sem seis métricas soltas. */
@@ -946,6 +971,29 @@ def fmt_km(val):
     return f"{to_float(val):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " km"
 
 
+def exibir_indicadores(indicadores, colunas=3):
+    """Mostra KPIs no mesmo padrão visual, mantendo os valores calculados pelo app."""
+    colunas = max(1, min(int(colunas), 5))
+    cartoes = []
+    for item in indicadores:
+        rotulo, valor = item[:2]
+        destaque = len(item) > 2 and item[2] == "destaque"
+        valor_texto = str(valor)
+        classes = "faeg-indicator-card is-accent" if destaque else "faeg-indicator-card"
+        classe_valor = "faeg-indicator-value is-long" if len(valor_texto) > 19 else "faeg-indicator-value"
+        cartoes.append(
+            f'<div class="{classes}">'
+            f'<div class="faeg-indicator-label">{escape(str(rotulo))}</div>'
+            f'<div class="{classe_valor}">{escape(valor_texto)}</div>'
+            '</div>'
+        )
+    st.markdown(
+        f'<div class="faeg-indicators-grid" style="--faeg-cols:{colunas}">'
+        + "".join(cartoes) + '</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def formatar_rotulo_cliente(c):
     partes_nome = [c["razao_social"]]
     if (
@@ -953,16 +1001,7 @@ def formatar_rotulo_cliente(c):
         and c["nome_fantasia"].strip().lower() != c["razao_social"].strip().lower()
     ):
         partes_nome.append(f"({c['nome_fantasia']})")
-    titulo = " ".join(partes_nome)
-
-    detalhes_local = []
-    if c.get("endereco_completo"):
-        detalhes_local.append(c["endereco_completo"])
-    if c.get("cidade") or c.get("uf"):
-        detalhes_local.append(f"{c.get('cidade') or ''}/{c.get('uf') or ''}".strip("/"))
-
-    sufixo = f" — {', '.join(detalhes_local)}" if detalhes_local else f" — Doc: {c['cnpj_cpf']}"
-    return f"{titulo}{sufixo}"
+    return " ".join(partes_nome)
 
 
 def formatar_rotulo_local(l, cli_map):
@@ -3580,53 +3619,53 @@ with st.container(border=True):
         cli_atual = get_campo("cli_id", 0)
         idx_cli = list(cli_ops.keys()).index(cli_atual) if cli_atual in cli_ops else 0
 
-        cl1, cl2, cl3 = st.columns([2.6, 1.5, 1.2])
-        with cl1:
-            cli_sel = st.selectbox(
-                "EMPRESA CLIENTE (RAZÃO SOCIAL / FANTASIA / ENDEREÇO) *",
-                options=list(cli_ops.keys()),
-                index=idx_cli,
-                format_func=lambda x: cli_ops[x],
-                key="w_cli_id",
-                on_change=on_cliente_select_change,
-                args=(locais_db,),
-            )
+        cli_sel = st.selectbox(
+            "EMPRESA CLIENTE (RAZÃO SOCIAL / NOME FANTASIA) *",
+            options=list(cli_ops.keys()),
+            index=idx_cli,
+            format_func=lambda x: cli_ops[x],
+            key="w_cli_id",
+            on_change=on_cliente_select_change,
+            args=(locais_db,),
+        )
         cli_obj = next((c for c in clientes_db if c["id_cliente"] == cli_sel), None)
-        with cl2:
-            st.text_input(
-                "RESPONSÁVEL",
-                value=(cli_obj.get("responsavel_comercial") or "") if cli_obj else "",
-                disabled=True,
-                key=f"prev_cli_resp_{cli_sel}",
-            )
-        with cl3:
-            st.text_input(
-                "TELEFONE / CONTATO",
-                value=(cli_obj.get("telefone_comercial") or "") if cli_obj else "",
-                disabled=True,
-                key=f"prev_cli_tel_{cli_sel}",
-            )
 
-        if cli_obj:
-            end_cli_str = ", ".join(
-                filter(
-                    None,
-                    [
-                        cli_obj.get("endereco_completo"),
-                        f"CEP {cli_obj['cep']}" if cli_obj.get("cep") else "",
-                        f"{cli_obj.get('cidade') or ''}/{cli_obj.get('uf') or ''}".strip("/"),
-                    ],
-                )
-            )
-            st.markdown(
-                f"""
-                <div class="cliente-coleta-banner">
-                    <strong>Endereço Cadastrado do Cliente:</strong> {end_cli_str or 'Não informado'}
-                    &nbsp;|&nbsp; <strong>E-mail:</strong> {cli_obj.get('email_financeiro') or '-'}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        # Mesmo desenho das Etapas 5 e 6: cada dado cadastral em seu campo.
+        ce1, ce2, ce3, ce4 = st.columns([0.9, 2.3, 1.3, 0.55])
+        ce1.text_input("CEP", value=(cli_obj.get("cep") or "") if cli_obj else "", disabled=True, key=f"p_cli_cep_{cli_sel}")
+        ce2.text_input(
+            "ENDEREÇO COMPLETO",
+            value=(cli_obj.get("endereco_completo") or "") if cli_obj else "",
+            disabled=True,
+            key=f"p_cli_end_{cli_sel}",
+        )
+        ce3.text_input(
+            "CIDADE",
+            value=(cli_obj.get("cidade") or "") if cli_obj else "",
+            disabled=True,
+            key=f"p_cli_cid_{cli_sel}",
+        )
+        ce4.text_input("UF", value=(cli_obj.get("uf") or "") if cli_obj else "", disabled=True, key=f"p_cli_uf_{cli_sel}")
+
+        cc1, cc2, cc3 = st.columns([1.2, 1.0, 1.6])
+        cc1.text_input(
+            "RESPONSÁVEL",
+            value=(cli_obj.get("responsavel_comercial") or "") if cli_obj else "",
+            disabled=True,
+            key=f"prev_cli_resp_{cli_sel}",
+        )
+        cc2.text_input(
+            "TELEFONE / CONTATO",
+            value=(cli_obj.get("telefone_comercial") or "") if cli_obj else "",
+            disabled=True,
+            key=f"prev_cli_tel_{cli_sel}",
+        )
+        cc3.text_input(
+            "E-MAIL FINANCEIRO",
+            value=(cli_obj.get("email_financeiro") or "") if cli_obj else "",
+            disabled=True,
+            key=f"prev_cli_email_{cli_sel}",
+        )
 
         render_navegacao_rodape(2, MENU_ITENS)
 
@@ -3771,10 +3810,14 @@ with st.container(border=True):
             saldo_em_aberto_agora = round(max(0.0, valor_contratado_agora - total_recebido_agora), 2)
             excedente_agora = round(max(0.0, total_recebido_agora - valor_contratado_agora), 2)
 
-            rc1, rc2, rc3 = st.columns(3)
-            rc1.metric("VALOR NEGOCIADO", fmt_brl(valor_contratado_agora))
-            rc2.metric("TOTAL RECEBIDO DE FATO", fmt_brl(total_recebido_agora))
-            rc3.metric("SALDO A RECEBER", fmt_brl(saldo_em_aberto_agora))
+            exibir_indicadores(
+                [
+                    ("VALOR NEGOCIADO", fmt_brl(valor_contratado_agora)),
+                    ("TOTAL RECEBIDO DE FATO", fmt_brl(total_recebido_agora)),
+                    ("SALDO A RECEBER", fmt_brl(saldo_em_aberto_agora), "destaque"),
+                ],
+                colunas=3,
+            )
             if excedente_agora > 0:
                 st.warning(f"Recebimentos excedem o valor negociado em {fmt_brl(excedente_agora)}. Confira os lançamentos ou a negociação.")
             st.caption("O valor negociado nesta tela pode ter alterações ainda não salvas; os recebimentos exibidos já estão registrados no banco.")
@@ -4534,7 +4577,10 @@ with st.container(border=True):
                         use_container_width=True,
                     )
                     ativas_ciclo = [d for d in historico_desp_ciclo if not d["cancelado"]]
-                    st.metric("DESPESAS COMPARTILHADAS ATIVAS DESTE CICLO", fmt_brl(sum(d["valor_total"] for d in ativas_ciclo)))
+                    exibir_indicadores(
+                        [("DESPESAS COMPARTILHADAS ATIVAS DESTE CICLO", fmt_brl(sum(d["valor_total"] for d in ativas_ciclo)))],
+                        colunas=3,
+                    )
                     if ativas_ciclo:
                         with st.expander("Corrigir lançamento compartilhado (mantendo histórico)"):
                             opcoes_cancelar_dc = {d["id_despesa_ciclo"]: d for d in ativas_ciclo}
@@ -4595,9 +4641,13 @@ with st.container(border=True):
                 d["id_despesa_veiculo"]: d for d in pendentes_veiculo
                 if not d["cancelado"] and (d["id_despesa_viagem_destino"] or d["id_despesa_ciclo_destino"])
             }
-            st.metric(
-                "TOTAL DE DESPESAS AINDA NÃO ATRIBUÍDAS",
-                fmt_brl(sum(d["valor_total"] for d in pendentes_ativos.values())),
+            exibir_indicadores(
+                [(
+                    "TOTAL DE DESPESAS AINDA NÃO ATRIBUÍDAS",
+                    fmt_brl(sum(d["valor_total"] for d in pendentes_ativos.values())),
+                    "destaque",
+                )],
+                colunas=3,
             )
             if pendentes_veiculo:
                 st.dataframe(
@@ -5077,10 +5127,14 @@ with st.container(border=True):
             r["valor_recebido"] for r in carregar_recebimentos_viagem(viagem_sel_id)
             if not r["cancelado"]
         )
-        r_fin1, r_fin2, r_fin3 = st.columns(3)
-        r_fin1.metric("NEGOCIADO", fmt_brl(v_neg_dre))
-        r_fin2.metric("RECEBIDO DE FATO", fmt_brl(reais_recebidos))
-        r_fin3.metric("SALDO A RECEBER", fmt_brl(max(0.0, v_neg_dre - reais_recebidos)))
+        exibir_indicadores(
+            [
+                ("NEGOCIADO", fmt_brl(v_neg_dre)),
+                ("RECEBIDO DE FATO", fmt_brl(reais_recebidos)),
+                ("SALDO A RECEBER", fmt_brl(max(0.0, v_neg_dre - reais_recebidos)), "destaque"),
+            ],
+            colunas=3,
+        )
         if viagem_sel_id == 0:
             st.caption("Para registrar pagamentos efetivos na Etapa 4, primeiro salve o frete.")
         elif reais_recebidos > v_neg_dre + 0.01:
@@ -5100,11 +5154,15 @@ with st.container(border=True):
                     "deste formulário. Despesas dos fretes são somadas individualmente; "
                     "despesas compartilhadas entram uma única vez por ID do ciclo."
                 )
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("FRETES NO CICLO", previa["qtd_fretes"])
-                c2.metric("RECEITA NEGOCIADA DO CICLO", fmt_brl(previa["valor_negociado_total"]))
-                c3.metric("DESPESAS FINANCEIRAS DO CICLO", fmt_brl(previa["despesas_total"]))
-                c4.metric("RESULTADO OPERACIONAL PARCIAL", fmt_brl(previa["resultado_operacional_parcial"]))
+                exibir_indicadores(
+                    [
+                        ("FRETES NO CICLO", previa["qtd_fretes"]),
+                        ("RECEITA NEGOCIADA DO CICLO", fmt_brl(previa["valor_negociado_total"])),
+                        ("DESPESAS FINANCEIRAS DO CICLO", fmt_brl(previa["despesas_total"])),
+                        ("RESULTADO OPERACIONAL PARCIAL", fmt_brl(previa["resultado_operacional_parcial"]), "destaque"),
+                    ],
+                    colunas=4,
+                )
                 st.caption(
                     f"Composição das despesas: fretes {fmt_brl(previa['despesas_fretes_total'])} "
                     f"+ compartilhadas {fmt_brl(previa['despesas_compartilhadas_total'])}. "
@@ -5112,13 +5170,21 @@ with st.container(border=True):
                 )
 
                 with st.expander("Ver parcelas, recebimentos e fretes do ciclo", expanded=False):
-                    p1, p2, p3 = st.columns(3)
-                    p1.metric("ADIANTAMENTOS PREVISTOS", fmt_brl(previa["adiantamentos_previstos"]))
-                    p2.metric("SALDOS PREVISTOS", fmt_brl(previa["saldos_previstos"]))
-                    p3.metric("PARCELAS PREVISTAS", fmt_brl(previa["parcelas_previstas"]))
-                    p4, p5 = st.columns(2)
-                    p4.metric("RECEBIDO EFETIVAMENTE NO CICLO", fmt_brl(previa["total_recebido"]))
-                    p5.metric("SALDO A RECEBER DO CICLO", fmt_brl(previa["saldo_a_receber"]) if previa["saldo_a_receber"] is not None else "Conferir financeiro legado")
+                    exibir_indicadores(
+                        [
+                            ("ADIANTAMENTOS PREVISTOS", fmt_brl(previa["adiantamentos_previstos"])),
+                            ("SALDOS PREVISTOS", fmt_brl(previa["saldos_previstos"])),
+                            ("PARCELAS PREVISTAS", fmt_brl(previa["parcelas_previstas"])),
+                        ],
+                        colunas=3,
+                    )
+                    exibir_indicadores(
+                        [
+                            ("RECEBIDO EFETIVAMENTE NO CICLO", fmt_brl(previa["total_recebido"])),
+                            ("SALDO A RECEBER DO CICLO", fmt_brl(previa["saldo_a_receber"]) if previa["saldo_a_receber"] is not None else "Conferir financeiro legado", "destaque"),
+                        ],
+                        colunas=2,
+                    )
                     st.caption("Adiantamento e saldo previstos não comprovam recebimento. O ciclo soma apenas pagamentos realmente registrados na Etapa 4 de cada frete.")
 
                     st.dataframe(
@@ -5153,10 +5219,14 @@ with st.container(border=True):
                     None,
                 )
                 if ultima_medicao:
-                    r1, r2, r3 = st.columns(3)
-                    r1.metric("KM ENTRE ABASTECIMENTOS", fmt_km(ultima_medicao["km_intervalo"]))
-                    r2.metric("MÉDIA INDICATIVA DE DIESEL", f"{ultima_medicao['km_por_litro']:.2f} km/L")
-                    r3.metric("CUSTO INDICATIVO DE DIESEL/KM", fmt_brl(ultima_medicao["custo_por_km"]))
+                    exibir_indicadores(
+                        [
+                            ("KM ENTRE ABASTECIMENTOS", fmt_km(ultima_medicao["km_intervalo"])),
+                            ("MÉDIA INDICATIVA DE DIESEL", f"{ultima_medicao['km_por_litro']:.2f} km/L"),
+                            ("CUSTO INDICATIVO DE DIESEL/KM", fmt_brl(ultima_medicao["custo_por_km"])),
+                        ],
+                        colunas=3,
+                    )
                     st.caption("Base: abastecimentos consecutivos de Diesel do veículo na Etapa 7, com tanque cheio. Não é o KM da viagem ou do ciclo.")
                 else:
                     st.caption("Registre ao menos dois abastecimentos consecutivos de Diesel com odômetros válidos na Etapa 7 para calcular o consumo.")
@@ -5229,16 +5299,24 @@ with st.container(border=True):
             custo_km_r = (custos_r / km_r) if km_r else None
             margem_r = ((resultado_r / receita_r) * 100.0) if receita_r > 0 else None
 
-            k1, k2, k3, k4, k5 = st.columns(5)
-            k1.metric("Receita Negociada", fmt_brl(receita_r))
-            k2.metric("Custos Totais", fmt_brl(custos_r))
-            k3.metric("Resultado Operacional Parcial", fmt_brl(resultado_r))
-            k4.metric("Custo por KM", fmt_brl(custo_km_r) if custo_km_r is not None else "Não informado")
-            k5.metric("Margem Operacional", f"{margem_r:.1f}%" if margem_r is not None else "Não calculável")
-            k6, k7, k8 = st.columns(3)
-            k6.metric("Recebido de Fato", fmt_brl(receb_real_r))
-            k7.metric("Saldo a Receber", fmt_brl(saldo_real_r))
-            k8.metric("Parcelas Previstas", fmt_brl(v_rec_r))
+            exibir_indicadores(
+                [
+                    ("Receita Negociada", fmt_brl(receita_r)),
+                    ("Custos Totais", fmt_brl(custos_r)),
+                    ("Resultado Operacional Parcial", fmt_brl(resultado_r), "destaque"),
+                    ("Custo por KM", fmt_brl(custo_km_r) if custo_km_r is not None else "Não informado"),
+                    ("Margem Operacional", f"{margem_r:.1f}%" if margem_r is not None else "Não calculável"),
+                ],
+                colunas=5,
+            )
+            exibir_indicadores(
+                [
+                    ("Recebido de Fato", fmt_brl(receb_real_r)),
+                    ("Saldo a Receber", fmt_brl(saldo_real_r), "destaque"),
+                    ("Parcelas Previstas", fmt_brl(v_rec_r)),
+                ],
+                colunas=3,
+            )
 
             st.markdown('<div class="sec-subtitle">Exportação da Viagem Atual</div>', unsafe_allow_html=True)
             vei_obj_r = next((v for v in veiculos_db if v["id_veiculo"] == get_campo("vei_id", 0)), None)
@@ -5276,7 +5354,7 @@ with st.container(border=True):
             ]
             pdf_bytes = gerar_pdf_relatorio(dados_pdf, desps_pdf)
 
-            b_pdf, b_xls, _ = st.columns([1.5, 1.7, 2.3])
+            b_pdf, b_xls = st.columns(2)
             with b_pdf:
                 st.download_button(
                     "📄 Baixar Relatório PDF (Viagem)",
@@ -5373,21 +5451,29 @@ with st.container(border=True):
                 )
 
                 st.markdown('<div class="sec-subtitle">Indicadores Globais Consolidados</div>', unsafe_allow_html=True)
-                bg1, bg2, bg3 = st.columns(3)
-                bg1.metric("Viagens Analisadas", len(vg_bi_filtradas))
-                bg2.metric("Receita Consolidada", fmt_brl(rec_global))
-                bg3.metric("Despesas dos Fretes", fmt_brl(desp_global))
-
-                bg4, bg5, bg6 = st.columns(3)
-                bg4.metric("Resultado Operacional Parcial", fmt_brl(res_global))
-                bg5.metric("Margem Operacional", f"{margem_global:.1f}%" if margem_global is not None else "Não calculável")
-                bg6.metric(
-                    "KM Registrado / Custo Médio KM",
-                    f"{km_global_fmt} / {fmt_brl(custo_km_global) if custo_km_global is not None else 'Não informado'}",
+                exibir_indicadores(
+                    [
+                        ("Viagens Analisadas", len(vg_bi_filtradas)),
+                        ("Receita Consolidada", fmt_brl(rec_global)),
+                        ("Despesas dos Fretes", fmt_brl(desp_global)),
+                    ],
+                    colunas=3,
                 )
-                bg7, bg8 = st.columns(2)
-                bg7.metric("Recebimentos Confirmados", fmt_brl(recebimentos_global))
-                bg8.metric("Saldo em Aberto", fmt_brl(saldo_global) if saldo_global_confiavel else "Conferir financeiro legado")
+                exibir_indicadores(
+                    [
+                        ("Resultado Operacional Parcial", fmt_brl(res_global), "destaque"),
+                        ("Margem Operacional", f"{margem_global:.1f}%" if margem_global is not None else "Não calculável"),
+                        ("KM Registrado / Custo Médio KM", f"{km_global_fmt} / {fmt_brl(custo_km_global) if custo_km_global is not None else 'Não informado'}"),
+                    ],
+                    colunas=3,
+                )
+                exibir_indicadores(
+                    [
+                        ("Recebimentos Confirmados", fmt_brl(recebimentos_global)),
+                        ("Saldo em Aberto", fmt_brl(saldo_global) if saldo_global_confiavel else "Conferir financeiro legado", "destaque"),
+                    ],
+                    colunas=2,
+                )
                 st.caption(
                     "Este BI é filtrado por frete/cliente e não inclui despesas compartilhadas do ciclo, "
                     "pois não há rateio aprovado. Consulte 'Fechamento por Ciclo' para o resultado "
@@ -5549,12 +5635,13 @@ with st.container(border=True):
             if not fechamentos_salvos:
                 st.info("Ainda não existem fretes do tipo Ciclo salvos para consolidar.")
             else:
-                cl1, cl2, cl3 = st.columns(3)
-                cl1.metric("CICLOS COM FRETES", len(fechamentos_salvos))
-                cl2.metric("FRETES AGRUPADOS", sum(f["qtd_fretes"] for f in fechamentos_salvos))
-                cl3.metric(
-                    "DESPESAS ATRIBUÍDAS AOS CICLOS",
-                    fmt_brl(sum(f["despesas_total"] for f in fechamentos_salvos)),
+                exibir_indicadores(
+                    [
+                        ("CICLOS COM FRETES", len(fechamentos_salvos)),
+                        ("FRETES AGRUPADOS", sum(f["qtd_fretes"] for f in fechamentos_salvos)),
+                        ("DESPESAS ATRIBUÍDAS AOS CICLOS", fmt_brl(sum(f["despesas_total"] for f in fechamentos_salvos)), "destaque"),
+                    ],
+                    colunas=3,
                 )
                 st.dataframe(
                     pd.DataFrame([
@@ -5627,28 +5714,32 @@ with st.container(border=True):
                 "O resultado inclui custos diretos dos fretes e compartilhados dos ciclos "
                 "uma única vez. Não soma novamente abastecimentos ou despesas de veículo atribuídas."
             )
-            cf1, cf2, cf3, cf4 = st.columns(4)
-            cf1.metric("RECEITA NEGOCIADA CONSIDERADA", fmt_brl(geral["receita_negociada_considerada"]))
-            cf2.metric("DESPESAS DOS FRETES", fmt_brl(geral["despesas_fretes"]))
-            cf3.metric("DESPESAS COMPARTILHADAS", fmt_brl(geral["despesas_compartilhadas"]))
-            cf4.metric("DESPESAS TOTAIS CONTABILIZADAS", fmt_brl(geral["despesas_financeiras_totais"]))
-            cf5, cf6, cf7, cf8 = st.columns(4)
-            cf5.metric("RESULTADO OPERACIONAL PARCIAL", fmt_brl(geral["resultado_operacional_parcial"]))
-            cf6.metric(
-                "MARGEM OPERACIONAL",
-                f"{geral['margem_operacional_pct']:.1f}%"
-                if geral["margem_operacional_pct"] is not None else "Não calculável",
+            exibir_indicadores(
+                [
+                    ("RECEITA NEGOCIADA CONSIDERADA", fmt_brl(geral["receita_negociada_considerada"])),
+                    ("DESPESAS DOS FRETES", fmt_brl(geral["despesas_fretes"])),
+                    ("DESPESAS COMPARTILHADAS", fmt_brl(geral["despesas_compartilhadas"])),
+                    ("DESPESAS TOTAIS CONTABILIZADAS", fmt_brl(geral["despesas_financeiras_totais"])),
+                ],
+                colunas=4,
             )
-            cf7.metric("RECEBIDO DE FATO", fmt_brl(geral["total_recebido"]))
-            cf8.metric(
-                "SALDO A RECEBER",
-                fmt_brl(geral["saldo_a_receber"])
-                if geral["saldo_a_receber"] is not None else "Conferir financeiro legado",
+            exibir_indicadores(
+                [
+                    ("RESULTADO OPERACIONAL PARCIAL", fmt_brl(geral["resultado_operacional_parcial"]), "destaque"),
+                    ("MARGEM OPERACIONAL", f"{geral['margem_operacional_pct']:.1f}%" if geral["margem_operacional_pct"] is not None else "Não calculável"),
+                    ("RECEBIDO DE FATO", fmt_brl(geral["total_recebido"])),
+                    ("SALDO A RECEBER", fmt_brl(geral["saldo_a_receber"]) if geral["saldo_a_receber"] is not None else "Conferir financeiro legado"),
+                ],
+                colunas=4,
             )
             st.markdown("**Despesas vinculadas ao veículo — controle separado**")
-            p1, p2 = st.columns(2)
-            p1.metric("PENDENTES — FORA DO RESULTADO", fmt_brl(geral["despesas_veiculo_pendentes"]))
-            p2.metric("JÁ ATRIBUÍDAS — NÃO SOMAR DE NOVO", fmt_brl(geral["despesas_veiculo_ja_atribuidas"]))
+            exibir_indicadores(
+                [
+                    ("PENDENTES — FORA DO RESULTADO", fmt_brl(geral["despesas_veiculo_pendentes"]), "destaque"),
+                    ("JÁ ATRIBUÍDAS — NÃO SOMAR DE NOVO", fmt_brl(geral["despesas_veiculo_ja_atribuidas"])),
+                ],
+                colunas=2,
+            )
             st.caption(
                 "Os gastos pendentes ainda não pertencem a frete/ciclo. Os já atribuídos "
                 "estão incluídos nas despesas financeiras de seus destinos, não são uma terceira despesa."
@@ -5773,32 +5864,22 @@ with st.container(border=True):
         saldos_consulta_validos = all(v["saldo_a_receber"] is not None for v in filtradas)
         tot_saldo_f = sum(v["saldo_a_receber"] or 0 for v in filtradas)
 
-        st.markdown(
-            f"""
-            <div class="kpi-consulta-grid">
-                <div class="kpi-consulta-card">
-                    <div class="kpi-consulta-lbl">Viagens Filtradas</div>
-                    <div class="kpi-consulta-val">{len(filtradas)}</div>
-                </div>
-                <div class="kpi-consulta-card">
-                    <div class="kpi-consulta-lbl">Receita Consolidada</div>
-                    <div class="kpi-consulta-val">{fmt_brl(tot_rec_f)}</div>
-                </div>
-                <div class="kpi-consulta-card orange">
-                    <div class="kpi-consulta-lbl">Despesas dos Fretes</div>
-                    <div class="kpi-consulta-val">{fmt_brl(tot_desp_f)}</div>
-                </div>
-                <div class="kpi-consulta-card">
-                    <div class="kpi-consulta-lbl">Resultado Operacional Parcial</div>
-                    <div class="kpi-consulta-val">{fmt_brl(tot_res_f)}</div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        exibir_indicadores(
+            [
+                ("Viagens Filtradas", len(filtradas)),
+                ("Receita Consolidada", fmt_brl(tot_rec_f)),
+                ("Despesas dos Fretes", fmt_brl(tot_desp_f)),
+                ("Resultado Operacional Parcial", fmt_brl(tot_res_f), "destaque"),
+            ],
+            colunas=4,
         )
-        sc1, sc2 = st.columns(2)
-        sc1.metric("Recebido de Fato (Fretes Filtrados)", fmt_brl(tot_recebido_f))
-        sc2.metric("Saldo a Receber", fmt_brl(tot_saldo_f) if saldos_consulta_validos else "Conferir financeiro legado")
+        exibir_indicadores(
+            [
+                ("Recebido de Fato (Fretes Filtrados)", fmt_brl(tot_recebido_f)),
+                ("Saldo a Receber", fmt_brl(tot_saldo_f) if saldos_consulta_validos else "Conferir financeiro legado", "destaque"),
+            ],
+            colunas=2,
+        )
         st.caption(
             "Os indicadores filtrados por frete não incluem despesas compartilhadas do ciclo. "
             "Para a visão operacional com esses custos, consulte o Fechamento por Ciclo na Etapa 9."
