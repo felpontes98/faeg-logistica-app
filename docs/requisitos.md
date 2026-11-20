@@ -19,15 +19,18 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 | RF-07 | Registrar odômetro inicial/final opcional da operação, sem confundir com estimativa de KM | Proposto; teste pendente |
 | RF-08 | Registrar Diesel ou ARLA por veículo na Etapa 7, mesmo sem qualquer viagem cadastrada | Proposto em `abastecimentos`; teste pendente |
 | RF-09 | Exibir distância e KM/L/custo por KM indicativos entre abastecimentos consecutivos de Diesel do mesmo veículo | Proposto; teste pendente |
-| RF-10 | Associar despesas financeiras a fretes sem somar duas vezes o registro informativo de combustível | Parcial: sem alocação automática por ciclo |
+| RF-10 | Associar despesas financeiras a fretes sem somar duas vezes o registro informativo de combustível | Proposto; vínculo financeiro manual, sem alocação automática |
 | RF-11 | Consultar, gerar relatórios e exportar dados operacionais; o Excel inclui aba própria `Abastecimentos_Veiculos` | Proposto; revisão de indicadores ainda pendente |
 | RF-12 | Importar Excel distinguindo fretes, fechamentos e totais gerais | Apenas prévia/auditoria; **gravação bloqueada** |
 | RF-13 | Registrar pagamentos efetivamente recebidos, com data, valor, tipo e referência, sem confundir com parcelas previstas | Proposto em `recebimentos_frete`; teste pendente |
-| RF-14 | Fechar ciclos com despesas compartilhadas e regra de rateio aprovada | **Pendente** |
+| RF-14 | Registrar despesas compartilhadas por ciclo e somá-las uma única vez no fechamento gerencial | Proposto em `ciclos_despesas`; teste pendente; **rateio não aprovado** |
 | RF-15 | Consolidar receita negociada e despesas de cada frete por ID interno de ciclo, sem duplicar lançamentos | Proposto em `fechamento_ciclos.py`; teste pendente |
 | RF-16 | Exibir prévia do ciclo na Etapa 8 e relatório na Etapa 9; exportar `Fechamento_Ciclos` | Proposto; teste pendente |
 | RF-17 | Somar pagamentos efetivos por frete e ciclo; mostrar saldo a receber e possível excedente | Proposto; teste pendente |
 | RF-18 | Cancelar recebimento lançado incorretamente com motivo obrigatório e sem apagar histórico | Proposto; teste pendente |
+| RF-19 | Registrar despesas compartilhadas em ciclo salvo e cancelá-las com histórico e motivo, sem rateá-las pelos fretes | Proposto em `ciclos_despesas`; teste pendente |
+| RF-20 | Exibir odômetro de abastecimento como campo numérico normal, visível na Etapa 7, sem checkbox | Proposto; teste visual pendente |
+| RF-21 | Exportar `Despesas_Ciclo` com histórico e `Fechamento_Ciclos` com despesas de fretes e compartilhadas separadas | Proposto; teste pendente |
 
 ## Critérios de aceite dos cálculos
 
@@ -39,13 +42,15 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 6. **Desvio:** quando o KM real estiver disponível, `Diferença = KM Real − KM Total Planejado`; exibir desvio percentual somente com planejado maior que zero.
 7. **Abastecimento:** o registro pertence ao **veículo**, não exige `id_viagem`/ID Frete e não modifica os odômetros operacionais.
 8. **Consumo:** apenas dois abastecimentos *consecutivos de Diesel* do mesmo veículo com odômetros crescentes permitem `KM entre abastecimentos`; `KM/L = distância / litros do abastecimento atual` e `R$/KM = valor atual / distância`. Informar que essa média é indicativa e pressupõe tanque cheio; ARLA é monitorado separadamente.
-9. **DRE:** histórico de abastecimentos não gera automaticamente despesa; somente despesas financeiras associadas à viagem são contabilizadas nesse resultado parcial. Rateio de custos comuns continua pendente.
-10. **Fechamento parcial do ciclo:** `Receita negociada do ciclo = soma dos valores negociados dos fretes`, `Despesas do ciclo = soma das despesas financeiras atribuídas aos respectivos fretes` e `Resultado Operacional Parcial = receita negociada − despesas do ciclo`; não contabilizar uma linha de fechamento como frete adicional.
+9. **DRE:** histórico de abastecimentos não gera automaticamente despesa; o resultado de um frete inclui apenas suas despesas financeiras e o resultado por ciclo inclui também os gastos comuns ativos daquele ID Ciclo. Rateio de custos comuns continua pendente; o BI filtrado por frete/cliente não inclui esses custos.
+10. **Fechamento parcial do ciclo:** `Receita negociada do ciclo = soma dos valores negociados dos fretes`, `Despesas do ciclo = soma das despesas financeiras atribuídas aos respectivos fretes + despesas compartilhadas ativas do ID Ciclo (uma única vez)` e `Resultado Operacional Parcial = receita negociada − despesas do ciclo`; não contabilizar linha de fechamento como frete adicional.
 11. **Proteção de registros legados:** se dois ou mais fretes compartilham o mesmo financeiro legado de ciclo, não somar o valor legado uma vez por frete; avisar sobre a necessidade de individualização, sem excluir o histórico.
 12. **Parcelas previstas:** adiantamento e saldo são campos contratuais previstos, não equivalem a recebimento efetivo. Não somar o fechamento por ciclo uma segunda vez ao total geral por fretes.
 13. **Recebido de fato:** cada lançamento só pode ser atribuído a frete já salvo e deve indicar data, valor positivo, tipo de parcela e meio de pagamento. Referência/comprovante e observação são opcionais; pagamentos idênticos sem referência são tratados como possível duplicidade.
 14. **Saldo:** `Recebido de fato = soma dos pagamentos confirmados (não cancelados)` e `Saldo a receber do frete = máximo(0, valor negociado − recebido de fato)`. O saldo do ciclo é a soma dos saldos de seus fretes, sem compensar automaticamente excedente de um frete com outro. Indicar excedentes separadamente; saldos de fretes com financeiro legado ambíguo não devem ser apresentados como exatos.
 15. **Correções:** cancelamento exige motivo, preserva o registro, data de cancelamento e valor original. A exportação em Excel deve incluir linhas canceladas com situação identificada, sem computá-las nos totais.
+16. **Odômetro visível no abastecimento:** campo numérico de tamanho comparável a litros/preço, sem checkbox. `0` no formulário representa **não informado** e deve persistir como `NULL`; a ausência não permite estimar km/L.
+17. **Despesa compartilhada:** somente em ciclo previamente salvo. Registrar uma vez por `id_ciclo`, sem lançar a mesma despesa no frete; lançar custo novo e cancelar custo incorreto sem exclusão física. A exportação deve mostrar todos os lançamentos e os dois componentes do total do ciclo. Não realizar rateio automático.
 
 ## Requisitos de integridade e implantação
 
@@ -63,8 +68,12 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - [ ] Registrar ARLA no meio dos Diesel; confirmar que não muda o cálculo de consumo.
 - [ ] Registrar abastecimento sem leitura e uma leitura regressiva; confirmar indicador indisponível/aviso e nenhuma distância negativa.
 - [ ] Confirmar que o DRE não ganhou despesa automaticamente ao salvar abastecimento do veículo.
+- [ ] Conferir visualmente que o odômetro do abastecimento é campo numérico direto (sem checkbox), registrar `0` como ausência e uma leitura real como número.
 - [ ] Cadastrar dois fretes no mesmo ciclo e conferir soma de KM e deslocamentos informados uma vez.
 - [ ] Cadastrar três fretes de um ciclo, com receitas e despesas diferentes; conferir prévia na Etapa 8, relatório na Etapa 9 e planilha `Fechamento_Ciclos`.
+- [ ] Registrar uma despesa compartilhada em ciclo salvo e conferir que entra uma única vez no fechamento, sem aparecer no BI por frete/cliente.
+- [ ] Cancelar despesa compartilhada com motivo; conferir saída do cálculo e manutenção do histórico cancelado em `Despesas_Ciclo`.
+- [ ] Conferir impedimento de lançamento idêntico no mesmo ciclo e verificar manualmente que o custo não foi também lançado a um frete.
 - [ ] Simular dois fretes legados com um único financeiro de ciclo; conferir aviso e receita não duplicada.
 - [ ] Registrar adiantamento recebido real, saldo recebido e um pagamento parcial adicional; conferir valores por frete/ciclo.
 - [ ] Cancelar pagamento com motivo e conferir exclusão dos totais, sem apagar o histórico na Etapa 4 ou na aba `Recebimentos_Fretes`.
@@ -77,4 +86,4 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 
 ## Escopo explicitamente não encerrado
 
-Não presumir que a aplicação esteja pronta para produção por existir código. Faltam ao menos: homologação integrada, fechamento **formal** dos ciclos (status/confirmação), despesas compartilhadas e regra de rateio, conciliação bancária e automatização de situações de pagamento, segurança de acesso e importação com gravação autorizada. A consolidação **gerencial parcial** por ciclo e o registro manual de recebimentos já estão propostos.
+Não presumir que a aplicação esteja pronta para produção por existir código. Faltam ao menos: homologação integrada, fechamento **formal** dos ciclos (status/confirmação), regra de rateio, despesas provisórias por veículo, conciliação bancária e automatização de situações de pagamento, segurança de acesso e importação com gravação autorizada. A consolidação **gerencial parcial** por ciclo, as despesas compartilhadas e o registro manual de recebimentos já estão propostos.

@@ -126,6 +126,7 @@ class CicloOperacional(Base):
         back_populates="ciclo",
         cascade="all, delete-orphan",
     )
+    despesas_compartilhadas = relationship("CicloDespesa", back_populates="ciclo")
 
 
 class CicloFinanceiro(Base):
@@ -268,6 +269,29 @@ class ViagemDespesa(Base):
 
     viagem = relationship("Viagem", back_populates="despesas")
     fornecedor = relationship("Fornecedor", back_populates="despesas")
+
+
+class CicloDespesa(Base):
+    """Despesa comum a todo um ciclo, sem rateio e sem repetição por frete."""
+
+    __tablename__ = "ciclos_despesas"
+
+    id_despesa_ciclo = Column(Integer, primary_key=True, autoincrement=True)
+    id_ciclo = Column(Integer, ForeignKey("ciclos_operacionais.id_ciclo"), nullable=False, index=True)
+    id_fornecedor = Column(Integer, ForeignKey("fornecedores.id_fornecedor"), nullable=True)
+    tipo_despesa = Column(String(80), nullable=False)
+    descricao_detalhe = Column(String(200))
+    quantidade = Column(Numeric(12, 2), nullable=False, default=1.0)
+    valor_unitario = Column(Numeric(12, 2), nullable=False)
+    valor_total = Column(Numeric(12, 2), nullable=False)
+    data_despesa = Column(Date, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    cancelado = Column(Boolean, nullable=False, default=False)
+    data_cancelamento = Column(Date)
+    motivo_cancelamento = Column(String(200))
+
+    ciclo = relationship("CicloOperacional", back_populates="despesas_compartilhadas")
+    fornecedor = relationship("Fornecedor")
 
 
 class Abastecimento(Base):

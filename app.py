@@ -17,6 +17,7 @@ from database.importador_planilha import preparar_previa_importacao_faeg
 from database.models import (
     Abastecimento,
     CicloOperacional,
+    CicloDespesa,
     Cliente,
     FreteFinanceiro,
     Fornecedor,
@@ -41,13 +42,13 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def inicializar_banco_uma_vez(schema_v=8):
+def inicializar_banco_uma_vez(schema_v=9):
     """Garante que todas as tabelas e colunas novas existam no Neon sem alterar dados."""
     sincronizar_colunas_banco()
     return True
 
 
-inicializar_banco_uma_vez(schema_v=8)
+inicializar_banco_uma_vez(schema_v=9)
 
 # ==============================================================================
 # LISTAS PADRONIZADAS DO SISTEMA
@@ -1146,6 +1147,32 @@ def carregar_recebimentos_viagem(id_viagem):
 
 
 @st.cache_data(ttl=300, show_spinner=False)
+def carregar_todas_despesas_ciclo():
+    """Despesas compartilhadas por ID do ciclo, nunca repetidas por frete."""
+    with SessionLocal() as session:
+        return [
+            {
+                "id_despesa_ciclo": d.id_despesa_ciclo,
+                "id_ciclo": d.id_ciclo,
+                "ciclo": d.ciclo.nome_operacao,
+                "id_fornecedor": d.id_fornecedor,
+                "tipo_despesa": d.tipo_despesa,
+                "descricao_detalhe": d.descricao_detalhe,
+                "quantidade": float(d.quantidade),
+                "valor_unitario": float(d.valor_unitario),
+                "valor_total": float(d.valor_total),
+                "data_despesa": d.data_despesa,
+                "cancelado": bool(d.cancelado),
+                "data_cancelamento": d.data_cancelamento,
+                "motivo_cancelamento": d.motivo_cancelamento,
+            }
+            for d in session.query(CicloDespesa)
+            .order_by(CicloDespesa.data_despesa, CicloDespesa.id_despesa_ciclo)
+            .all()
+        ]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
 def carregar_todas_viagens_consulta():
     """Carrega visão consolidada de todas as viagens, ciclos, receitas e despesas para Consultas e BI."""
     with SessionLocal() as session:
@@ -1333,7 +1360,7 @@ def carregar_abastecimentos_veiculo(id_veiculo):
     return [a for a in carregar_todos_abastecimentos() if a["id_veiculo"] == id_veiculo]
 
 
-def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None, recebimentos=None):
+def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None, recebimentos=None, despesas_ciclo=None):
     """Gera arquivo Excel (.xlsx) completo com todas as viagens, despesas e cadastros do sistema."""
     buf = io.BytesIO()
 
@@ -1421,6 +1448,8 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
             "Recebido de Fato (R$)": f["total_recebido"],
             "Saldo a Receber (R$)": f["saldo_a_receber"],
             "Excedente Recebido (R$)": f["excedente_recebido"],
+            "Despesas dos Fretes (R$)": f["despesas_fretes_total"],
+            "Despesas Compartilhadas (R$)": f["despesas_compartilhadas_total"],
             "Despesas Financeiras (R$)": f["despesas_total"],
             "Resultado Operacional Parcial (R$)": f["resultado_operacional_parcial"],
             "KM Fretes Planejados": f["km_planejado_fretes"],
@@ -1434,6 +1463,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         "Clientes", "Negociado (R$)", "Adiantamentos Previstos (R$)",
         "Saldos Previstos (R$)", "Parcelas Previstas (R$)",
         "Recebido de Fato (R$)", "Saldo a Receber (R$)", "Excedente Recebido (R$)",
+        "Despesas dos Fretes (R$)", "Despesas Compartilhadas (R$)",
         "Despesas Financeiras (R$)", "Resultado Operacional Parcial (R$)",
         "KM Fretes Planejados", "KM Deslocamentos", "KM Total Planejado",
         "Fretes com Financeiro Legado Ambíguo",
@@ -1458,6 +1488,29 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         "Forma Pagamento", "Referência", "Observação", "Valor (R$)",
         "Situação", "Data Cancelamento", "Motivo Cancelamento",
     ])
+    fornecedores_map = {f["id_fornecedor"]: f["nome_fantasia"] for f in fornecedores}
+    df_despesas_ciclo = pd.DataFrame([
+        {
+            "ID Despesa Ciclo": d["id_despesa_ciclo"],
+            "ID Interno Ciclo": d["id_ciclo"],
+            "Código Ciclo": d["ciclo"],
+            "Data": d["data_despesa"].strftime("%d/%m/%Y"),
+            "Categoria": d["tipo_despesa"],
+            "Descrição": d["descricao_detalhe"],
+            "Fornecedor": fornecedores_map.get(d["id_fornecedor"], "Não informado"),
+            "Quantidade": d["quantidade"],
+            "Valor Unitário (R$)": d["valor_unitario"],
+            "Valor Total (R$)": d["valor_total"],
+            "Situação": "Cancelada" if d["cancelado"] else "Ativa",
+            "Data Cancelamento": d["data_cancelamento"].strftime("%d/%m/%Y") if d["data_cancelamento"] else None,
+            "Motivo Cancelamento": d["motivo_cancelamento"],
+        }
+        for d in (despesas_ciclo or [])
+    ], columns=[
+        "ID Despesa Ciclo", "ID Interno Ciclo", "Código Ciclo", "Data",
+        "Categoria", "Descrição", "Fornecedor", "Quantidade", "Valor Unitário (R$)",
+        "Valor Total (R$)", "Situação", "Data Cancelamento", "Motivo Cancelamento",
+    ])
 
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         df_viagens.to_excel(writer, sheet_name="Viagens_e_Ciclos", index=False)
@@ -1470,6 +1523,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         df_abast.to_excel(writer, sheet_name="Abastecimentos_Veiculos", index=False)
         df_ciclos.to_excel(writer, sheet_name="Fechamento_Ciclos", index=False)
         df_recebimentos.to_excel(writer, sheet_name="Recebimentos_Fretes", index=False)
+        df_despesas_ciclo.to_excel(writer, sheet_name="Despesas_Ciclo", index=False)
 
     return buf.getvalue()
 
@@ -1692,7 +1746,7 @@ def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_cat
     y += 24
     text(55, y + 6, "Receita Consolidada:", size=10, bold=False, r=1, g=1, b=1)
     text(210, y + 6, resumo_geral["receita_fmt"], size=10, bold=True, r=1, g=1, b=1)
-    text(340, y + 6, "Despesas Totais:", size=10, bold=False, r=1, g=1, b=1)
+    text(340, y + 6, "Despesas Fretes:", size=10, bold=False, r=1, g=1, b=1)
     text(445, y + 6, resumo_geral["despesa_fmt"], size=10, bold=True, r=0.953, g=0.302, b=0.145)
     y += 26
     text(55, y + 6, "RESULTADO OPERACIONAL PARCIAL:", size=10, bold=True, r=1, g=1, b=1)
@@ -1703,7 +1757,7 @@ def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_cat
 
     y += 42
     rect(40, y, 515, 22, 0.914, 0.914, 0.914)
-    text(48, y + 15, "2. DESEMPENHO CONSOLIDADO POR CLIENTE", size=10, bold=True)
+    text(48, y + 15, "2. DESEMPENHO POR CLIENTE (SEM RATEIO)", size=10, bold=True)
     y += 34
 
     rect(40, y - 12, 515, 18, 0.051, 0.149, 0.235)
@@ -1730,7 +1784,7 @@ def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_cat
 
     y += 14
     rect(40, y, 515, 22, 0.914, 0.914, 0.914)
-    text(48, y + 15, "3. DISTRIBUICAO CONSOLIDADA DE DESPESAS POR CATEGORIA", size=10, bold=True)
+    text(48, y + 15, "3. DESPESAS POR FRETE / CATEGORIA (SEM RATEIO)", size=10, bold=True)
     y += 34
 
     rect(40, y - 12, 515, 18, 0.051, 0.149, 0.235)
@@ -2036,7 +2090,7 @@ def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual):
         # ser salva com seus próprios valores em fretes_financeiro.
         "financeiro_individual": ativo_salvo["financeiro_individual"] if ativo_salvo else True,
     }
-    consolidados = consolidar_ciclos(outros + [frete_atual])
+    consolidados = consolidar_ciclos(outros + [frete_atual], carregar_todas_despesas_ciclo())
     return consolidados[0] if consolidados else None
 
 
@@ -2166,6 +2220,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 carregar_listas_base.clear()
                 carregar_despesas_viagem.clear()
                 carregar_todas_viagens_consulta.clear()
+                carregar_todas_despesas_ciclo.clear()
                 st.toast(f"Viagem {codigo_digitado} salva com sucesso no Neon!", icon="✅")
                 st.rerun()
             else:
@@ -2224,6 +2279,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     carregar_listas_base.clear()
                     carregar_despesas_viagem.clear()
                     carregar_todas_viagens_consulta.clear()
+                    carregar_todas_despesas_ciclo.clear()
                     st.toast(f"Alterações da viagem {codigo_digitado} atualizadas!", icon="✅")
                     st.rerun()
     except IntegrityError:
@@ -3286,7 +3342,9 @@ with st.container(border=True):
                             "DATA *", value=date.today(), format="DD/MM/YYYY", key="abast_data"
                         )
 
-                    b1, b2, b3, b4 = st.columns([1.15, 1.25, 1.45, 1.65])
+                    # Campo de odômetro sempre visível, com o mesmo padrão
+                    # numérico de Litros e Preço: sem checkbox para habilitar.
+                    b1, b2, b3 = st.columns([1.2, 1.4, 1.6])
                     with b1:
                         abast_litros = st.number_input(
                             "LITROS *", min_value=0.01, value=1.0, step=1.0,
@@ -3298,24 +3356,21 @@ with st.container(border=True):
                             step=0.10, format="%.4f", key="abast_preco"
                         )
                     with b3:
-                        abast_com_odometro = st.checkbox(
-                            "Informar odômetro", value=False, key="abast_com_odometro"
+                        abast_odo_digitado = st.number_input(
+                            "ODÔMETRO NO ABASTECIMENTO (KM)",
+                            min_value=0, value=0, step=1,
+                            key="abast_odometro",
+                            help="Digite diretamente a leitura do painel do veículo. Deixe 0 somente se não tiver essa informação.",
                         )
-                        abast_odometro = (
-                            st.number_input(
-                                "LEITURA (KM)", min_value=1, value=1, step=1,
-                                key="abast_odometro",
-                            ) if abast_com_odometro else None
-                        )
-                    with b4:
-                        abast_forn_ops = {0: "Não informado"}
-                        abast_forn_ops.update({
-                            f["id_fornecedor"]: f["nome_fantasia"] for f in fornecedores_db
-                        })
-                        abast_fornecedor = st.selectbox(
-                            "POSTO / FORNECEDOR", options=list(abast_forn_ops),
-                            format_func=lambda x: abast_forn_ops[x], key="abast_fornecedor"
-                        )
+                        abast_odometro = int(abast_odo_digitado) if abast_odo_digitado > 0 else None
+                    abast_forn_ops = {0: "Não informado"}
+                    abast_forn_ops.update({
+                        f["id_fornecedor"]: f["nome_fantasia"] for f in fornecedores_db
+                    })
+                    abast_fornecedor = st.selectbox(
+                        "POSTO / FORNECEDOR", options=list(abast_forn_ops),
+                        format_func=lambda x: abast_forn_ops[x], key="abast_fornecedor"
+                    )
 
                     st.caption(f"Valor calculado deste abastecimento: {fmt_brl(abast_litros * abast_preco)}")
                     salvar_abastecimento = st.form_submit_button(
@@ -3584,6 +3639,151 @@ with st.container(border=True):
                 unsafe_allow_html=True,
             )
 
+        with st.expander("🧾 Despesas compartilhadas do ciclo — lançar uma única vez", expanded=False):
+            st.caption(
+                "Use para um gasto que atende ao ciclo inteiro e não pertence integralmente "
+                "a um único frete. O lançamento é vinculado ao ID do ciclo, sem copiar o "
+                "valor para cada frete e sem rateio automático."
+            )
+            with SessionLocal() as session:
+                ciclos_cadastrados = [
+                    (c.id_ciclo, c.nome_operacao)
+                    for c in session.query(CicloOperacional)
+                    .order_by(CicloOperacional.nome_operacao, CicloOperacional.id_ciclo)
+                    .all()
+                    if not c.nome_operacao.startswith("Individual - ")
+                ]
+
+            if not ciclos_cadastrados:
+                st.info("Ainda não há ciclos salvos. Salve primeiro um frete do tipo Ciclo para registrar uma despesa compartilhada.")
+            else:
+                ciclos_dict = {ident: nome for ident, nome in ciclos_cadastrados}
+                with st.form("form_despesa_compartilhada_ciclo", clear_on_submit=False):
+                    dc1, dc2, dc3 = st.columns([2.1, 1.5, 1.2])
+                    with dc1:
+                        ciclo_desp_id = st.selectbox(
+                            "CICLO OPERACIONAL *",
+                            options=list(ciclos_dict),
+                            format_func=lambda x: f"{ciclos_dict[x]} (ID interno {x})",
+                            key="desp_ciclo_id",
+                        )
+                    with dc2:
+                        tipo_desp_ciclo = st.selectbox(
+                            "TIPO DE DESPESA *", CATEGORIAS_DESPESA_FORNECEDOR,
+                            key="desp_ciclo_tipo",
+                        )
+                    with dc3:
+                        data_desp_ciclo = st.date_input(
+                            "DATA *", value=date.today(), format="DD/MM/YYYY", key="desp_ciclo_data",
+                        )
+
+                    dc4, dc5, dc6 = st.columns([1.7, 1.0, 1.1])
+                    with dc4:
+                        desc_desp_ciclo = st.text_input(
+                            "DESCRIÇÃO / LOCAL", max_chars=200, key="desp_ciclo_desc",
+                        )
+                    with dc5:
+                        qtd_desp_ciclo = st.number_input(
+                            "QUANTIDADE / LITROS *", min_value=0.01, value=1.0,
+                            step=1.0, format="%.2f", key="desp_ciclo_qtd",
+                        )
+                    with dc6:
+                        valor_unit_ciclo = st.number_input(
+                            "UNITÁRIO (R$) *", min_value=0.0, value=0.0,
+                            step=10.0, format="%.2f", key="desp_ciclo_unitario",
+                        )
+                    fornecedor_ciclo = st.selectbox(
+                        "FORNECEDOR / POSTO", options=list(forn_ops),
+                        format_func=lambda x: forn_ops[x], key="desp_ciclo_fornecedor",
+                    )
+                    total_desp_ciclo = round(qtd_desp_ciclo * valor_unit_ciclo, 2)
+                    st.caption(f"Valor total compartilhado: {fmt_brl(total_desp_ciclo)}")
+                    btn_salvar_desp_ciclo = st.form_submit_button(
+                        "Registrar Despesa Compartilhada do Ciclo", use_container_width=True,
+                    )
+
+                if btn_salvar_desp_ciclo:
+                    if valor_unit_ciclo <= 0:
+                        st.warning("Informe um valor unitário maior que R$ 0,00.")
+                    else:
+                        with SessionLocal() as session:
+                            existente = session.query(CicloDespesa).filter_by(
+                                id_ciclo=ciclo_desp_id,
+                                tipo_despesa=tipo_desp_ciclo,
+                                descricao_detalhe=desc_desp_ciclo.strip() or tipo_desp_ciclo,
+                                data_despesa=data_desp_ciclo,
+                                valor_total=total_desp_ciclo,
+                                cancelado=False,
+                            ).first()
+                            if existente:
+                                st.warning("Esta despesa já consta no ciclo. Confira antes de registrar novamente.")
+                            else:
+                                session.add(CicloDespesa(
+                                    id_ciclo=ciclo_desp_id,
+                                    id_fornecedor=fornecedor_ciclo or None,
+                                    tipo_despesa=tipo_desp_ciclo,
+                                    descricao_detalhe=desc_desp_ciclo.strip() or tipo_desp_ciclo,
+                                    quantidade=round(qtd_desp_ciclo, 2),
+                                    valor_unitario=round(valor_unit_ciclo, 2),
+                                    valor_total=total_desp_ciclo,
+                                    data_despesa=data_desp_ciclo,
+                                ))
+                                session.commit()
+                                carregar_todas_despesas_ciclo.clear()
+                                st.toast("Despesa compartilhada registrada uma única vez no ciclo!", icon="✅")
+                                st.rerun()
+
+                historico_desp_ciclo = [
+                    d for d in carregar_todas_despesas_ciclo() if d["id_ciclo"] == ciclo_desp_id
+                ]
+                if historico_desp_ciclo:
+                    st.dataframe(
+                        pd.DataFrame([
+                            {
+                                "Data": d["data_despesa"].strftime("%d/%m/%Y"),
+                                "Tipo": d["tipo_despesa"],
+                                "Descrição": d["descricao_detalhe"] or "-",
+                                "Valor (R$)": d["valor_total"],
+                                "Situação": "Cancelada" if d["cancelado"] else "Ativa",
+                            }
+                            for d in reversed(historico_desp_ciclo)
+                        ]),
+                        hide_index=True,
+                        use_container_width=True,
+                    )
+                    ativas_ciclo = [d for d in historico_desp_ciclo if not d["cancelado"]]
+                    st.metric("DESPESAS COMPARTILHADAS ATIVAS DESTE CICLO", fmt_brl(sum(d["valor_total"] for d in ativas_ciclo)))
+                    if ativas_ciclo:
+                        with st.expander("Corrigir lançamento compartilhado (mantendo histórico)"):
+                            opcoes_cancelar_dc = {d["id_despesa_ciclo"]: d for d in ativas_ciclo}
+                            dc_cancel_id = st.selectbox(
+                                "DESPESA A CANCELAR", options=list(opcoes_cancelar_dc),
+                                format_func=lambda x: f"#{x} — {fmt_brl(opcoes_cancelar_dc[x]['valor_total'])}",
+                                key="desp_ciclo_cancel_id",
+                            )
+                            dc_cancel_motivo = st.text_input(
+                                "MOTIVO DO CANCELAMENTO *", max_chars=200,
+                                key="desp_ciclo_cancel_motivo",
+                            )
+                            if st.button("Confirmar Cancelamento da Despesa", key="desp_ciclo_cancel_btn"):
+                                if len(dc_cancel_motivo.strip()) < 6:
+                                    st.warning("Informe um motivo com pelo menos 6 caracteres.")
+                                else:
+                                    with SessionLocal() as session:
+                                        objeto = session.query(CicloDespesa).filter_by(
+                                            id_despesa_ciclo=dc_cancel_id, id_ciclo=ciclo_desp_id, cancelado=False,
+                                        ).first()
+                                        if objeto:
+                                            objeto.cancelado = True
+                                            objeto.data_cancelamento = date.today()
+                                            objeto.motivo_cancelamento = dc_cancel_motivo.strip()
+                                            session.commit()
+                                    carregar_todas_despesas_ciclo.clear()
+                                    st.toast("Despesa cancelada, mantendo histórico!", icon="🧾")
+                                    st.rerun()
+                else:
+                    st.info("Nenhuma despesa compartilhada neste ciclo.")
+
         render_navegacao_rodape(6, MENU_ITENS)
 
     # --------------------------------------------------------------------------
@@ -3753,13 +3953,19 @@ with st.container(border=True):
             else:
                 st.caption(
                     "Consolida os fretes do mesmo ID Ciclo, incluindo os valores ainda não salvos "
-                    "deste formulário. Cada despesa é somada apenas no frete ao qual foi lançada."
+                    "deste formulário. Despesas dos fretes são somadas individualmente; "
+                    "despesas compartilhadas entram uma única vez por ID do ciclo."
                 )
                 c1, c2, c3, c4 = st.columns(4)
                 c1.metric("FRETES NO CICLO", previa["qtd_fretes"])
                 c2.metric("RECEITA NEGOCIADA DO CICLO", fmt_brl(previa["valor_negociado_total"]))
                 c3.metric("DESPESAS FINANCEIRAS DO CICLO", fmt_brl(previa["despesas_total"]))
                 c4.metric("RESULTADO OPERACIONAL PARCIAL", fmt_brl(previa["resultado_operacional_parcial"]))
+                st.caption(
+                    f"Composição das despesas: fretes {fmt_brl(previa['despesas_fretes_total'])} "
+                    f"+ compartilhadas {fmt_brl(previa['despesas_compartilhadas_total'])}. "
+                    "Gastos compartilhados não são rateados entre os fretes."
+                )
 
                 p1, p2, p3 = st.columns(3)
                 p1.metric("ADIANTAMENTOS PREVISTOS", fmt_brl(previa["adiantamentos_previstos"]))
@@ -3814,8 +4020,9 @@ with st.container(border=True):
         xlsx_bytes_completo = gerar_excel_base_completa(
             todas_vg_exp, desp_det_exp, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db,
             abastecimentos=todos_abast_exp,
-            fechamentos_ciclos=consolidar_ciclos(todas_vg_exp),
+            fechamentos_ciclos=consolidar_ciclos(todas_vg_exp, carregar_todas_despesas_ciclo()),
             recebimentos=carregar_todos_recebimentos(),
+            despesas_ciclo=carregar_todas_despesas_ciclo(),
         )
 
         tab_rel_viagem, tab_rel_geral, tab_rel_ciclos = st.tabs(
@@ -3999,7 +4206,7 @@ with st.container(border=True):
                 bg1, bg2, bg3 = st.columns(3)
                 bg1.metric("Viagens Analisadas", len(vg_bi_filtradas))
                 bg2.metric("Receita Consolidada", fmt_brl(rec_global))
-                bg3.metric("Despesas Consolidadas", fmt_brl(desp_global))
+                bg3.metric("Despesas dos Fretes", fmt_brl(desp_global))
 
                 bg4, bg5, bg6 = st.columns(3)
                 bg4.metric("Resultado Operacional Parcial", fmt_brl(res_global))
@@ -4011,6 +4218,11 @@ with st.container(border=True):
                 bg7, bg8 = st.columns(2)
                 bg7.metric("Recebimentos Confirmados", fmt_brl(recebimentos_global))
                 bg8.metric("Saldo em Aberto", fmt_brl(saldo_global) if saldo_global_confiavel else "Conferir financeiro legado")
+                st.caption(
+                    "Este BI é filtrado por frete/cliente e não inclui despesas compartilhadas do ciclo, "
+                    "pois não há rateio aprovado. Consulte 'Fechamento por Ciclo' para o resultado "
+                    "que inclui esses gastos uma única vez. Não some os dois painéis."
+                )
                 if not km_completo:
                     st.caption("KM total parcial: existem fretes sem as duas leituras de odômetro. Custo médio por KM global fica indisponível.")
                 if any(v["financeiro_legado_ambiguo"] for v in vg_bi_filtradas):
@@ -4102,7 +4314,7 @@ with st.container(border=True):
                                 "Viagens": r["viagens"],
                                 "Receita Total": r["receita_fmt"],
                                 "Recebido de Fato": r["recebido_fmt"],
-                                "Despesas Totais": r["despesa_fmt"],
+                                "Despesas dos Fretes": r["despesa_fmt"],
                                 "Resultado Operacional Parcial": r["resultado_fmt"],
                                 "Margem (%)": r["margem_fmt"],
                             }
@@ -4151,11 +4363,11 @@ with st.container(border=True):
         # SUB-ABA 3: CONSOLIDAÇÃO POR ID INTERNO DO CICLO
         # ----------------------------------------------------------------------
         with tab_rel_ciclos:
-            fechamentos_salvos = consolidar_ciclos(todas_vg_exp)
+            fechamentos_salvos = consolidar_ciclos(todas_vg_exp, carregar_todas_despesas_ciclo())
             st.caption(
-                "Cada frete aparece uma vez no ciclo correspondente; a despesa registrada "
-                "em seu ID Frete é somada uma vez. Este painel é uma visão dos mesmos valores "
-                "do BI por frete, portanto não deve ser somado novamente ao total geral."
+                "Cada despesa por ID Frete é somada uma vez e cada despesa compartilhada "
+                "por ID Ciclo entra uma vez, sem rateio. O BI por frete não inclui os gastos "
+                "compartilhados; não some os resultados dos dois painéis."
             )
             if not fechamentos_salvos:
                 st.info("Ainda não existem fretes do tipo Ciclo salvos para consolidar.")
@@ -4176,7 +4388,9 @@ with st.container(border=True):
                             "Parcelas Previstas": fmt_brl(f["parcelas_previstas"]),
                             "Recebido de Fato": fmt_brl(f["total_recebido"]),
                             "Saldo em Aberto": fmt_brl(f["saldo_a_receber"]) if f["saldo_a_receber"] is not None else "Conferir legado",
-                            "Despesas": fmt_brl(f["despesas_total"]),
+                            "Despesas Fretes": fmt_brl(f["despesas_fretes_total"]),
+                            "Despesas Compartilhadas": fmt_brl(f["despesas_compartilhadas_total"]),
+                            "Despesas Totais": fmt_brl(f["despesas_total"]),
                             "Resultado Parcial": fmt_brl(f["resultado_operacional_parcial"]),
                             "KM Total Planejado": fmt_km(f["km_total_planejado"]),
                             "Conferência Financeira": "Pendente" if f["qtd_financeiros_legados_ambiguos"] else "Por frete",
@@ -4194,6 +4408,12 @@ with st.container(border=True):
                     key="rel_ciclo_detalhe",
                 )
                 ciclo_aberto = opcoes_ciclos[ciclo_abrir_id]
+                st.caption(
+                    f"Ciclo {ciclo_aberto['ciclo']}: despesas dos fretes "
+                    f"{fmt_brl(ciclo_aberto['despesas_fretes_total'])} + despesas compartilhadas "
+                    f"{fmt_brl(ciclo_aberto['despesas_compartilhadas_total'])} "
+                    f"= {fmt_brl(ciclo_aberto['despesas_total'])}."
+                )
                 st.dataframe(
                     pd.DataFrame([
                         {
@@ -4216,7 +4436,7 @@ with st.container(border=True):
                         "por frete. Esses valores não foram repetidos na receita consolidada; "
                         "a conferência e a individualização ainda são necessárias."
                     )
-                st.caption("O Excel da Etapa 9 inclui a planilha Fechamento_Ciclos com esses totais.")
+                st.caption("O Excel da Etapa 9 inclui Fechamento_Ciclos (com os dois componentes de despesa) e Despesas_Ciclo (lançamentos ativos e cancelados).")
 
         render_navegacao_rodape(8, MENU_ITENS)
 
@@ -4303,7 +4523,7 @@ with st.container(border=True):
                     <div class="kpi-consulta-val">{fmt_brl(tot_rec_f)}</div>
                 </div>
                 <div class="kpi-consulta-card orange">
-                    <div class="kpi-consulta-lbl">Despesas Consolidadas</div>
+                    <div class="kpi-consulta-lbl">Despesas dos Fretes</div>
                     <div class="kpi-consulta-val">{fmt_brl(tot_desp_f)}</div>
                 </div>
                 <div class="kpi-consulta-card">
@@ -4317,6 +4537,10 @@ with st.container(border=True):
         sc1, sc2 = st.columns(2)
         sc1.metric("Recebido de Fato (Fretes Filtrados)", fmt_brl(tot_recebido_f))
         sc2.metric("Saldo a Receber", fmt_brl(tot_saldo_f) if saldos_consulta_validos else "Conferir financeiro legado")
+        st.caption(
+            "Os indicadores filtrados por frete não incluem despesas compartilhadas do ciclo. "
+            "Para a visão operacional com esses custos, consulte o Fechamento por Ciclo na Etapa 9."
+        )
 
         if not filtradas:
             st.info("Nenhuma viagem encontrada para os filtros aplicados.")
@@ -4369,8 +4593,9 @@ with st.container(border=True):
                 xlsx_cons = gerar_excel_base_completa(
                     filtradas, desp_detalhadas, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db,
                     abastecimentos=carregar_todos_abastecimentos(),
-                    fechamentos_ciclos=consolidar_ciclos(todas_viagens),
+                    fechamentos_ciclos=consolidar_ciclos(todas_viagens, carregar_todas_despesas_ciclo()),
                     recebimentos=carregar_todos_recebimentos(),
+                    despesas_ciclo=carregar_todas_despesas_ciclo(),
                 )
                 st.download_button(
                     "📥 Exportar Excel (.xlsx)",

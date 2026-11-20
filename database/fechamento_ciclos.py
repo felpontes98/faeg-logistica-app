@@ -1,11 +1,11 @@
 """Fechamento gerencial por ciclo a partir de fretes, sem alterar o banco.
 
-Os registros de despesa têm dono único (ID do frete) e são somados uma só vez.
-O histórico de abastecimento por veículo não entra neste cálculo.
+As despesas diretas pertencem ao ID Frete; as compartilhadas, ao ID Ciclo.
+Cada valor é somado uma vez, sem rateio e sem incluir abastecimentos de veículo.
 """
 
 
-def consolidar_ciclos(fretes):
+def consolidar_ciclos(fretes, despesas_ciclo=None):
     """Retorna uma linha por ID interno de ciclo, sem somar linhas de fechamento.
 
     Cada frete deve ter: id_ciclo, id_viagem, codigo_viagem, id_frete,
@@ -14,6 +14,7 @@ def consolidar_ciclos(fretes):
     O identificador interno impede juntar ciclos legados homônimos por engano.
     """
     grupos = {}
+    despesas_ciclo = despesas_ciclo or []
     for frete in fretes:
         if frete.get("tipo_viagem") != "Ciclo":
             continue
@@ -43,7 +44,12 @@ def consolidar_ciclos(fretes):
         receita = round(sum(float(i.get("valor_negociado") or 0) for i in receitas), 2)
         adiantamentos = round(sum(float(i.get("valor_adiantamento") or 0) for i in receitas), 2)
         saldos = round(sum(float(i.get("valor_saldo") or 0) for i in receitas), 2)
-        despesas = round(sum(float(i.get("total_despesas") or 0) for i in itens), 2)
+        despesas_dos_fretes = round(sum(float(i.get("total_despesas") or 0) for i in itens), 2)
+        despesas_comuns = round(sum(
+            float(d.get("valor_total") or 0) for d in despesas_ciclo
+            if d.get("id_ciclo") == id_ciclo and not d.get("cancelado", False)
+        ), 2)
+        despesas = round(despesas_dos_fretes + despesas_comuns, 2)
         recebido = round(sum(float(i.get("total_recebido") or 0) for i in itens), 2)
         # Não compensar automaticamente o excedente de um frete com o saldo
         # de outro. Cada contrato mantém seu valor em aberto e o excedente
@@ -78,6 +84,8 @@ def consolidar_ciclos(fretes):
             "saldo_a_receber": saldo_receber,
             "excedente_recebido": excedente_recebido,
             "despesas_total": despesas,
+            "despesas_fretes_total": despesas_dos_fretes,
+            "despesas_compartilhadas_total": despesas_comuns,
             "resultado_operacional_parcial": resultado,
             "margem_operacional_pct": margem,
             "km_planejado_fretes": km_fretes,

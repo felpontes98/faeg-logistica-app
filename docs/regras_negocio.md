@@ -79,7 +79,7 @@ Se saída e chegada forem preenchidos para o mesmo veículo e intervalo, **KM re
 
 Leituras de abastecimento podem ajudar a conferir o histórico e, quando houver duas leituras confiáveis consecutivas, calcular a distância entre abastecimentos. **Não presumir** que essa distância seja automaticamente igual ao KM do ciclo ou do frete: abastecimentos podem ocorrer no meio de vários serviços.
 
-Na implementação preparada, a Etapa 7 contém um **histórico de abastecimentos independente de ID de frete**, identificado por `id_veiculo`. Cada registro de `abastecimentos` conserva a data, tipo (Diesel/ARLA), litros, preço por litro, total, fornecedor opcional e odômetro opcional. Pode ser registrado mesmo com **zero viagens** no banco. ARLA fica no histórico, mas não entra na estimativa de consumo de Diesel.
+Na implementação preparada, a Etapa 7 contém um **histórico de abastecimentos independente de ID de frete**, identificado por `id_veiculo`. Cada registro de `abastecimentos` conserva a data, tipo (Diesel/ARLA), litros, preço por litro, total, fornecedor opcional e odômetro opcional. Pode ser registrado mesmo com **zero viagens** no banco. O campo numérico **ODÔMETRO NO ABASTECIMENTO (KM)** permanece sempre visível, sem checkbox; digitar `0` significa leitura não informada (`NULL`), nunca um odômetro real de zero. ARLA fica no histórico, mas não entra na estimativa de consumo de Diesel.
 
 O indicador `KM entre abastecimentos` é a diferença positiva entre odômetros de **dois registros consecutivos de Diesel do mesmo veículo**. O `KM/L indicativo` divide essa distância pelos litros do abastecimento mais recente, e `R$/KM indicativo` divide seu valor total pela distância. Somente são estimativas úteis quando há histórico completo de abastecimentos de **tanque cheio**; abastecimento parcial, registro omitido ou odômetro inconsistente invalidam a interpretação de consumo real. Sem duas leituras válidas, exibir indicador **não disponível**, nunca `0 km/L` fictício.
 
@@ -89,10 +89,11 @@ O campo legado `viagens_despesas.odometro_abastecimento` não é excluído (comp
 
 - Cada despesa deve ter categoria, descrição, data, valor e associação clara a um **frete individual** ou a **um ciclo**.
 - Despesa de uso comum no ciclo entra **uma vez** no fechamento consolidado, sem cópia integral em cada frete.
+- A Etapa 7 permite cadastrar despesas comuns em `ciclos_despesas`, referenciadas pelo `id_ciclo` já salvo. Cancelamentos preservam o lançamento e o motivo, retirando-o dos cálculos. A prevenção de cadastro idêntico dentro do mesmo ciclo não detecta por si só um lançamento manual duplicado entre um frete e o ciclo: exige conferência humana.
 - Caso seja necessário mostrar custo individual de cada frete do ciclo, estabelecer antes um critério de rateio acordado (por exemplo, participação na receita ou quilômetros), identificando o valor rateado como estimativa gerencial. **O rateio ainda não foi definido.**
 - Um abastecimento deve registrar data, veículo, posto/fornecedor, litros, preço por litro, valor e odômetro quando disponível. Diesel e ARLA devem ser distinguíveis.
 - Evitar lançamento em duplicidade quando o abastecimento também aparece como despesa financeira.
-- O histórico operacional `abastecimentos` **não gera automaticamente** um lançamento em `viagens_despesas` nem entra no DRE; quando o custo pertencer claramente a um frete, registrar a despesa financeira na Etapa 7 separadamente. Alocação automática por ciclo depende de regra de rateio ainda não aprovada.
+- O histórico operacional `abastecimentos` **não gera automaticamente** um lançamento financeiro em `viagens_despesas` ou `ciclos_despesas` nem entra no DRE; quando o custo pertencer claramente a um frete ou ao ciclo inteiro, registrar manualmente a despesa financeira no local correspondente, sem duplicá-la. O vínculo provisório de despesas a veículo sem frete/ciclo e a alocação automática ainda não estão implementados.
 
 ## RN-07 — Fechamento e resultado operacional
 
@@ -100,7 +101,7 @@ O campo legado `viagens_despesas.odometro_abastecimento` não é excluído (comp
 
 **Ciclo:** soma da receita negociada dos fretes vinculados − despesas dos fretes − despesas compartilhadas do ciclo = resultado operacional do ciclo.
 
-**Implementação parcial proposta:** a Etapa 8 apresenta uma **prévia** financeira do ciclo considerando os fretes já salvos e o formulário atual, sem somá-lo duas vezes. A Etapa 9 reúne os fretes salvos por `id_ciclo` e a exportação inclui a aba `Fechamento_Ciclos`. O cálculo inclui somente as despesas vinculadas a cada frete. **Ainda não existe lançamento independente de despesa compartilhada no ciclo**, nem rateio.
+**Implementação parcial proposta:** a Etapa 8 apresenta uma **prévia** financeira do ciclo considerando os fretes já salvos, o formulário atual e despesas comuns ativas vinculadas a esse `id_ciclo`, sem somar nada duas vezes. A Etapa 9 reúne os fretes salvos por `id_ciclo`; a aba `Fechamento_Ciclos` separa despesas por frete e compartilhadas, e `Despesas_Ciclo` mantém o histórico auditável. **Não existe rateio:** o BI por frete/cliente não incorpora as despesas compartilhadas, enquanto o fechamento do ciclo as incorpora uma vez. Não somar ambos os painéis.
 
 O novo cadastro `recebimentos_frete` pertence a um único frete. O resumo por ciclo soma exclusivamente pagamentos confirmados dos seus fretes; cancelados não contribuem. **Saldo a receber do ciclo = soma dos saldos não negativos de cada frete**. Valores recebidos acima do negociado em um frete são mostrados como excedentes e **não abatem automaticamente** o saldo de outro frete. Quando houver financeiro legado ambíguo, o saldo do ciclo fica marcado como pendente de conferência. Os registros completos, incluindo cancelamentos, são exportados separadamente em `Recebimentos_Fretes`.
 
@@ -128,7 +129,8 @@ Campos ausentes não devem ser substituídos por datas atuais ou valores zero se
 ## RN-10 — Validação antes de programar mudanças
 
 - [x] Eduardo definiu a separação entre KM Individual/Ciclo, deslocamentos operacionais e total planejado. A implementação ainda precisa de teste integrado.
-- [ ] A equipe decide como registrar gastos comuns e se haverá rateio individual.
+- [x] Gastos comuns podem ser registrados uma vez por ID do ciclo, sem rateio automático (implementação pendente de testes).
+- [ ] A equipe decide se e como fará o rateio individual e como gerenciar despesas provisórias por veículo sem operação vinculada.
 - [ ] A equipe aprova a nomenclatura final das situações operacional e financeira.
 - [ ] São preparados cenários reais anonimizados para teste individual e por ciclo.
 - [ ] Todas as alterações preservam histórico já cadastrado após teste de migração.
