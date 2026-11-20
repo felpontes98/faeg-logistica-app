@@ -24,7 +24,7 @@ Foi realizada uma leitura estática do código e da planilha de referência. O a
 | 10 | Consultas gerais |
 | 11 | Cadastros gerais |
 
-Os formulários, cadastros, consultas e relatórios estão presentes no código. A proposta atual acrescenta `fretes_financeiro`, totalizando **dez tabelas no ORM**. **A presença de uma tela ou de um modelo não equivale a homologação:** este código ainda precisa ser testado com uma cópia do PostgreSQL.
+Os formulários, cadastros, consultas e relatórios estão presentes no código. A proposta atual inclui `fretes_financeiro` e o histórico independente `abastecimentos`, totalizando **onze tabelas no ORM**. **A presença de uma tela ou de um modelo não equivale a homologação:** este código ainda precisa ser testado com uma cópia do PostgreSQL.
 
 ## Decisões operacionais da FAEG
 
@@ -44,7 +44,7 @@ Exemplos e critérios de aceite estão documentados em [Regras de negócio](regr
 | Agrupamento | Novo cadastro reutiliza ciclo existente pelo número; mantém negociação e cliente independentes em `fretes_financeiro`. **Ciclos históricos repetidos não foram migrados** |
 | Fechamento | A prévia compara os valores negociados com a soma dos fretes anteriores e identifica códigos de ciclo ausentes ou divergentes. O fechamento real de despesas e recebimentos ainda não está implementado |
 | Recebimentos | Adiantamento mais saldo passam a ser apresentados como **total previsto**, sem confundir com pagamento confirmado; falta criar registro de recebimentos efetivos |
-| KM e abastecimento | Etapa 2 mantém o KM manual do frete; Etapa 8 soma os trechos no ciclo e os deslocamentos operacionais. Na Etapa 7, despesas de Diesel/ARLA podem receber um odômetro próprio, sem duplicar custos e sem alterar os odômetros inicial/final |
+| KM e abastecimento | Etapa 2 mantém o KM manual do frete; Etapa 8 soma os trechos do ciclo e os deslocamentos, compara com odômetros válidos e exibe consumo indicativo do veículo. Na Etapa 7, o histórico de Diesel/ARLA é identificado por veículo, independentemente do ID do frete, enquanto as despesas financeiras continuam atribuídas às viagens. O Excel exportado ganha a aba `Abastecimentos_Veiculos` |
 | Segurança | Não foi identificada autenticação ou autorização de usuários no código revisado |
 | Testes | Não havia suíte automatizada de testes no pacote recebido |
 
@@ -59,8 +59,8 @@ Na planilha de referência de setembro/2026, a auditoria apontou: linha 10 sem I
 - Tema com azul estrutural `#0D263C`, laranja `#F34D25`, branco e cinza, além do logotipo em `assets/logo_faeg.png`.
 - Marca institucional: **FAEG — Soluções Empresariais e Logísticas**.
 
-## Próxima versão
+## Próxima verificação após concluir os ajustes
 
-A próxima etapa é fazer uma rodada integrada de testes no PostgreSQL de testes: vínculo frete/ciclo, soma de KM, lançamentos de combustível com odômetro próprio e DRE sem duplicação. A gravação Excel, os recebimentos efetivos e um cadastro específico de abastecimentos por veículo continuam pendentes, com proteção dos dados existentes.
+Eduardo decidiu reunir primeiro os ajustes e deixar os testes integrados para o final. Nessa fase deverão ser avaliados, em PostgreSQL de testes: vínculo frete/ciclo, soma de KM, odômetros opcionais, cadastro de abastecimentos sem frete, indicadores consecutivos de Diesel/ARLA e DRE sem duplicação. A gravação Excel, os recebimentos efetivos e o rateio de custos compartilhados continuam pendentes, com proteção dos dados existentes. **O cadastro independente de abastecimentos já está proposto no código, mas não foi homologado.**
 
 Para apresentação geral e instalação, consulte o [README](../README.md). Para a arquitetura técnica, consulte [Arquitetura do banco](arquitetura_banco.md).

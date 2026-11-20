@@ -45,6 +45,7 @@ class Veiculo(Base):
     status_ativo = Column(Boolean, default=True)
 
     viagens = relationship("Viagem", back_populates="veiculo")
+    abastecimentos = relationship("Abastecimento", back_populates="veiculo")
 
 
 class Cliente(Base):
@@ -97,6 +98,7 @@ class Fornecedor(Base):
     uf = Column(String(5))
 
     despesas = relationship("ViagemDespesa", back_populates="fornecedor")
+    abastecimentos = relationship("Abastecimento", back_populates="fornecedor")
 
 
 class CicloOperacional(Base):
@@ -243,6 +245,29 @@ class ViagemDespesa(Base):
     fornecedor = relationship("Fornecedor", back_populates="despesas")
 
 
+class Abastecimento(Base):
+    """Histórico de Diesel/ARLA por veículo, independente de frete ou ciclo.
+
+    Não contabilizar automaticamente no DRE: despesas financeiras da viagem
+    ficam em viagens_despesas e eventual rateio ainda precisa ser definido.
+    """
+
+    __tablename__ = "abastecimentos"
+
+    id_abastecimento = Column(Integer, primary_key=True, autoincrement=True)
+    id_veiculo = Column(Integer, ForeignKey("veiculos.id_veiculo"), nullable=False, index=True)
+    id_fornecedor = Column(Integer, ForeignKey("fornecedores.id_fornecedor"), nullable=True)
+    data_abastecimento = Column(Date, nullable=False)
+    tipo_combustivel = Column(String(20), nullable=False)
+    odometro = Column(Integer, nullable=True)
+    litros = Column(Numeric(12, 2), nullable=False)
+    preco_litro = Column(Numeric(12, 4), nullable=False)
+    valor_total = Column(Numeric(12, 2), nullable=False)
+
+    veiculo = relationship("Veiculo", back_populates="abastecimentos")
+    fornecedor = relationship("Fornecedor", back_populates="abastecimentos")
+
+
 def sincronizar_colunas_banco():
     """Cria tabelas ausentes e aplica migrações seguras (ADD COLUMN IF NOT EXISTS) no PostgreSQL."""
     Base.metadata.create_all(bind=engine)
@@ -260,6 +285,7 @@ def sincronizar_colunas_banco():
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_origem VARCHAR(120);",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_destino VARCHAR(120);",
         "ALTER TABLE ciclos_operacionais ADD COLUMN IF NOT EXISTS km_deslocamentos_operacionais NUMERIC(12, 2) DEFAULT 0;",
+        "ALTER TABLE viagens_despesas ADD COLUMN IF NOT EXISTS data_despesa DATE;",
         "ALTER TABLE viagens_despesas ADD COLUMN IF NOT EXISTS odometro_abastecimento INTEGER;",
         "ALTER TABLE viagens ALTER COLUMN rota_resumo TYPE VARCHAR(250);",
         "ALTER TABLE viagens ALTER COLUMN nfe_carga TYPE VARCHAR(120);",

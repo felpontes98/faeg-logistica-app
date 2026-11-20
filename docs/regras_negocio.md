@@ -73,13 +73,17 @@ Manter três conceitos independentes:
 | --- | --- | --- |
 | KM planejado (Maps) | Frete / trechos do ciclo | Planejamento e análise operacional |
 | Odômetro saída e chegada (opcionais) | Fechamento do individual ou ciclo | Apurar percurso real e comparar com o planejado |
-| Odômetro no abastecimento (quando disponível) | Despesa de Diesel/ARLA lançada na Etapa 7 | Histórico do veículo, consumo e manutenção |
+| Odômetro no abastecimento (quando disponível) | Registro independente de Diesel/ARLA por veículo na Etapa 7 | Histórico do veículo, consumo e manutenção |
 
 Se saída e chegada forem preenchidos para o mesmo veículo e intervalo, **KM real do percurso = odômetro de chegada − odômetro de saída**. Validar que a chegada não é inferior à saída e que leituras pertencem ao veículo correto. Se uma leitura faltar, mostrar **“KM real não informado”**.
 
 Leituras de abastecimento podem ajudar a conferir o histórico e, quando houver duas leituras confiáveis consecutivas, calcular a distância entre abastecimentos. **Não presumir** que essa distância seja automaticamente igual ao KM do ciclo ou do frete: abastecimentos podem ocorrer no meio de vários serviços.
 
-Na implementação atual, a Etapa 7 oferece a **data e a leitura opcional do odômetro em cada lançamento de abastecimento** (`Posto de Combustível` ou `Abast. ARLA`). A leitura é gravada em `viagens_despesas.odometro_abastecimento` (nulo quando não informado); a data utiliza `viagens_despesas.data_despesa`. A quantidade representa litros, o unitário representa R$/L e o valor total permanece uma única despesa, sem criação de um segundo custo de combustível.
+Na implementação preparada, a Etapa 7 contém um **histórico de abastecimentos independente de ID de frete**, identificado por `id_veiculo`. Cada registro de `abastecimentos` conserva a data, tipo (Diesel/ARLA), litros, preço por litro, total, fornecedor opcional e odômetro opcional. Pode ser registrado mesmo com **zero viagens** no banco. ARLA fica no histórico, mas não entra na estimativa de consumo de Diesel.
+
+O indicador `KM entre abastecimentos` é a diferença positiva entre odômetros de **dois registros consecutivos de Diesel do mesmo veículo**. O `KM/L indicativo` divide essa distância pelos litros do abastecimento mais recente, e `R$/KM indicativo` divide seu valor total pela distância. Somente são estimativas úteis quando há histórico completo de abastecimentos de **tanque cheio**; abastecimento parcial, registro omitido ou odômetro inconsistente invalidam a interpretação de consumo real. Sem duas leituras válidas, exibir indicador **não disponível**, nunca `0 km/L` fictício.
+
+O campo legado `viagens_despesas.odometro_abastecimento` não é excluído (compatibilidade com eventuais registros da versão anterior), mas **novos lançamentos** de odômetro são feitos em `abastecimentos`. Nada é migrado ou duplicado automaticamente; a Etapa 8 apresenta apenas um resumo indicativo de consumo do veículo, separado do fechamento do frete/ciclo.
 
 ## RN-06 — Despesas e abastecimento
 
@@ -88,6 +92,7 @@ Na implementação atual, a Etapa 7 oferece a **data e a leitura opcional do od�
 - Caso seja necessário mostrar custo individual de cada frete do ciclo, estabelecer antes um critério de rateio acordado (por exemplo, participação na receita ou quilômetros), identificando o valor rateado como estimativa gerencial. **O rateio ainda não foi definido.**
 - Um abastecimento deve registrar data, veículo, posto/fornecedor, litros, preço por litro, valor e odômetro quando disponível. Diesel e ARLA devem ser distinguíveis.
 - Evitar lançamento em duplicidade quando o abastecimento também aparece como despesa financeira.
+- O histórico operacional `abastecimentos` **não gera automaticamente** um lançamento em `viagens_despesas` nem entra no DRE; quando o custo pertencer claramente a um frete, registrar a despesa financeira na Etapa 7 separadamente. Alocação automática por ciclo depende de regra de rateio ainda não aprovada.
 
 ## RN-07 — Fechamento e resultado operacional
 
@@ -116,7 +121,7 @@ Campos ausentes não devem ser substituídos por datas atuais ou valores zero se
 
 ## RN-10 — Validação antes de programar mudanças
 
-- [ ] Eduardo confirma o significado dos trechos de KM planejado dos ciclos.
+- [x] Eduardo definiu a separação entre KM Individual/Ciclo, deslocamentos operacionais e total planejado. A implementação ainda precisa de teste integrado.
 - [ ] A equipe decide como registrar gastos comuns e se haverá rateio individual.
 - [ ] A equipe aprova a nomenclatura final das situações operacional e financeira.
 - [ ] São preparados cenários reais anonimizados para teste individual e por ciclo.

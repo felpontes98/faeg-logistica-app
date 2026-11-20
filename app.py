@@ -11,8 +11,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 
 from database.connection import SessionLocal
+from database.controle_abastecimentos import calcular_indicadores_abastecimentos
 from database.importador_planilha import preparar_previa_importacao_faeg
 from database.models import (
+    Abastecimento,
     CicloOperacional,
     Cliente,
     FreteFinanceiro,
@@ -37,13 +39,13 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def inicializar_banco_uma_vez(schema_v=5):
+def inicializar_banco_uma_vez(schema_v=6):
     """Garante que todas as tabelas e colunas novas existam no Neon sem alterar dados."""
     sincronizar_colunas_banco()
     return True
 
 
-inicializar_banco_uma_vez(schema_v=5)
+inicializar_banco_uma_vez(schema_v=6)
 
 # ==============================================================================
 # LISTAS PADRONIZADAS DO SISTEMA
@@ -1243,7 +1245,36 @@ def carregar_despesas_viagem(id_viagem):
         ]
 
 
-def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores):
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_todos_abastecimentos():
+    """Histórico de abastecimentos por veículo, independente das viagens."""
+    with SessionLocal() as session:
+        registros = [
+            {
+                "id_abastecimento": a.id_abastecimento,
+                "id_veiculo": a.id_veiculo,
+                "id_fornecedor": a.id_fornecedor,
+                "data_abastecimento": a.data_abastecimento,
+                "tipo_combustivel": a.tipo_combustivel,
+                "odometro": a.odometro,
+                "litros": float(a.litros),
+                "preco_litro": float(a.preco_litro),
+                "valor_total": float(a.valor_total),
+            }
+            for a in session.query(Abastecimento)
+            .order_by(Abastecimento.data_abastecimento, Abastecimento.id_abastecimento)
+            .all()
+        ]
+    return calcular_indicadores_abastecimentos(registros)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_abastecimentos_veiculo(id_veiculo):
+    """Permite consultar o histórico mesmo sem nenhum frete cadastrado."""
+    return [a for a in carregar_todos_abastecimentos() if a["id_veiculo"] == id_veiculo]
+
+
+def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None):
     """Gera arquivo Excel (.xlsx) completo com todas as viagens, despesas e cadastros do sistema."""
     buf = io.BytesIO()
 
@@ -1292,6 +1323,28 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
     df_cli = pd.DataFrame(clientes)
     df_loc = pd.DataFrame(locais)
     df_forn = pd.DataFrame(fornecedores)
+    veiculos_map = {v["id_veiculo"]: v["placa"] for v in veiculos}
+    df_abast = pd.DataFrame([
+        {
+            "Data": a["data_abastecimento"].strftime("%d/%m/%Y"),
+            "Placa": veiculos_map.get(a["id_veiculo"], "-"),
+            "Veículo ID": a["id_veiculo"],
+            "Tipo": a["tipo_combustivel"],
+            "Odômetro (km)": a["odometro"],
+            "Litros": a["litros"],
+            "Preço por Litro (R$)": a["preco_litro"],
+            "Valor Total (R$)": a["valor_total"],
+            "KM entre Diesel": a["km_intervalo"],
+            "KM/L Indicativo": a["km_por_litro"],
+            "R$/KM Indicativo": a["custo_por_km"],
+            "Observação": a["observacao"],
+        }
+        for a in (abastecimentos or [])
+    ], columns=[
+        "Data", "Placa", "Veículo ID", "Tipo", "Odômetro (km)", "Litros",
+        "Preço por Litro (R$)", "Valor Total (R$)", "KM entre Diesel",
+        "KM/L Indicativo", "R$/KM Indicativo", "Observação",
+    ])
 
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         df_viagens.to_excel(writer, sheet_name="Viagens_e_Ciclos", index=False)
@@ -1301,6 +1354,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         df_cli.to_excel(writer, sheet_name="Cad_Clientes", index=False)
         df_loc.to_excel(writer, sheet_name="Cad_Locais", index=False)
         df_forn.to_excel(writer, sheet_name="Cad_Fornecedores", index=False)
+        df_abast.to_excel(writer, sheet_name="Abastecimentos_Veiculos", index=False)
 
     return buf.getvalue()
 
@@ -1420,7 +1474,7 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
         ("Motorista:", dados_resumo["motorista"], "Veiculo / Placa:", dados_resumo["veiculo"]),
         ("Origem:", dados_resumo["origem"], "Destino:", dados_resumo["destino"]),
         ("Tipo Viagem:", dados_resumo["tipo_viagem"], "Tipo / Origem Frete:", dados_resumo["frete_info"]),
-        ("Situacao:", dados_resumo["status"], "KM Real Rodado:", f"{dados_resumo['km_real']} km"),
+        ("Situacao:", dados_resumo["status"], "KM Real Rodado:", dados_resumo["km_real_fmt"]),
     ]
     for l1, v1, l2, v2 in pares_op:
         text(42, y, l1, size=9, bold=True, r=0.35, g=0.40, b=0.48)
@@ -1441,13 +1495,13 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
     text(55, y + 4, "Custos Totais de Viagem:", size=10, bold=False, r=0.671, g=0.808, b=0.882)
     text(390, y + 4, f"- {dados_resumo['despesa_fmt']}", size=11, bold=True, r=0.953, g=0.302, b=0.145)
     y += 26
-    text(55, y + 4, "RESULTADO LIQUIDO:", size=11, bold=True, r=1, g=1, b=1)
+    text(55, y + 4, "RESULTADO OPERACIONAL PARCIAL:", size=10, bold=True, r=1, g=1, b=1)
     text(390, y + 4, dados_resumo["resultado_fmt"], size=13, bold=True, r=1, g=1, b=1)
     y += 34
 
     text(42, y, f"Custo por KM: {dados_resumo['custo_km_fmt']}", size=10, bold=True)
     text(250, y, f"Margem de Lucro: {dados_resumo['margem_fmt']}", size=10, bold=True)
-    text(420, y, f"Recebido: {dados_resumo['recebido_fmt']}", size=9, bold=False)
+    text(420, y, f"Parcelas previstas: {dados_resumo['parcelas_previstas_fmt']}", size=8, bold=False)
     y += 24
 
     rect(40, y, 515, 22, 0.914, 0.914, 0.914)
@@ -1859,7 +1913,11 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 
     odo_ini = to_int(get_campo("odo_ini", 0))
     odo_fin = to_int(get_campo("odo_fin", 0))
-    km_real = max(0, odo_fin - odo_ini)
+    if odo_ini > 0 and odo_fin > 0 and odo_fin < odo_ini:
+        st.error("O odômetro final não pode ser menor que o inicial. Corrija antes de salvar.")
+        return
+    # Zero significa leitura ainda não informada na estrutura antiga do banco.
+    km_real = (odo_fin - odo_ini) if odo_ini > 0 and odo_fin > 0 else 0
     nome_ciclo = ciclo_num_val if tipo_viagem_val == "Ciclo" else f"Individual - {codigo_digitado}"
 
     origem_val = (get_campo("rota_origem") or "").strip()
@@ -2877,6 +2935,156 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
+        with st.expander("⛽ Controle de abastecimentos por veículo (sem ID de frete)", expanded=True):
+            st.caption(
+                "Histórico independente da viagem: informe cada abastecimento de Diesel ou ARLA "
+                "mesmo que não exista frete cadastrado. Não altera os odômetros inicial/final da operação."
+            )
+            if not veiculos_db:
+                st.info("Cadastre primeiro um veículo na Etapa 11 para registrar abastecimentos.")
+            else:
+                abast_vei_ops = {
+                    v["id_veiculo"]: f"{v['descricao_marca']} ({v['placa']})"
+                    for v in veiculos_db
+                }
+                abast_ids = list(abast_vei_ops.keys())
+                veic_em_edicao = get_campo("vei_id", 0)
+                abast_indice = abast_ids.index(veic_em_edicao) if veic_em_edicao in abast_ids else 0
+                with st.form("form_abastecimento_veiculo", clear_on_submit=False):
+                    a1, a2, a3 = st.columns([2.1, 1.1, 1.2])
+                    with a1:
+                        abast_veiculo = st.selectbox(
+                            "VEÍCULO / PLACA *",
+                            options=abast_ids,
+                            index=abast_indice,
+                            format_func=lambda x: abast_vei_ops[x],
+                            key="abast_id_veiculo",
+                        )
+                    with a2:
+                        abast_tipo = st.selectbox("COMBUSTÍVEL *", ["Diesel", "ARLA"], key="abast_tipo")
+                    with a3:
+                        abast_data = st.date_input(
+                            "DATA *", value=date.today(), format="DD/MM/YYYY", key="abast_data"
+                        )
+
+                    b1, b2, b3, b4 = st.columns([1.15, 1.25, 1.45, 1.65])
+                    with b1:
+                        abast_litros = st.number_input(
+                            "LITROS *", min_value=0.01, value=1.0, step=1.0,
+                            format="%.2f", key="abast_litros"
+                        )
+                    with b2:
+                        abast_preco = st.number_input(
+                            "PREÇO / LITRO (R$) *", min_value=0.0, value=0.0,
+                            step=0.10, format="%.4f", key="abast_preco"
+                        )
+                    with b3:
+                        abast_com_odometro = st.checkbox(
+                            "Informar odômetro", value=False, key="abast_com_odometro"
+                        )
+                        abast_odometro = (
+                            st.number_input(
+                                "LEITURA (KM)", min_value=1, value=1, step=1,
+                                key="abast_odometro",
+                            ) if abast_com_odometro else None
+                        )
+                    with b4:
+                        abast_forn_ops = {0: "Não informado"}
+                        abast_forn_ops.update({
+                            f["id_fornecedor"]: f["nome_fantasia"] for f in fornecedores_db
+                        })
+                        abast_fornecedor = st.selectbox(
+                            "POSTO / FORNECEDOR", options=list(abast_forn_ops),
+                            format_func=lambda x: abast_forn_ops[x], key="abast_fornecedor"
+                        )
+
+                    st.caption(f"Valor calculado deste abastecimento: {fmt_brl(abast_litros * abast_preco)}")
+                    salvar_abastecimento = st.form_submit_button(
+                        "Registrar Abastecimento no Histórico do Veículo",
+                        use_container_width=True,
+                    )
+
+                if salvar_abastecimento:
+                    if abast_preco <= 0:
+                        st.warning("Informe o preço por litro maior que R$ 0,00.")
+                    else:
+                        valor_abast = round(abast_litros * abast_preco, 2)
+                        with SessionLocal() as session:
+                            # Impede envio repetido idêntico pelo botão sem copiar
+                            # o gasto para nenhuma despesa financeira de viagem.
+                            duplicado = (
+                                session.query(Abastecimento)
+                                .filter_by(
+                                    id_veiculo=abast_veiculo,
+                                    tipo_combustivel=abast_tipo,
+                                    data_abastecimento=abast_data,
+                                    odometro=abast_odometro,
+                                    litros=round(abast_litros, 2),
+                                    valor_total=valor_abast,
+                                )
+                                .first()
+                            )
+                            if duplicado is not None:
+                                st.warning("Este mesmo abastecimento já consta no histórico do veículo.")
+                            else:
+                                session.add(Abastecimento(
+                                    id_veiculo=abast_veiculo,
+                                    id_fornecedor=abast_fornecedor or None,
+                                    tipo_combustivel=abast_tipo,
+                                    data_abastecimento=abast_data,
+                                    odometro=abast_odometro,
+                                    litros=round(abast_litros, 2),
+                                    preco_litro=round(abast_preco, 4),
+                                    valor_total=valor_abast,
+                                ))
+                                session.commit()
+                                carregar_todos_abastecimentos.clear()
+                                carregar_abastecimentos_veiculo.clear()
+                                st.toast("Abastecimento registrado para o veículo!", icon="⛽")
+                                st.rerun()
+
+                historico_abast = carregar_abastecimentos_veiculo(abast_veiculo)
+                if historico_abast:
+                    st.markdown("**Histórico de abastecimentos deste veículo**")
+                    forn_abast_map = {
+                        f["id_fornecedor"]: f["nome_fantasia"] for f in fornecedores_db
+                    }
+                    st.dataframe(
+                        pd.DataFrame([
+                            {
+                                "Data": a["data_abastecimento"].strftime("%d/%m/%Y"),
+                                "Combustível": a["tipo_combustivel"],
+                                "Posto": forn_abast_map.get(a["id_fornecedor"], "Não informado"),
+                                "Odômetro (km)": a["odometro"],
+                                "Litros": a["litros"],
+                                "R$/L": a["preco_litro"],
+                                "Total (R$)": a["valor_total"],
+                                "KM entre Diesel": a["km_intervalo"],
+                                "KM/L (indicativo)": a["km_por_litro"],
+                                "R$/KM (indicativo)": a["custo_por_km"],
+                                "Observações": a["observacao"],
+                            }
+                            for a in reversed(historico_abast)
+                        ]),
+                        hide_index=True,
+                        use_container_width=True,
+                    )
+                    st.caption(
+                        "KM/L e R$/KM usam a distância desde o abastecimento anterior de Diesel "
+                        "do mesmo veículo e os litros/valor do abastecimento atual. São estimativas "
+                        "válidas apenas quando os registros são consecutivos, com odômetros comparáveis "
+                        "e tanque cheio; ARLA não participa do cálculo de KM/L."
+                    )
+                else:
+                    st.info("Ainda não há abastecimentos registrados para este veículo.")
+
+            st.info(
+                "O histórico de abastecimento é um controle do veículo e NÃO entra "
+                "automaticamente no DRE. Para atribuir custo a um frete, use também o "
+                "lançamento financeiro de despesa abaixo. Só a despesa é somada ao DRE; "
+                "não há duplicação automática."
+            )
+
         st.markdown('<div class="sec-subtitle">Adicionar Nova Despesa</div>', unsafe_allow_html=True)
 
         # Linha 1: Campos de seleção e descrição largos para evitar corte de opções/placeholders
@@ -2918,8 +3126,8 @@ with st.container(border=True):
             st.markdown('<div style="padding-top:1.35rem;"></div>', unsafe_allow_html=True)
             btn_add_desp = st.button("Adicionar à Lista", use_container_width=True, key="btn_add_despesa")
 
-        # A leitura no posto pertence a ESTE abastecimento. Não substituir nem
-        # utilizar como odômetro inicial/final da viagem na Etapa 8.
+        # A despesa financeira permanece ligada ao frete; o histórico de
+        # odômetro/consumo passou para abastecimentos por veículo acima.
         eh_combustivel = tipo_desp in {"Posto de Combustível", "Abast. ARLA"}
         odometro_abast = None
         data_abastecimento = None
@@ -2930,21 +3138,11 @@ with st.container(border=True):
                 format="DD/MM/YYYY",
                 key="desp_data_abastecimento",
             )
-            inf_odometro = st.checkbox(
-                "Informar odômetro registrado no abastecimento",
-                value=False,
-                key="desp_informar_odometro",
-                help="Opcional. Este valor é registrado junto à despesa de Diesel/ARLA e não altera o fechamento do odômetro da operação.",
+            st.caption(
+                "A quantidade representa litros e o unitário, R$/L. "
+                "Para registrar odômetro e acompanhar KM/L, use o controle por veículo acima. "
+                "Este lançamento entra no custo financeiro somente deste frete."
             )
-            if inf_odometro:
-                odometro_abast = st.number_input(
-                    "ODÔMETRO NO ABASTECIMENTO (KM)",
-                    min_value=0,
-                    step=1,
-                    value=0,
-                    key="desp_odometro_abastecimento",
-                )
-            st.caption("A quantidade deve representar os litros abastecidos e o valor unitário, o preço por litro. A despesa será contada uma única vez.")
 
         if btn_add_desp:
             if unit_desp <= 0:
@@ -3104,9 +3302,20 @@ with st.container(border=True):
                 on_change=sync_campo,
                 args=("w_odo_fin", "odo_fin"),
             )
-        km_real_calc = max(0, to_int(odo_fin_v) - to_int(odo_ini_v))
+        km_real_calc = (
+            to_int(odo_fin_v) - to_int(odo_ini_v)
+            if to_int(odo_ini_v) > 0 and to_int(odo_fin_v) >= to_int(odo_ini_v)
+            else None
+        )
         with f3:
-            st.text_input("KM REAL RODADO", value=f"{km_real_calc} km", disabled=True, key=f"prev_km_{km_real_calc}")
+            st.text_input(
+                "KM REAL RODADO",
+                value=f"{km_real_calc} km" if km_real_calc is not None else "Não informado",
+                disabled=True,
+                key=f"prev_km_{km_real_calc}",
+            )
+        if odo_ini_v > 0 and odo_fin_v > 0 and odo_fin_v < odo_ini_v:
+            st.error("Leituras inconsistentes: odômetro final menor que o inicial.")
         with f4:
             st_atual = get_campo("status_viagem", "Aguardando Adiantamento")
             st.selectbox(
@@ -3141,6 +3350,34 @@ with st.container(border=True):
             st.metric("KM TOTAL PLANEJADO", fmt_km(km_total_previsto_op))
             st.caption("KM Planejado + KM Deslocamentos Operacionais.")
 
+        c_real_1, c_real_2 = st.columns(2)
+        if km_real_calc is not None:
+            diferenca_km = km_real_calc - km_total_previsto_op
+            c_real_1.metric("DIFERENÇA REAL − PLANEJADO", fmt_km(diferenca_km))
+            if km_total_previsto_op > 0:
+                c_real_2.metric("DESVIO DO PLANEJADO", f"{(diferenca_km / km_total_previsto_op) * 100:+.1f}%")
+            else:
+                c_real_2.metric("DESVIO DO PLANEJADO", "Não calculável")
+        else:
+            st.caption("Diferença e desvio indisponíveis enquanto não houver dois odômetros válidos.")
+
+        vei_km_id = get_campo("vei_id", 0)
+        if vei_km_id:
+            historico_km = carregar_abastecimentos_veiculo(vei_km_id)
+            ultima_medicao = next(
+                (a for a in reversed(historico_km) if a["km_por_litro"] is not None),
+                None,
+            )
+            st.markdown('<div class="sec-subtitle">Consumo do Veículo (Controle Separado)</div>', unsafe_allow_html=True)
+            if ultima_medicao:
+                r1, r2, r3 = st.columns(3)
+                r1.metric("KM ENTRE ABASTECIMENTOS", fmt_km(ultima_medicao["km_intervalo"]))
+                r2.metric("MÉDIA INDICATIVA DE DIESEL", f"{ultima_medicao['km_por_litro']:.2f} km/L")
+                r3.metric("CUSTO INDICATIVO DE DIESEL/KM", fmt_brl(ultima_medicao["custo_por_km"]))
+                st.caption("Base: abastecimentos consecutivos de Diesel do veículo na Etapa 7, com tanque cheio. Não é o KM da viagem ou do ciclo.")
+            else:
+                st.caption("Registre ao menos dois abastecimentos consecutivos de Diesel com odômetros válidos na Etapa 7 para calcular o consumo.")
+
         v_neg_dre = to_float(get_campo("valor_negociado", 0.0))
         v_rec_dre = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))
         receita_dre = v_neg_dre if v_neg_dre > 0 else v_rec_dre
@@ -3156,7 +3393,7 @@ with st.container(border=True):
         st.markdown(
             f"""
             <div class="dre-box">
-                <div class="dre-header">Demonstrativo de Resultado da Viagem (DRE — FAEG)</div>
+                <div class="dre-header">Resultado Operacional Parcial da Viagem (DRE — FAEG)</div>
                 <div class="dre-row">
                     <span style="color:#ABCEE1;">Receita Prevista (Frete Negociado)</span>
                     <span style="font-weight:800; font-size:1.15rem;">{fmt_brl(receita_dre)}</span>
@@ -3166,13 +3403,14 @@ with st.container(border=True):
                     <span style="font-weight:800; font-size:1.15rem; color:#F34D25;">- {fmt_brl(custos_dre)}</span>
                 </div>
                 <div class="dre-total-row">
-                    <span style="font-weight:800; text-transform:uppercase; letter-spacing:0.04em;">Resultado Líquido</span>
+                    <span style="font-weight:800; text-transform:uppercase; letter-spacing:0.04em;">Resultado Operacional Parcial</span>
                     <span style="font-weight:900; font-size:1.85rem; color:{cor_res};">{fmt_brl(resultado_dre)}</span>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
+        st.caption("Custos do histórico de abastecimentos por veículo não são somados aqui; apenas despesas financeiras vinculadas a esta viagem entram no resultado.")
 
         render_navegacao_rodape(7, MENU_ITENS)
 
@@ -3191,8 +3429,10 @@ with st.container(border=True):
         )
 
         todas_vg_exp, desp_det_exp = carregar_todas_viagens_consulta()
+        todos_abast_exp = carregar_todos_abastecimentos()
         xlsx_bytes_completo = gerar_excel_base_completa(
-            todas_vg_exp, desp_det_exp, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db
+            todas_vg_exp, desp_det_exp, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db,
+            abastecimentos=todos_abast_exp,
         )
 
         tab_rel_viagem, tab_rel_geral = st.tabs(
@@ -3217,15 +3457,21 @@ with st.container(border=True):
 
             custos_r = sum(to_float(d["valor_total"]) for d in desps_r)
             resultado_r = receita_r - custos_r
-            km_r = max(0, to_int(get_campo("odo_fin", 0)) - to_int(get_campo("odo_ini", 0)))
-            custo_km_r = (custos_r / km_r) if km_r > 0 else 0.0
+            od_inicio_rel = to_int(get_campo("odo_ini", 0))
+            od_final_rel = to_int(get_campo("odo_fin", 0))
+            km_r = (
+                od_final_rel - od_inicio_rel
+                if od_inicio_rel > 0 and od_final_rel >= od_inicio_rel
+                else None
+            )
+            custo_km_r = (custos_r / km_r) if km_r else None
             margem_r = ((resultado_r / receita_r) * 100.0) if receita_r > 0 else 0.0
 
             k1, k2, k3, k4, k5 = st.columns(5)
             k1.metric("Receita Considerada", fmt_brl(receita_r))
             k2.metric("Custos Totais", fmt_brl(custos_r))
-            k3.metric("Resultado Líquido", fmt_brl(resultado_r))
-            k4.metric("Custo por KM", fmt_brl(custo_km_r))
+            k3.metric("Resultado Operacional Parcial", fmt_brl(resultado_r))
+            k4.metric("Custo por KM", fmt_brl(custo_km_r) if custo_km_r is not None else "Não informado")
             k5.metric("Margem de Lucro", f"{margem_r:.1f}%")
 
             st.markdown('<div class="sec-subtitle">Exportação da Viagem Atual</div>', unsafe_allow_html=True)
@@ -3242,13 +3488,13 @@ with st.container(border=True):
                 "tipo_viagem": get_campo("tipo_viagem", "Individual"),
                 "frete_info": f"{get_campo('tipo_frete', 'Dedicado')} / {get_campo('forma_contrat', '-')}",
                 "status": status_ctx,
-                "km_real": km_r,
+                "km_real_fmt": f"{km_r} km" if km_r is not None else "Não informado",
                 "receita_fmt": fmt_brl(receita_r),
                 "despesa_fmt": fmt_brl(custos_r),
                 "resultado_fmt": fmt_brl(resultado_r),
-                "custo_km_fmt": fmt_brl(custo_km_r),
+                "custo_km_fmt": fmt_brl(custo_km_r) if custo_km_r is not None else "Não informado",
                 "margem_fmt": f"{margem_r:.1f}%",
-                "recebido_fmt": fmt_brl(v_rec_r),
+                "parcelas_previstas_fmt": fmt_brl(v_rec_r),
             }
             desps_pdf = [
                 {
@@ -3622,7 +3868,8 @@ with st.container(border=True):
             with ac3:
                 st.markdown('<div style="padding-top:1.35rem;"></div>', unsafe_allow_html=True)
                 xlsx_cons = gerar_excel_base_completa(
-                    filtradas, desp_detalhadas, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db
+                    filtradas, desp_detalhadas, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db,
+                    abastecimentos=carregar_todos_abastecimentos(),
                 )
                 st.download_button(
                     "📥 Exportar Excel (.xlsx)",
