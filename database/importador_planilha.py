@@ -30,13 +30,14 @@ def _limpar_texto(val):
 
 
 def _parse_float(val, default=0.0):
+    valor_padrao = None if default is None else float(default)
     if val is None or (isinstance(val, float) and pd.isna(val)):
-        return float(default)
+        return valor_padrao
     if isinstance(val, (int, float)):
         return float(val)
     s = str(val).strip()
     if not s or s.lower() in {"nan", "none", "-"} or s.startswith("#"):
-        return float(default)
+        return valor_padrao
     s = re.sub(r"[R$\s%]", "", s)
     if "," in s and "." in s:
         if s.rfind(",") > s.rfind("."):
@@ -47,8 +48,8 @@ def _parse_float(val, default=0.0):
         s = s.replace(",", ".")
     try:
         return float(s)
-    except ValueError:
-        return float(default)
+    except (ValueError, TypeError):
+        return valor_padrao
 
 
 def _parse_int(val, default=0):
@@ -538,6 +539,8 @@ def analisar_planilha_faeg(file_bytes):
 
         for r in range(header_row + 1, ws.max_row + 1):
             raw_id = _limpar_texto(get_c(r, "id"))
+            raw_id_frete = _limpar_texto(get_c(r, "id_frete"))
+            raw_tipo = _limpar_texto(get_c(r, "tipo"))
             raw_mot = _limpar_texto(get_c(r, "motorista"))
             raw_placa = _limpar_texto(get_c(r, "placa"))
             raw_rota = _limpar_texto(get_c(r, "rota"))
@@ -545,10 +548,15 @@ def analisar_planilha_faeg(file_bytes):
             val_neg = _parse_float(get_c(r, "valor_negociado"), 0.0)
             val_tot_rec = _parse_float(get_c(r, "valor_total_recebido"), 0.0)
 
-            # Ignora linhas vazias ou linhas de resumo/rodapé
-            if raw_id.lower() in {"fechamento", "total", "totais", "resumo"}:
+            # Na planilha FAEG, "FECHAMENTO" fica na coluna "ID Frete" (não em "ID").
+            # Fechamentos e totais não são novos fretes e não entram na soma das receitas.
+            if (
+                raw_id.upper().startswith(("FECHAMENTO", "TOTAL", "RESUMO"))
+                or raw_id_frete.upper().startswith(("FECHAMENTO", "TOTAL", "RESUMO"))
+                or raw_tipo.lower() == "fechamento"
+            ):
                 continue
-            if not any([raw_id, raw_mot, raw_placa, raw_rota, raw_emp]) and val_neg == 0 and val_tot_rec == 0:
+            if not any([raw_id, raw_id_frete, raw_mot, raw_placa, raw_rota, raw_emp]):
                 continue
 
             origem, destino = _separar_origem_destino(raw_rota)
@@ -779,6 +787,75 @@ def analisar_planilha_faeg(file_bytes):
             )
 
     return registros
+
+
+def preparar_previa_importacao_faeg(file_bytes):
+    """Confere a planilha sem gravar no banco e separa fretes de fechamentos."""
+    try:
+        registros = analisar_planilha_faeg(file_bytes)
+
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+        total_fechamentos = 0
+        abas_ignoradas = {"PARÂMETROS", "PARAMETROS", "CONFIG", "LISTAS", "APOIO"}
+        try:
+            for aba in wb.worksheets:
+                if aba.title.strip().upper() in abas_ignoradas:
+                    continue
+                linha_cabecalho = _encontrar_linha_cabecalho(aba)
+                cabecalhos = {
+                    _limpar_texto(aba.cell(linha_cabecalho, c).value).lower(): c
+                    for c in range(1, aba.max_column + 1)
+                }
+                col_id_frete = cabecalhos.get("id frete")
+                col_tipo = cabecalhos.get("tipo")
+                for linha in range(linha_cabecalho + 1, aba.max_row + 1):
+                    id_frete = _limpar_texto(aba.cell(linha, col_id_frete).value) if col_id_frete else ""
+                    tipo = _limpar_texto(aba.cell(linha, col_tipo).value) if col_tipo else ""
+                    if id_frete.upper().startswith("FECHAMENTO") or tipo.lower() == "fechamento":
+                        total_fechamentos += 1
+        finally:
+            wb.close()
+
+        if not registros:
+            return {"erro": "Nenhuma linha válida de frete foi encontrada no arquivo Excel."}
+
+        ciclos = {r["ciclo"] for r in registros if r["ciclo"]}
+        total_receita = round(sum(r["receita_consolidada"] for r in registros), 2)
+        total_despesas = round(sum(r["despesa_consolidada"] for r in registros), 2)
+        previa = pd.DataFrame(
+            [
+                {
+                    "ID Frete": r["id_frete"],
+                    "ID Ciclo": r["ciclo"] or "-",
+                    "Tipo": r["tipo"] or "-",
+                    "Rota": f"{r['rota_origem']} → {r['rota_destino']}",
+                    "Receita do frete (R$)": r["receita_consolidada"],
+                    "Despesas do frete (R$)": r["despesa_consolidada"],
+                }
+                for r in registros
+            ]
+        )
+
+        return {
+            "erro": None,
+            "resumo": {
+                "total_fretes": len(registros),
+                "total_ciclos": len(ciclos),
+                "total_fechamentos": total_fechamentos,
+                "receita_fretes": total_receita,
+                "despesas_fretes": total_despesas,
+            },
+            "preview_df": previa,
+            "avisos": [
+                "A prévia usa valores encontrados nas linhas dos fretes; despesas e totais de fechamento ainda não foram conciliados.",
+                "A gravação está bloqueada até a correção do agrupamento de vários fretes em um único ciclo operacional.",
+            ],
+            "importacao_bloqueada": True,
+        }
+    except Exception:
+        return {
+            "erro": "Não foi possível ler a planilha. Confirme o formato .xlsx e os cabeçalhos esperados da FAEG."
+        }
 
 
 def importar_planilha_para_banco(file_bytes, modo_duplicado="atualizar"):
