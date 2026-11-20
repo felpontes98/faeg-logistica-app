@@ -241,7 +241,7 @@ st.markdown(
         object-position: center;
         display: block;
         margin: 0 auto;
-        transform: translateY(-22px);
+        transform: translateY(-10px);
         filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
     }
     .sidebar-monogram-fallback {
@@ -1072,10 +1072,26 @@ def on_local_select_change(chave_widget, chave_dado, locais_lista):
     _atualizar_rota_automatica(locais_lista)
 
 
-def _limpar_widgets_financeiros():
-    for wk in ["w_perc_adiant", "w_val_adiant", "w_perc_saldo", "w_val_saldo"]:
-        if wk in st.session_state:
-            del st.session_state[wk]
+_WIDGETS_PREVISAO_FINANCEIRA = {
+    "w_val_negociado": "valor_negociado",
+    "w_perc_adiant": "perc_adiant",
+    "w_val_adiant": "valor_adiant",
+    "w_perc_saldo": "perc_saldo",
+    "w_val_saldo": "valor_saldo",
+}
+
+
+def inicializar_widgets_previsao_financeira():
+    """Ao abrir a Etapa 4, recupera os valores da viagem sem sobrescrever edições."""
+    for chave_widget, chave_campo in _WIDGETS_PREVISAO_FINANCEIRA.items():
+        if chave_widget not in st.session_state:
+            st.session_state[chave_widget] = to_float(get_campo(chave_campo, 0.0))
+
+
+def sincronizar_widgets_previsao_financeira():
+    """Atualiza os campos visíveis antes do rerun do Streamlit, inclusive os correlatos."""
+    for chave_widget, chave_campo in _WIDGETS_PREVISAO_FINANCEIRA.items():
+        st.session_state[chave_widget] = to_float(get_campo(chave_campo, 0.0))
 
 
 def on_valor_negociado_change():
@@ -1088,7 +1104,7 @@ def on_valor_negociado_change():
             st.session_state["form_data"]["valor_adiant"] = round(neg * (p_adi / 100.0), 2)
         if p_sal > 0:
             st.session_state["form_data"]["valor_saldo"] = round(neg * (p_sal / 100.0), 2)
-        _limpar_widgets_financeiros()
+        sincronizar_widgets_previsao_financeira()
 
 
 def on_perc_adiant_change():
@@ -1100,8 +1116,8 @@ def on_perc_adiant_change():
         if 0 <= p_adi <= 100:
             p_sal = round(100.0 - p_adi, 2)
             st.session_state["form_data"]["perc_saldo"] = p_sal
-            st.session_state["form_data"]["valor_saldo"] = round(neg * (p_sal / 100.0), 2)
-        _limpar_widgets_financeiros()
+            st.session_state["form_data"]["valor_saldo"] = round(neg - st.session_state["form_data"]["valor_adiant"], 2)
+        sincronizar_widgets_previsao_financeira()
 
 
 def on_val_adiant_change():
@@ -1115,7 +1131,7 @@ def on_val_adiant_change():
             v_sal = round(neg - v_adi, 2)
             st.session_state["form_data"]["valor_saldo"] = v_sal
             st.session_state["form_data"]["perc_saldo"] = round((v_sal / neg) * 100.0, 2)
-        _limpar_widgets_financeiros()
+        sincronizar_widgets_previsao_financeira()
 
 
 def on_perc_saldo_change():
@@ -1127,8 +1143,8 @@ def on_perc_saldo_change():
         if 0 <= p_sal <= 100:
             p_adi = round(100.0 - p_sal, 2)
             st.session_state["form_data"]["perc_adiant"] = p_adi
-            st.session_state["form_data"]["valor_adiant"] = round(neg * (p_adi / 100.0), 2)
-        _limpar_widgets_financeiros()
+            st.session_state["form_data"]["valor_adiant"] = round(neg - st.session_state["form_data"]["valor_saldo"], 2)
+        sincronizar_widgets_previsao_financeira()
 
 
 def on_val_saldo_change():
@@ -1142,7 +1158,7 @@ def on_val_saldo_change():
             v_adi = round(neg - v_sal, 2)
             st.session_state["form_data"]["valor_adiant"] = v_adi
             st.session_state["form_data"]["perc_adiant"] = round((v_adi / neg) * 100.0, 2)
-        _limpar_widgets_financeiros()
+        sincronizar_widgets_previsao_financeira()
 
 
 def on_cliente_select_change(locais_lista):
@@ -3759,6 +3775,7 @@ with st.container(border=True):
     # ETAPA 4: NEGOCIAÇÃO E RECEBIMENTOS
     # --------------------------------------------------------------------------
     elif aba_ativa == "4. Negociação / Pgto":
+        inicializar_widgets_previsao_financeira()
         st.markdown(
             """
             <div class="tab-header-wrap">
@@ -3797,7 +3814,6 @@ with st.container(border=True):
                 min_value=0.0,
                 step=100.0,
                 format="%.2f",
-                value=to_float(get_campo("valor_negociado", 0.0)),
                 key="w_val_negociado",
                 on_change=on_valor_negociado_change,
             )
@@ -3811,7 +3827,6 @@ with st.container(border=True):
                 max_value=100.0,
                 step=5.0,
                 format="%.2f",
-                value=to_float(get_campo("perc_adiant", 0.0)),
                 key="w_perc_adiant",
                 on_change=on_perc_adiant_change,
             )
@@ -3830,7 +3845,6 @@ with st.container(border=True):
                 min_value=0.0,
                 step=100.0,
                 format="%.2f",
-                value=to_float(get_campo("valor_adiant", 0.0)),
                 key="w_val_adiant",
                 on_change=on_val_adiant_change,
             )
@@ -3844,7 +3858,6 @@ with st.container(border=True):
                 max_value=100.0,
                 step=5.0,
                 format="%.2f",
-                value=to_float(get_campo("perc_saldo", 0.0)),
                 key="w_perc_saldo",
                 on_change=on_perc_saldo_change,
             )
@@ -3863,7 +3876,6 @@ with st.container(border=True):
                 min_value=0.0,
                 step=100.0,
                 format="%.2f",
-                value=to_float(get_campo("valor_saldo", 0.0)),
                 key="w_val_saldo",
                 on_change=on_val_saldo_change,
             )
