@@ -198,6 +198,7 @@ class Viagem(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    recebimentos = relationship("RecebimentoFrete", back_populates="viagem")
 
 
 class FreteFinanceiro(Base):
@@ -223,6 +224,30 @@ class FreteFinanceiro(Base):
 
     viagem = relationship("Viagem", back_populates="financeiro_frete")
     cliente = relationship("Cliente")
+
+
+class RecebimentoFrete(Base):
+    """Pagamento de fato recebido, distinto de adiantamento/saldo previstos.
+
+    Cancelamentos mantêm o registro para conferência; não apagam recebimentos.
+    """
+
+    __tablename__ = "recebimentos_frete"
+
+    id_recebimento = Column(Integer, primary_key=True, autoincrement=True)
+    id_viagem = Column(Integer, ForeignKey("viagens.id_viagem"), nullable=False, index=True)
+    data_recebimento = Column(Date, nullable=False)
+    tipo_parcela = Column(String(30), nullable=False)
+    forma_pagamento = Column(String(40))
+    referencia = Column(String(120))
+    observacao = Column(String(200))
+    valor_recebido = Column(Numeric(12, 2), nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    cancelado = Column(Boolean, nullable=False, default=False)
+    data_cancelamento = Column(Date, nullable=True)
+    motivo_cancelamento = Column(String(200), nullable=True)
+
+    viagem = relationship("Viagem", back_populates="recebimentos")
 
 
 class ViagemDespesa(Base):

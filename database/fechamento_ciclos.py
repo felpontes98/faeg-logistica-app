@@ -44,6 +44,18 @@ def consolidar_ciclos(fretes):
         adiantamentos = round(sum(float(i.get("valor_adiantamento") or 0) for i in receitas), 2)
         saldos = round(sum(float(i.get("valor_saldo") or 0) for i in receitas), 2)
         despesas = round(sum(float(i.get("total_despesas") or 0) for i in itens), 2)
+        recebido = round(sum(float(i.get("total_recebido") or 0) for i in itens), 2)
+        # Não compensar automaticamente o excedente de um frete com o saldo
+        # de outro. Cada contrato mantém seu valor em aberto e o excedente
+        # fica disponível para conferência separada.
+        saldo_receber = round(sum(
+            max(0.0, float(i.get("valor_negociado") or 0) - float(i.get("total_recebido") or 0))
+            for i in receitas
+        ), 2) if not ambiguos else None
+        excedente_recebido = round(sum(
+            max(0.0, float(i.get("total_recebido") or 0) - float(i.get("valor_negociado") or 0))
+            for i in receitas
+        ), 2) if not ambiguos else None
         km_fretes = round(sum(float(i.get("km_rota_planejado") or 0) for i in itens), 2)
         # Na prévia, o frete em edição é anexado por último: seu valor manual
         # dos deslocamentos do ciclo deve prevalecer sobre o cache já salvo.
@@ -62,6 +74,9 @@ def consolidar_ciclos(fretes):
             "adiantamentos_previstos": adiantamentos,
             "saldos_previstos": saldos,
             "parcelas_previstas": round(adiantamentos + saldos, 2),
+            "total_recebido": recebido,
+            "saldo_a_receber": saldo_receber,
+            "excedente_recebido": excedente_recebido,
             "despesas_total": despesas,
             "resultado_operacional_parcial": resultado,
             "margem_operacional_pct": margem,

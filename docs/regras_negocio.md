@@ -48,7 +48,7 @@ Uma alteração em uma classificação não deve apagar o cliente, o preço, a i
 | Saldo | 90% = R$ 450,00 |
 | Total negociado | R$ 500,00 |
 
-**Atenção:** adiantamento e saldo negociados não significam dinheiro recebido. Pagamentos confirmados precisam ter valor, data e referência próprios. O indicador **Total recebido** soma apenas recebimentos confirmados; **A receber** é o negociado menos o recebido, com tratamento separado para estornos e cancelamentos.
+**Atenção:** adiantamento e saldo negociados não significam dinheiro recebido. Na Etapa 4, depois de salvar o frete, os pagamentos recebidos de fato possuem lançamento próprio com data, valor, tipo de parcela, forma de pagamento, referência opcional e observação. O **Total recebido** soma somente lançamentos confirmados; **A receber = máximo entre zero e (valor negociado − total recebido)**. Recebimento acima do negociado exige confirmação explícita e aparece como excedente para conferência. Um lançamento incorreto pode ser cancelado mediante motivo obrigatório, permanecendo no histórico, mas deixa de compor os totais. Não se presume quitação operacional/financeira automaticamente com base na soma.
 
 ## RN-04 — Quilometragem planejada por frete e ciclo
 
@@ -102,6 +102,8 @@ O campo legado `viagens_despesas.odometro_abastecimento` não é excluído (comp
 
 **Implementação parcial proposta:** a Etapa 8 apresenta uma **prévia** financeira do ciclo considerando os fretes já salvos e o formulário atual, sem somá-lo duas vezes. A Etapa 9 reúne os fretes salvos por `id_ciclo` e a exportação inclui a aba `Fechamento_Ciclos`. O cálculo inclui somente as despesas vinculadas a cada frete. **Ainda não existe lançamento independente de despesa compartilhada no ciclo**, nem rateio.
 
+O novo cadastro `recebimentos_frete` pertence a um único frete. O resumo por ciclo soma exclusivamente pagamentos confirmados dos seus fretes; cancelados não contribuem. **Saldo a receber do ciclo = soma dos saldos não negativos de cada frete**. Valores recebidos acima do negociado em um frete são mostrados como excedentes e **não abatem automaticamente** o saldo de outro frete. Quando houver financeiro legado ambíguo, o saldo do ciclo fica marcado como pendente de conferência. Os registros completos, incluindo cancelamentos, são exportados separadamente em `Recebimentos_Fretes`.
+
 Em vários fretes antigos que compartilham a mesma linha de `ciclos_financeiro`, não é possível saber a receita negociada de cada frete: a prévia/relatório os **marca para conferência e exclui a receita financeira legada ambígua**, evitando multiplica-la pelo número de fretes. Nenhum dado histórico é apagado ou redistribuído. Valor de adiantamento e saldo negociados são **parcelas previstas**, não comprovam pagamento efetivo.
 
 Resultados por frete e por ciclo não devem ser somados simultaneamente em um dashboard de totais, porque representariam os mesmos valores em níveis diferentes.
@@ -113,7 +115,7 @@ Usar **“Resultado Operacional”** ou **“Resultado Operacional Parcial”** 
 São controles diferentes:
 
 - **Operacional:** Negociado, Aguardando Coleta, Em Transporte, Entregue, Cancelado, Fechado (rótulos finais a validar).
-- **Financeiro:** Sem Recebimento, Parcialmente Recebido, Quitado, Em Atraso (rótulos finais a validar).
+- **Financeiro:** Sem Recebimento, Parcialmente Recebido, Quitado, Em Atraso (rótulos finais a validar). Os valores efetivamente recebidos agora são registrados, mas a situação financeira automática ainda não foi implementada.
 
 Um frete pode estar **entregue e ainda com saldo pendente**. A entrega não deve marcar automaticamente a quitação.
 

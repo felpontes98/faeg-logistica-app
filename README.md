@@ -13,6 +13,7 @@ Sistema web de apoio ao controle operacional e financeiro da FAEG — Soluções
 - Histórico de Diesel e ARLA por **veículo**, inclusive sem frete selecionado, com métricas indicativas de distância, km/L e R$/km entre registros consecutivos de Diesel.
 - Despesas financeiras por viagem e demonstrativo de resultado operacional parcial, sem lançamento automático de combustível a partir do histórico do veículo.
 - Prévia financeira do ciclo na Etapa 8 e relatório de fechamento gerencial por ciclo na Etapa 9: soma receitas negociadas e despesas atribuídas aos fretes, mantendo parcelas previstas separadas de pagamentos efetivos.
+- Registro de recebimentos efetivamente confirmados por frete na Etapa 4, com histórico de cancelamentos, total recebido e saldo em aberto por frete e por ciclo. O Excel inclui `Recebimentos_Fretes`.
 - Prévia e auditoria da planilha Excel. **A importação com gravação no banco permanece bloqueada.**
 
 ## Tecnologia

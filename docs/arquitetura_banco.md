@@ -6,7 +6,7 @@
 
 O Streamlit (`app.py`) acessa o PostgreSQL por sessões SQLAlchemy criadas em `database/connection.py`. Os modelos são definidos em `database/models.py`; o importador lê arquivos Excel por `database/importador_planilha.py`.
 
-### Tabelas no mapeamento ORM proposto (11 no total)
+### Tabelas no mapeamento ORM proposto (12 no total)
 
 | Tabela | Chave primária | Finalidade e vínculo principal |
 | --- | --- | --- |
@@ -19,6 +19,7 @@ O Streamlit (`app.py`) acessa o PostgreSQL por sessões SQLAlchemy criadas em `d
 | `ciclos_financeiro` | `id_ciclo` (também FK) | Valores legados do ciclo; mantidos para compatibilidade histórica |
 | `viagens` | `id_viagem` | Frete/viagem com código, motorista, veículo, rota e documentos; `id_ciclo` pode ser compartilhado |
 | `fretes_financeiro` | `id_viagem` (também FK) | **Nova tabela** com cliente, negociação, percentuais e parcelas específicos do frete |
+| `recebimentos_frete` | `id_recebimento` | Pagamentos efetivos, cada um associado a um frete via `id_viagem`, com data, valor, forma, referência e status de cancelamento |
 | `viagens_despesas` | `id_despesa` | Despesa financeira ligada a `id_viagem`; fornecedor e campo legado `odometro_abastecimento` são opcionais |
 | `abastecimentos` | `id_abastecimento` | Histórico de Diesel/ARLA por `id_veiculo`, sem depender de `id_viagem`; data, tipo, odômetro opcional, litros, preço e total |
 
@@ -31,6 +32,7 @@ erDiagram
     CICLOS_OPERACIONAIS ||--o| CICLOS_FINANCEIRO : legado
     CICLOS_OPERACIONAIS ||--o{ VIAGENS : agrupa
     VIAGENS ||--o| FRETES_FINANCEIRO : negociacao
+    VIAGENS ||--o{ RECEBIMENTOS_FRETE : recebido
     CLIENTES ||--o{ FRETES_FINANCEIRO : contrata
     MOTORISTAS ||--o{ VIAGENS : realiza
     VEICULOS ||--o{ VIAGENS : utiliza
@@ -56,8 +58,9 @@ Nesta proposta, a tela de cadastro passa a funcionar da seguinte maneira:
 8. A Etapa 7 mostra distância entre dois abastecimentos de Diesel consecutivos e indicadores aproximados de KM/L e R$/KM, quando as leituras são válidas. A Etapa 8 apresenta o último indicador disponível do veículo, além de diferença e desvio entre KM real e planejado quando os dois odômetros da operação estão informados. Leituras ausentes não aparecem como zero medido.
 9. O módulo `database/fechamento_ciclos.py` consolida valores somente em memória, agrupando os fretes pelo `id_ciclo` interno (sem misturar nomes legados iguais). O fechamento na Etapa 8 substitui o frete atual pelos valores não salvos; a Etapa 9 cria a visão por ciclo e a aba Excel `Fechamento_Ciclos`. Receitas negociadas e despesas por frete são somadas uma vez; parcelas previstas são mostradas separadamente dos recebimentos efetivos, ainda não implementados.
 10. Quando um mesmo `ciclos_financeiro` legado serve de fonte para vários fretes sem `fretes_financeiro`, a receita legada não entra repetidamente nos totais do BI ou do ciclo. Os fretes são sinalizados como pendentes de individualização, mantendo os registros originais.
+11. A nova tabela `recebimentos_frete` conserva pagamentos efetivos por `id_viagem` com data, valor, tipo, forma e referência opcional; o histórico inclui cancelamentos com data e motivo. A Etapa 4 grava esses registros apenas depois que o frete existe. Um cancelamento lógico exclui o valor dos cálculos sem apagar a linha. A Etapa 8 e a Etapa 9 leem os recebimentos confirmados por frete e por ciclo. O Excel exporta o histórico completo em `Recebimentos_Fretes`.
 
-**Limitação:** ciclos duplicados já existentes na base não são mesclados; isso exige migração específica, conferência e backup. O **resumo gerencial** por ciclo foi implementado no código, mas **despesas compartilhadas independentes, rateio, recebimentos efetivos e fechamento formal com alteração de status** ainda não foram implementados.
+**Limitação:** ciclos duplicados já existentes na base não são mesclados; isso exige migração específica, conferência e backup. O **resumo gerencial** e o **registro manual de recebimentos efetivos** foram implementados no código, mas **despesas compartilhadas independentes, rateio, conciliação bancária, estornos externos e fechamento formal com alteração de status** ainda não foram implementados.
 
 **Critério de segurança:** a proximidade entre uma linha de fechamento e os fretes anteriores é utilizada para sugerir a correspondência na auditoria. Ela **não autoriza corrigir automaticamente** o ID do ciclo nem transferir valores ou despesas. Linhas interpretadas como total geral não são somadas como fretes adicionais.
 
@@ -68,7 +71,7 @@ Nesta proposta, a tela de cadastro passa a funcionar da seguinte maneira:
 | Códigos comerciais de frete | Identificador de negócio `F26-...` independente do `codigo_viagem` interno `V1`, `V2`... |
 | Códigos únicos de ciclo | Chave de negócio única no banco, sem duplicação em acessos concorrentes |
 | Vínculo frete-ciclo | `id_ciclo` opcional no frete; vários fretes podem referenciar o mesmo ciclo |
-| `recebimentos` | Registro de entradas efetivas com data, valor e referência ao frete, distinto da programação de parcelas |
+| Conciliação e classificação de recebimentos | Confrontar `recebimentos_frete` com extratos bancários; situações financeiras automáticas e estornos por transferência externa |
 | `despesas` | Lançamento associado a **um frete ou a um ciclo**, com validação para evitar atribuição dupla |
 | Alocação de abastecimento para DRE | Critério explícito para contabilizar e ratear custos por ciclo, sem duplicar lançamentos em `viagens_despesas` |
 | Fechamento | Cálculo derivado por frete ou ciclo: receita negociada, recebida, despesas, KM estimado e KM real disponível |
@@ -92,6 +95,7 @@ Os códigos de negócio devem ser gerados e validados no banco de forma segura p
 - A atualização do cálculo de KM acrescenta a coluna `km_deslocamentos_operacionais` em `ciclos_operacionais` por meio de `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`; essa alteração de esquema ocorre na inicialização do aplicativo atualizado.
 - O controle do odômetro no abastecimento acrescenta `odometro_abastecimento INTEGER NULL` à tabela `viagens_despesas`; essa coluna também é criada automaticamente na inicialização da nova versão.
 - A tabela independente `abastecimentos` (com FK para `veiculos` e fornecedor opcional) é criada por `Base.metadata.create_all()` na inicialização da versão 6. O schema existente de `viagens_despesas` não é removido nem reescrito.
+- A tabela `recebimentos_frete` é criada por `Base.metadata.create_all()` na inicialização da versão 8. Nenhuma coluna de dados históricos é removida e os recebimentos não são deduzidos automaticamente das parcelas previstas.
 - `app.py` chama `sincronizar_colunas_banco()` na inicialização.
 - `database/diagnostico_ciclos.py` pode ser executado separadamente com `python -m database.diagnostico_ciclos`. Esse diagnóstico **não inicializa o app nem migra o banco**: faz exclusivamente consultas SQL em transação `READ ONLY`, identifica IDs de ciclo duplicados e diferencia os valores legados dos financeiros individuais. O resultado é exibido no terminal como JSON.
 - A string de conexão é lida da variável `DATABASE_URL` após `load_dotenv()`.
@@ -113,6 +117,8 @@ Os códigos de negócio devem ser gerados e validados no banco de forma segura p
 - [ ] Validar criação de `fretes_financeiro` em PostgreSQL de testes, sem tocar o banco oficial.
 - [ ] Validar criação de `abastecimentos`, cadastro com zero fretes e histórico do mesmo veículo com Diesel, ARLA, leituras ausentes e registros fora da ordem cronológica.
 - [ ] Conferir que abastecimentos não dupliquem o DRE e que o consumo só apareça com leituras consecutivas confiáveis e tanque cheio.
+- [ ] Validar criação de `recebimentos_frete`; registrar pagamento parcial, duas parcelas, duplicidade, excedente confirmado e cancelamento com motivo, garantindo que só valores confirmados compõem o saldo.
+- [ ] Conferir consolidação dos recebimentos dos fretes do mesmo ciclo e aba `Recebimentos_Fretes` da exportação.
 - [ ] Testar edição de dois fretes com clientes diferentes dentro do mesmo ciclo.
 - [ ] Contar ciclos e fretes importados e identificar ciclos duplicados pelo nome.
 - [ ] Verificar se já existem códigos `V1`, `V2` etc. vinculados a fretes históricos.

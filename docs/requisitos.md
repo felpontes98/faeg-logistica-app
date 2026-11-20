@@ -22,10 +22,12 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 | RF-10 | Associar despesas financeiras a fretes sem somar duas vezes o registro informativo de combustível | Parcial: sem alocação automática por ciclo |
 | RF-11 | Consultar, gerar relatórios e exportar dados operacionais; o Excel inclui aba própria `Abastecimentos_Veiculos` | Proposto; revisão de indicadores ainda pendente |
 | RF-12 | Importar Excel distinguindo fretes, fechamentos e totais gerais | Apenas prévia/auditoria; **gravação bloqueada** |
-| RF-13 | Registrar efetivos recebimentos financeiros distintos das parcelas previstas | **Pendente** |
+| RF-13 | Registrar pagamentos efetivamente recebidos, com data, valor, tipo e referência, sem confundir com parcelas previstas | Proposto em `recebimentos_frete`; teste pendente |
 | RF-14 | Fechar ciclos com despesas compartilhadas e regra de rateio aprovada | **Pendente** |
 | RF-15 | Consolidar receita negociada e despesas de cada frete por ID interno de ciclo, sem duplicar lançamentos | Proposto em `fechamento_ciclos.py`; teste pendente |
 | RF-16 | Exibir prévia do ciclo na Etapa 8 e relatório na Etapa 9; exportar `Fechamento_Ciclos` | Proposto; teste pendente |
+| RF-17 | Somar pagamentos efetivos por frete e ciclo; mostrar saldo a receber e possível excedente | Proposto; teste pendente |
+| RF-18 | Cancelar recebimento lançado incorretamente com motivo obrigatório e sem apagar histórico | Proposto; teste pendente |
 
 ## Critérios de aceite dos cálculos
 
@@ -41,6 +43,9 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 10. **Fechamento parcial do ciclo:** `Receita negociada do ciclo = soma dos valores negociados dos fretes`, `Despesas do ciclo = soma das despesas financeiras atribuídas aos respectivos fretes` e `Resultado Operacional Parcial = receita negociada − despesas do ciclo`; não contabilizar uma linha de fechamento como frete adicional.
 11. **Proteção de registros legados:** se dois ou mais fretes compartilham o mesmo financeiro legado de ciclo, não somar o valor legado uma vez por frete; avisar sobre a necessidade de individualização, sem excluir o histórico.
 12. **Parcelas previstas:** adiantamento e saldo são campos contratuais previstos, não equivalem a recebimento efetivo. Não somar o fechamento por ciclo uma segunda vez ao total geral por fretes.
+13. **Recebido de fato:** cada lançamento só pode ser atribuído a frete já salvo e deve indicar data, valor positivo, tipo de parcela e meio de pagamento. Referência/comprovante e observação são opcionais; pagamentos idênticos sem referência são tratados como possível duplicidade.
+14. **Saldo:** `Recebido de fato = soma dos pagamentos confirmados (não cancelados)` e `Saldo a receber do frete = máximo(0, valor negociado − recebido de fato)`. O saldo do ciclo é a soma dos saldos de seus fretes, sem compensar automaticamente excedente de um frete com outro. Indicar excedentes separadamente; saldos de fretes com financeiro legado ambíguo não devem ser apresentados como exatos.
+15. **Correções:** cancelamento exige motivo, preserva o registro, data de cancelamento e valor original. A exportação em Excel deve incluir linhas canceladas com situação identificada, sem computá-las nos totais.
 
 ## Requisitos de integridade e implantação
 
@@ -61,6 +66,9 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - [ ] Cadastrar dois fretes no mesmo ciclo e conferir soma de KM e deslocamentos informados uma vez.
 - [ ] Cadastrar três fretes de um ciclo, com receitas e despesas diferentes; conferir prévia na Etapa 8, relatório na Etapa 9 e planilha `Fechamento_Ciclos`.
 - [ ] Simular dois fretes legados com um único financeiro de ciclo; conferir aviso e receita não duplicada.
+- [ ] Registrar adiantamento recebido real, saldo recebido e um pagamento parcial adicional; conferir valores por frete/ciclo.
+- [ ] Cancelar pagamento com motivo e conferir exclusão dos totais, sem apagar o histórico na Etapa 4 ou na aba `Recebimentos_Fretes`.
+- [ ] Simular reenvio do mesmo comprovante, lançamento acima do negociado e frete ainda não salvo; conferir as proteções.
 - [ ] Conferir ausência de valor negociado, adiantamento/saldo previstos e ausência de odômetros sem contabilizar valores fictícios.
 - [ ] Salvar operação sem odômetros, com odômetros válidos e com odômetro final inferior ao inicial.
 - [ ] Conferir cenário de fechamento e exportação sem viagens e com viagens.
@@ -69,4 +77,4 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 
 ## Escopo explicitamente não encerrado
 
-Não presumir que a aplicação esteja pronta para produção por existir código. Faltam ao menos: homologação integrada, fechamento **formal** dos ciclos (status/confirmação), despesas compartilhadas e regra de rateio, confirmação de recebimentos efetivos, segurança de acesso e importação com gravação autorizada. A consolidação **gerencial parcial** por ciclo já está proposta.
+Não presumir que a aplicação esteja pronta para produção por existir código. Faltam ao menos: homologação integrada, fechamento **formal** dos ciclos (status/confirmação), despesas compartilhadas e regra de rateio, conciliação bancária e automatização de situações de pagamento, segurança de acesso e importação com gravação autorizada. A consolidação **gerencial parcial** por ciclo e o registro manual de recebimentos já estão propostos.

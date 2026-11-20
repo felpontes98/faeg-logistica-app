@@ -22,6 +22,7 @@ from database.models import (
     Fornecedor,
     Local,
     Motorista,
+    RecebimentoFrete,
     Veiculo,
     Viagem,
     ViagemDespesa,
@@ -40,13 +41,13 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def inicializar_banco_uma_vez(schema_v=6):
+def inicializar_banco_uma_vez(schema_v=8):
     """Garante que todas as tabelas e colunas novas existam no Neon sem alterar dados."""
     sincronizar_colunas_banco()
     return True
 
 
-inicializar_banco_uma_vez(schema_v=6)
+inicializar_banco_uma_vez(schema_v=8)
 
 # ==============================================================================
 # LISTAS PADRONIZADAS DO SISTEMA
@@ -1112,11 +1113,49 @@ def carregar_listas_base():
 
 
 @st.cache_data(ttl=300, show_spinner=False)
+def carregar_todos_recebimentos():
+    """Registros confirmados ou cancelados, preservados para auditoria."""
+    with SessionLocal() as session:
+        return [
+            {
+                "id_recebimento": r.id_recebimento,
+                "id_viagem": r.id_viagem,
+                "codigo_viagem": resolver_codigo_viagem(r.viagem, r.viagem.ciclo),
+                "id_frete": r.viagem.id_frete_externo or "-",
+                "data_recebimento": r.data_recebimento,
+                "tipo_parcela": r.tipo_parcela,
+                "forma_pagamento": r.forma_pagamento,
+                "referencia": r.referencia,
+                "observacao": r.observacao,
+                "valor_recebido": float(r.valor_recebido),
+                "cancelado": bool(r.cancelado),
+                "data_cancelamento": r.data_cancelamento,
+                "motivo_cancelamento": r.motivo_cancelamento,
+            }
+            for r in session.query(RecebimentoFrete)
+            .order_by(RecebimentoFrete.data_recebimento, RecebimentoFrete.id_recebimento)
+            .all()
+        ]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_recebimentos_viagem(id_viagem):
+    if not id_viagem:
+        return []
+    return [r for r in carregar_todos_recebimentos() if r["id_viagem"] == id_viagem]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
 def carregar_todas_viagens_consulta():
     """Carrega visão consolidada de todas as viagens, ciclos, receitas e despesas para Consultas e BI."""
     with SessionLocal() as session:
         viagens_raw = session.query(Viagem).order_by(Viagem.id_viagem.desc()).all()
         despesas_all = session.query(ViagemDespesa).all()
+        recebidos_por_viagem = {}
+        for r in carregar_todos_recebimentos():
+            if not r["cancelado"]:
+                vid = r["id_viagem"]
+                recebidos_por_viagem[vid] = recebidos_por_viagem.get(vid, 0.0) + r["valor_recebido"]
         desp_por_viagem = {}
         desp_detalhadas = []
         cod_map = {vg.id_viagem: resolver_codigo_viagem(vg, vg.ciclo) for vg in viagens_raw}
@@ -1153,6 +1192,7 @@ def carregar_todas_viagens_consulta():
             v_adi = to_float(fin.valor_adiantamento) if fin else 0.0
             v_sal = to_float(fin.valor_saldo) if fin else 0.0
             total_previsto = v_adi + v_sal
+            total_recebido_real = round(recebidos_por_viagem.get(vg.id_viagem, 0.0), 2)
             financeiro_individual = vg.financeiro_frete is not None
             # Uma linha financeira legada do CICLO não pode ser replicada como
             # receita individual em vários fretes do mesmo grupo.
@@ -1162,6 +1202,8 @@ def carregar_todas_viagens_consulta():
             # Parcelas previstas NÃO são recebimentos nem receita negociada:
             # não substituem o valor negociado ausente no fechamento.
             receita_base = 0.0 if legado_ambiguo else v_neg
+            saldo_a_receber_real = round(max(0.0, v_neg - total_recebido_real), 2) if not legado_ambiguo else None
+            excedente_recebido = round(max(0.0, total_recebido_real - v_neg), 2) if not legado_ambiguo else None
             tot_desp = desp_por_viagem.get(vg.id_viagem, 0.0)
             res_liq = receita_base - tot_desp
             od_ini = to_int(vg.odometro_inicial)
@@ -1220,6 +1262,9 @@ def carregar_todas_viagens_consulta():
                     "valor_adiantamento": v_adi,
                     "valor_saldo": v_sal,
                     "total_previsto": total_previsto,
+                    "total_recebido": total_recebido_real,
+                    "saldo_a_receber": saldo_a_receber_real,
+                    "excedente_recebido": excedente_recebido,
                     "receita_base": receita_base,
                     "total_despesas": tot_desp,
                     "km_rota_planejado": to_float(vg.km_rota_planejado),
@@ -1288,7 +1333,7 @@ def carregar_abastecimentos_veiculo(id_veiculo):
     return [a for a in carregar_todos_abastecimentos() if a["id_veiculo"] == id_veiculo]
 
 
-def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None):
+def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None, recebimentos=None):
     """Gera arquivo Excel (.xlsx) completo com todas as viagens, despesas e cadastros do sistema."""
     buf = io.BytesIO()
 
@@ -1321,6 +1366,9 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
                 "Adiantamento (R$)": v["valor_adiantamento"],
                 "Saldo (R$)": v["valor_saldo"],
                 "Parcelas Previstas (R$)": v["total_previsto"],
+                "Recebido de Fato (R$)": v["total_recebido"],
+                "Saldo a Receber (R$)": v["saldo_a_receber"],
+                "Excedente Recebido (R$)": v["excedente_recebido"],
                 "Despesas Totais (R$)": v["total_despesas"],
                 "Resultado Operacional Parcial (R$)": v["resultado_liquido"],
                 "Margem (%)": round(v["margem_pct"], 2),
@@ -1370,6 +1418,9 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
             "Adiantamentos Previstos (R$)": f["adiantamentos_previstos"],
             "Saldos Previstos (R$)": f["saldos_previstos"],
             "Parcelas Previstas (R$)": f["parcelas_previstas"],
+            "Recebido de Fato (R$)": f["total_recebido"],
+            "Saldo a Receber (R$)": f["saldo_a_receber"],
+            "Excedente Recebido (R$)": f["excedente_recebido"],
             "Despesas Financeiras (R$)": f["despesas_total"],
             "Resultado Operacional Parcial (R$)": f["resultado_operacional_parcial"],
             "KM Fretes Planejados": f["km_planejado_fretes"],
@@ -1382,9 +1433,30 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         "ID Interno Ciclo", "Código Ciclo", "Quantidade Fretes", "IDs Frete",
         "Clientes", "Negociado (R$)", "Adiantamentos Previstos (R$)",
         "Saldos Previstos (R$)", "Parcelas Previstas (R$)",
+        "Recebido de Fato (R$)", "Saldo a Receber (R$)", "Excedente Recebido (R$)",
         "Despesas Financeiras (R$)", "Resultado Operacional Parcial (R$)",
         "KM Fretes Planejados", "KM Deslocamentos", "KM Total Planejado",
         "Fretes com Financeiro Legado Ambíguo",
+    ])
+    df_recebimentos = pd.DataFrame([
+        {
+            "Código Viagem": r["codigo_viagem"],
+            "ID Frete": r["id_frete"],
+            "Data Recebimento": r["data_recebimento"].strftime("%d/%m/%Y"),
+            "Tipo Parcela": r["tipo_parcela"],
+            "Forma Pagamento": r["forma_pagamento"],
+            "Referência": r["referencia"],
+            "Observação": r["observacao"],
+            "Valor (R$)": r["valor_recebido"],
+            "Situação": "Cancelado" if r["cancelado"] else "Confirmado",
+            "Data Cancelamento": r["data_cancelamento"].strftime("%d/%m/%Y") if r["data_cancelamento"] else None,
+            "Motivo Cancelamento": r["motivo_cancelamento"],
+        }
+        for r in (recebimentos or [])
+    ], columns=[
+        "Código Viagem", "ID Frete", "Data Recebimento", "Tipo Parcela",
+        "Forma Pagamento", "Referência", "Observação", "Valor (R$)",
+        "Situação", "Data Cancelamento", "Motivo Cancelamento",
     ])
 
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
@@ -1397,6 +1469,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         df_forn.to_excel(writer, sheet_name="Cad_Fornecedores", index=False)
         df_abast.to_excel(writer, sheet_name="Abastecimentos_Veiculos", index=False)
         df_ciclos.to_excel(writer, sheet_name="Fechamento_Ciclos", index=False)
+        df_recebimentos.to_excel(writer, sheet_name="Recebimentos_Fretes", index=False)
 
     return buf.getvalue()
 
@@ -1545,6 +1618,9 @@ def gerar_pdf_relatorio(dados_resumo, despesas_lista):
     text(250, y, f"Margem Operacional: {dados_resumo['margem_fmt']}", size=10, bold=True)
     text(420, y, f"Parcelas previstas: {dados_resumo['parcelas_previstas_fmt']}", size=8, bold=False)
     y += 24
+    text(42, y, f"Recebido de fato: {dados_resumo['recebido_real_fmt']}", size=10, bold=True)
+    text(310, y, f"Saldo a receber: {dados_resumo['saldo_receber_fmt']}", size=10, bold=True)
+    y += 22
 
     rect(40, y, 515, 22, 0.914, 0.914, 0.914)
     text(48, y + 15, "3. DETALHAMENTO DE DESPESAS DA VIAGEM", size=10, bold=True)
@@ -1622,6 +1698,8 @@ def gerar_pdf_relatorio_consolidado(resumo_geral, ranking_clientes, despesas_cat
     text(55, y + 6, "RESULTADO OPERACIONAL PARCIAL:", size=10, bold=True, r=1, g=1, b=1)
     text(275, y + 6, resumo_geral["resultado_fmt"], size=12, bold=True, r=1, g=1, b=1)
     text(430, y + 6, f"Margem: {resumo_geral['margem_fmt']}", size=10, bold=True, r=0.671, g=0.808, b=0.882)
+    text(55, y + 27, f"Recebido de fato: {resumo_geral['recebido_fmt']}", size=9, bold=True, r=1, g=1, b=1)
+    text(300, y + 27, f"Saldo em aberto: {resumo_geral['saldo_fmt']}", size=9, bold=True, r=1, g=1, b=1)
 
     y += 42
     rect(40, y, 515, 22, 0.914, 0.914, 0.914)
@@ -1948,6 +2026,10 @@ def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual):
         "valor_adiantamento": to_float(get_campo("valor_adiant", 0.0)),
         "valor_saldo": to_float(get_campo("valor_saldo", 0.0)),
         "total_despesas": despesas_frete_atual,
+        "total_recebido": round(sum(
+            r["valor_recebido"] for r in carregar_recebimentos_viagem(id_viagem_atual)
+            if not r["cancelado"]
+        ), 2),
         "km_rota_planejado": to_float(get_campo("km_rota", 0.0)),
         "km_deslocamentos_operacionais": to_float(get_campo("km_deslocamentos", 0.0)),
         # Uma viagem antiga que só lê ciclos_financeiro permanece ambígua até
@@ -2826,6 +2908,156 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
+        st.markdown('<div class="sec-subtitle">Recebimentos Efetivamente Confirmados</div>', unsafe_allow_html=True)
+        st.caption(
+            "Os valores de adiantamento e saldo acima são PREVISÕES da negociação. "
+            "Registre abaixo cada entrada realmente recebida, com data e valor próprios; "
+            "o saldo em aberto será atualizado pela soma desses pagamentos."
+        )
+
+        if viagem_sel_id == 0:
+            st.info("Primeiro salve o frete. Os recebimentos reais são vinculados ao ID do frete já cadastrado.")
+        else:
+            recebimentos_frete = carregar_recebimentos_viagem(viagem_sel_id)
+            recebimentos_ativos = [r for r in recebimentos_frete if not r["cancelado"]]
+            total_recebido_agora = round(sum(r["valor_recebido"] for r in recebimentos_ativos), 2)
+            valor_contratado_agora = to_float(get_campo("valor_negociado", 0.0))
+            saldo_em_aberto_agora = round(max(0.0, valor_contratado_agora - total_recebido_agora), 2)
+            excedente_agora = round(max(0.0, total_recebido_agora - valor_contratado_agora), 2)
+
+            rc1, rc2, rc3 = st.columns(3)
+            rc1.metric("VALOR NEGOCIADO", fmt_brl(valor_contratado_agora))
+            rc2.metric("TOTAL RECEBIDO DE FATO", fmt_brl(total_recebido_agora))
+            rc3.metric("SALDO A RECEBER", fmt_brl(saldo_em_aberto_agora))
+            if excedente_agora > 0:
+                st.warning(f"Recebimentos excedem o valor negociado em {fmt_brl(excedente_agora)}. Confira os lançamentos ou a negociação.")
+            st.caption("O valor negociado nesta tela pode ter alterações ainda não salvas; os recebimentos exibidos já estão registrados no banco.")
+
+            with st.form("form_recebimento_frete", clear_on_submit=False):
+                r1, r2, r3, r4 = st.columns([1.2, 1.2, 1.2, 1.4])
+                with r1:
+                    data_receb = st.date_input("DATA DO RECEBIMENTO *", value=date.today(), format="DD/MM/YYYY", key="rec_data")
+                with r2:
+                    tipo_receb = st.selectbox("PARCELA / ORIGEM *", ["Adiantamento", "Saldo", "Pagamento Parcial", "Outros"], key="rec_tipo")
+                with r3:
+                    valor_receb = st.number_input("RECEBIDO (R$) *", min_value=0.01, value=0.01, step=50.0, format="%.2f", key="rec_valor")
+                with r4:
+                    forma_receb = st.selectbox("FORMA DE PAGAMENTO", ["Pix", "Transferência", "TED", "Depósito", "Boleto", "Dinheiro", "Outros"], key="rec_forma")
+                ref_col, obs_col = st.columns(2)
+                with ref_col:
+                    ref_receb = st.text_input("REFERÊNCIA / COMPROVANTE", placeholder="Ex: ID da transação Pix", max_chars=120, key="rec_ref")
+                with obs_col:
+                    obs_receb = st.text_input("OBSERVAÇÃO", placeholder="Ex: parcela recebida do cliente", max_chars=200, key="rec_obs")
+
+                acima_negociado = (
+                    valor_contratado_agora > 0
+                    and total_recebido_agora + valor_receb > valor_contratado_agora + 0.01
+                )
+                confirmar_excedente = st.checkbox(
+                    "Confirmo que o recebimento ultrapassa o valor negociado",
+                    value=False,
+                    key="rec_confirmar_excedente",
+                ) if acima_negociado else False
+                registrar_receb = st.form_submit_button("Registrar Recebimento Confirmado", use_container_width=True)
+
+            if registrar_receb:
+                if acima_negociado and not confirmar_excedente:
+                    st.warning("Confirme expressamente o valor acima do negociado antes de registrar.")
+                else:
+                    valor_novo = round(float(valor_receb), 2)
+                    ref_normalizada = ref_receb.strip()
+                    with SessionLocal() as session:
+                        lancamentos_anteriores = session.query(RecebimentoFrete).filter_by(
+                            id_viagem=viagem_sel_id, cancelado=False
+                        ).all()
+                        duplicado = any(
+                            (
+                                (ref_normalizada and (p.referencia or "").strip().casefold() == ref_normalizada.casefold())
+                                or (
+                                    not ref_normalizada and not (p.referencia or "").strip()
+                                    and p.data_recebimento == data_receb
+                                    and p.tipo_parcela == tipo_receb
+                                    and round(float(p.valor_recebido), 2) == valor_novo
+                                )
+                            )
+                            for p in lancamentos_anteriores
+                        )
+                        if duplicado:
+                            st.warning("Possível pagamento já registrado. Confira o histórico; se forem dois pagamentos iguais, informe uma referência distinta.")
+                        else:
+                            session.add(RecebimentoFrete(
+                                id_viagem=viagem_sel_id,
+                                data_recebimento=data_receb,
+                                tipo_parcela=tipo_receb,
+                                forma_pagamento=forma_receb,
+                                referencia=ref_normalizada or None,
+                                observacao=obs_receb.strip() or None,
+                                valor_recebido=valor_novo,
+                            ))
+                            session.commit()
+                            carregar_todos_recebimentos.clear()
+                            carregar_recebimentos_viagem.clear()
+                            carregar_todas_viagens_consulta.clear()
+                            st.toast("Recebimento confirmado registrado!", icon="✅")
+                            st.rerun()
+
+            if recebimentos_frete:
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            "ID": r["id_recebimento"],
+                            "Data": r["data_recebimento"].strftime("%d/%m/%Y"),
+                            "Parcela": r["tipo_parcela"],
+                            "Forma": r["forma_pagamento"],
+                            "Referência": r["referencia"] or "-",
+                            "Valor (R$)": r["valor_recebido"],
+                            "Situação": "Cancelado" if r["cancelado"] else "Confirmado",
+                            "Motivo cancelamento": r["motivo_cancelamento"] or "",
+                        }
+                        for r in reversed(recebimentos_frete)
+                    ]),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+                if recebimentos_ativos:
+                    with st.expander("Corrigir lançamento: cancelar recebimento sem apagar histórico"):
+                        opcoes_cancelamento = {r["id_recebimento"]: r for r in recebimentos_ativos}
+                        cancelar_id = st.selectbox(
+                            "RECEBIMENTO A CANCELAR",
+                            options=list(opcoes_cancelamento),
+                            format_func=lambda i: (
+                                f"#{i} — {opcoes_cancelamento[i]['data_recebimento'].strftime('%d/%m/%Y')} "
+                                f"— {fmt_brl(opcoes_cancelamento[i]['valor_recebido'])}"
+                            ),
+                            key="rec_cancelar_id",
+                        )
+                        motivo_cancelamento = st.text_input(
+                            "MOTIVO DO CANCELAMENTO *",
+                            max_chars=200,
+                            placeholder="Ex: lançamento repetido / valor informado incorretamente",
+                            key="rec_motivo_cancelamento",
+                        )
+                        if st.button("Confirmar Cancelamento do Recebimento", key="rec_btn_cancelar"):
+                            if len(motivo_cancelamento.strip()) < 6:
+                                st.warning("Informe o motivo do cancelamento com pelo menos 6 caracteres.")
+                            else:
+                                with SessionLocal() as session:
+                                    recebido_db = session.query(RecebimentoFrete).filter_by(
+                                        id_recebimento=cancelar_id, id_viagem=viagem_sel_id, cancelado=False
+                                    ).first()
+                                    if recebido_db is not None:
+                                        recebido_db.cancelado = True
+                                        recebido_db.data_cancelamento = date.today()
+                                        recebido_db.motivo_cancelamento = motivo_cancelamento.strip()
+                                        session.commit()
+                                carregar_todos_recebimentos.clear()
+                                carregar_recebimentos_viagem.clear()
+                                carregar_todas_viagens_consulta.clear()
+                                st.toast("Recebimento cancelado, mantendo histórico.", icon="🧾")
+                                st.rerun()
+            else:
+                st.info("Nenhum recebimento efetivamente confirmado para este frete.")
+
         render_navegacao_rodape(3, MENU_ITENS)
 
     # --------------------------------------------------------------------------
@@ -3499,6 +3731,20 @@ with st.container(border=True):
         )
         st.caption("Custos do histórico de abastecimentos por veículo não são somados aqui; apenas despesas financeiras vinculadas a esta viagem entram no resultado.")
 
+        st.markdown('<div class="sec-subtitle">Situação dos Recebimentos Efetivos do Frete</div>', unsafe_allow_html=True)
+        reais_recebidos = sum(
+            r["valor_recebido"] for r in carregar_recebimentos_viagem(viagem_sel_id)
+            if not r["cancelado"]
+        )
+        r_fin1, r_fin2, r_fin3 = st.columns(3)
+        r_fin1.metric("NEGOCIADO", fmt_brl(v_neg_dre))
+        r_fin2.metric("RECEBIDO DE FATO", fmt_brl(reais_recebidos))
+        r_fin3.metric("SALDO A RECEBER", fmt_brl(max(0.0, v_neg_dre - reais_recebidos)))
+        if viagem_sel_id == 0:
+            st.caption("Para registrar pagamentos efetivos na Etapa 4, primeiro salve o frete.")
+        elif reais_recebidos > v_neg_dre + 0.01:
+            st.warning("O total recebido supera o valor negociado. Confira os lançamentos e o contrato.")
+
         if get_campo("tipo_viagem", "Individual") == "Ciclo":
             st.markdown('<div class="sec-subtitle">Prévia do Fechamento Financeiro do Ciclo</div>', unsafe_allow_html=True)
             previa = montar_previa_financeira_ciclo(viagem_sel_id, custos_dre)
@@ -3519,7 +3765,10 @@ with st.container(border=True):
                 p1.metric("ADIANTAMENTOS PREVISTOS", fmt_brl(previa["adiantamentos_previstos"]))
                 p2.metric("SALDOS PREVISTOS", fmt_brl(previa["saldos_previstos"]))
                 p3.metric("PARCELAS PREVISTAS", fmt_brl(previa["parcelas_previstas"]))
-                st.caption("Adiantamentos e saldos previstos não comprovam recebimento de dinheiro; os pagamentos efetivos ainda não possuem cadastro separado.")
+                p4, p5 = st.columns(2)
+                p4.metric("RECEBIDO EFETIVAMENTE NO CICLO", fmt_brl(previa["total_recebido"]))
+                p5.metric("SALDO A RECEBER DO CICLO", fmt_brl(previa["saldo_a_receber"]) if previa["saldo_a_receber"] is not None else "Conferir financeiro legado")
+                st.caption("Adiantamento e saldo previstos não comprovam recebimento. O ciclo soma apenas pagamentos realmente registrados na Etapa 4 de cada frete.")
 
                 st.dataframe(
                     pd.DataFrame([
@@ -3528,6 +3777,7 @@ with st.container(border=True):
                             "Código Viagem": i["codigo_viagem"],
                             "Cliente": i["cliente"],
                             "Negociado Considerado (R$)": to_float(i["negociado_considerado"]),
+                            "Recebido de Fato (R$)": to_float(i["total_recebido"]),
                             "Despesas (R$)": to_float(i["total_despesas"]),
                             "Situação Financeira": "Legado para conferir" if i["financeiro_legado_ambiguo"] else "Individualizado",
                         }
@@ -3565,6 +3815,7 @@ with st.container(border=True):
             todas_vg_exp, desp_det_exp, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db,
             abastecimentos=todos_abast_exp,
             fechamentos_ciclos=consolidar_ciclos(todas_vg_exp),
+            recebimentos=carregar_todos_recebimentos(),
         )
 
         tab_rel_viagem, tab_rel_geral, tab_rel_ciclos = st.tabs(
@@ -3582,6 +3833,11 @@ with st.container(border=True):
             v_neg_r = to_float(get_campo("valor_negociado", 0.0))
             v_rec_r = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))
             receita_r = v_neg_r
+            receb_real_r = round(sum(
+                r["valor_recebido"] for r in carregar_recebimentos_viagem(viagem_sel_id)
+                if not r["cancelado"]
+            ), 2)
+            saldo_real_r = max(0.0, receita_r - receb_real_r)
 
             if viagem_sel_id == 0:
                 desps_r = st.session_state.get("despesas_temp", [])
@@ -3606,6 +3862,10 @@ with st.container(border=True):
             k3.metric("Resultado Operacional Parcial", fmt_brl(resultado_r))
             k4.metric("Custo por KM", fmt_brl(custo_km_r) if custo_km_r is not None else "Não informado")
             k5.metric("Margem Operacional", f"{margem_r:.1f}%")
+            k6, k7, k8 = st.columns(3)
+            k6.metric("Recebido de Fato", fmt_brl(receb_real_r))
+            k7.metric("Saldo a Receber", fmt_brl(saldo_real_r))
+            k8.metric("Parcelas Previstas", fmt_brl(v_rec_r))
 
             st.markdown('<div class="sec-subtitle">Exportação da Viagem Atual</div>', unsafe_allow_html=True)
             vei_obj_r = next((v for v in veiculos_db if v["id_veiculo"] == get_campo("vei_id", 0)), None)
@@ -3628,6 +3888,8 @@ with st.container(border=True):
                 "custo_km_fmt": fmt_brl(custo_km_r) if custo_km_r is not None else "Não informado",
                 "margem_fmt": f"{margem_r:.1f}%",
                 "parcelas_previstas_fmt": fmt_brl(v_rec_r),
+                "recebido_real_fmt": fmt_brl(receb_real_r),
+                "saldo_receber_fmt": fmt_brl(saldo_real_r),
             }
             desps_pdf = [
                 {
@@ -3720,6 +3982,9 @@ with st.container(border=True):
                 rec_global = sum(v["receita_base"] for v in vg_bi_filtradas)
                 desp_global = sum(v["total_despesas"] for v in vg_bi_filtradas)
                 res_global = rec_global - desp_global
+                recebimentos_global = round(sum(v["total_recebido"] for v in vg_bi_filtradas), 2)
+                saldo_global_confiavel = all(v["saldo_a_receber"] is not None for v in vg_bi_filtradas)
+                saldo_global = round(sum(v["saldo_a_receber"] or 0 for v in vg_bi_filtradas), 2)
                 margem_global = ((res_global / rec_global) * 100.0) if rec_global > 0 else 0.0
                 km_global = sum(v["km_rodado"] or 0 for v in vg_bi_filtradas)
                 quantos_com_odometro = sum(v["km_rodado"] is not None for v in vg_bi_filtradas)
@@ -3743,6 +4008,9 @@ with st.container(border=True):
                     "KM Registrado / Custo Médio KM",
                     f"{km_global_fmt} / {fmt_brl(custo_km_global) if custo_km_global is not None else 'Não informado'}",
                 )
+                bg7, bg8 = st.columns(2)
+                bg7.metric("Recebimentos Confirmados", fmt_brl(recebimentos_global))
+                bg8.metric("Saldo em Aberto", fmt_brl(saldo_global) if saldo_global_confiavel else "Conferir financeiro legado")
                 if not km_completo:
                     st.caption("KM total parcial: existem fretes sem as duas leituras de odômetro. Custo médio por KM global fica indisponível.")
                 if any(v["financeiro_legado_ambiguo"] for v in vg_bi_filtradas):
@@ -3757,6 +4025,7 @@ with st.container(border=True):
                         .agg(
                             viagens=("id_viagem", "count"),
                             receita=("receita_base", "sum"),
+                            recebido=("total_recebido", "sum"),
                             despesas=("total_despesas", "sum"),
                             resultado=("resultado_liquido", "sum"),
                         )
@@ -3769,10 +4038,12 @@ with st.container(border=True):
                                 "cliente": row_c["cliente"],
                                 "viagens": int(row_c["viagens"]),
                                 "receita": float(row_c["receita"]),
+                                "recebido": float(row_c["recebido"]),
                                 "despesas": float(row_c["despesas"]),
                                 "resultado": float(row_c["resultado"]),
                                 "margem": mg_c,
                                 "receita_fmt": fmt_brl(row_c["receita"]),
+                                "recebido_fmt": fmt_brl(row_c["recebido"]),
                                 "despesa_fmt": fmt_brl(row_c["despesas"]),
                                 "resultado_fmt": fmt_brl(row_c["resultado"]),
                                 "margem_fmt": f"{mg_c:.1f}%",
@@ -3830,6 +4101,7 @@ with st.container(border=True):
                                 "Cliente": r["cliente"],
                                 "Viagens": r["viagens"],
                                 "Receita Total": r["receita_fmt"],
+                                "Recebido de Fato": r["recebido_fmt"],
                                 "Despesas Totais": r["despesa_fmt"],
                                 "Resultado Operacional Parcial": r["resultado_fmt"],
                                 "Margem (%)": r["margem_fmt"],
@@ -3847,6 +4119,8 @@ with st.container(border=True):
                     "receita_fmt": fmt_brl(rec_global),
                     "despesa_fmt": fmt_brl(desp_global),
                     "resultado_fmt": fmt_brl(res_global),
+                    "recebido_fmt": fmt_brl(recebimentos_global),
+                    "saldo_fmt": fmt_brl(saldo_global) if saldo_global_confiavel else "Conferir legado",
                     "margem_fmt": f"{margem_global:.1f}%",
                 }
                 pdf_bi_bytes = gerar_pdf_relatorio_consolidado(
@@ -3900,6 +4174,8 @@ with st.container(border=True):
                             "Fretes": f["qtd_fretes"],
                             "Receita Negociada": fmt_brl(f["valor_negociado_total"]),
                             "Parcelas Previstas": fmt_brl(f["parcelas_previstas"]),
+                            "Recebido de Fato": fmt_brl(f["total_recebido"]),
+                            "Saldo em Aberto": fmt_brl(f["saldo_a_receber"]) if f["saldo_a_receber"] is not None else "Conferir legado",
                             "Despesas": fmt_brl(f["despesas_total"]),
                             "Resultado Parcial": fmt_brl(f["resultado_operacional_parcial"]),
                             "KM Total Planejado": fmt_km(f["km_total_planejado"]),
@@ -3925,6 +4201,7 @@ with st.container(border=True):
                             "Código Viagem": f["codigo_viagem"],
                             "Cliente": f["cliente"],
                             "Negociado Considerado (R$)": to_float(f["negociado_considerado"]),
+                            "Recebido de Fato (R$)": to_float(f["total_recebido"]),
                             "Despesas (R$)": to_float(f["total_despesas"]),
                             "Situação Financeira": "Legado para conferir" if f["financeiro_legado_ambiguo"] else "Individualizado",
                         }
@@ -4010,6 +4287,9 @@ with st.container(border=True):
         tot_rec_f = sum(v["receita_base"] for v in filtradas)
         tot_desp_f = sum(v["total_despesas"] for v in filtradas)
         tot_res_f = sum(v["resultado_liquido"] for v in filtradas)
+        tot_recebido_f = sum(v["total_recebido"] for v in filtradas)
+        saldos_consulta_validos = all(v["saldo_a_receber"] is not None for v in filtradas)
+        tot_saldo_f = sum(v["saldo_a_receber"] or 0 for v in filtradas)
 
         st.markdown(
             f"""
@@ -4034,6 +4314,9 @@ with st.container(border=True):
             """,
             unsafe_allow_html=True,
         )
+        sc1, sc2 = st.columns(2)
+        sc1.metric("Recebido de Fato (Fretes Filtrados)", fmt_brl(tot_recebido_f))
+        sc2.metric("Saldo a Receber", fmt_brl(tot_saldo_f) if saldos_consulta_validos else "Conferir financeiro legado")
 
         if not filtradas:
             st.info("Nenhuma viagem encontrada para os filtros aplicados.")
@@ -4050,6 +4333,8 @@ with st.container(border=True):
                         "Origem": v["rota_origem"] or "-",
                         "Destino": v["rota_destino"] or "-",
                         "Receita": fmt_brl(v["receita_base"]),
+                        "Recebido de Fato": fmt_brl(v["total_recebido"]),
+                        "Saldo a Receber": fmt_brl(v["saldo_a_receber"]) if v["saldo_a_receber"] is not None else "Conferir legado",
                         "Despesas": fmt_brl(v["total_despesas"]),
                         "Resultado": fmt_brl(v["resultado_liquido"]),
                     }
@@ -4085,6 +4370,7 @@ with st.container(border=True):
                     filtradas, desp_detalhadas, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db,
                     abastecimentos=carregar_todos_abastecimentos(),
                     fechamentos_ciclos=consolidar_ciclos(todas_viagens),
+                    recebimentos=carregar_todos_recebimentos(),
                 )
                 st.download_button(
                     "📥 Exportar Excel (.xlsx)",
