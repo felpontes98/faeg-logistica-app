@@ -37,6 +37,9 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 | RF-25 | Atribuir despesa pendente a frete/ciclo salvo do mesmo veículo, sem segundo histórico de abastecimento nem duplicação no DRE | Proposto em `atribuicao_despesas.py`; teste pendente |
 | RF-26 | Estornar atribuição, devolver o custo ao veículo e guardar histórico de ações com justificativa | Proposto em `veiculos_despesas_atribuicoes`; teste pendente |
 | RF-27 | Manter único cadastro de despesas, com seções de vínculo e detalhes; permitir consulta/atribuição/cancelamento em áreas separadas de histórico | Proposto; teste visual pendente |
+| RF-28 | Reconciliar resultado financeiro gerencial de toda a base, separando custo direto de frete, compartilhado de ciclo, gasto pendente de veículo e gasto já atribuído sem dupla soma | Proposto em `fechamento_ciclos.py`; teste pendente |
+| RF-29 | Disponibilizar `Conferencia_Financeira` no Excel e exportar base completa coerente na Etapa 10, independentemente dos filtros da tabela da tela | Proposto; teste pendente |
+| RF-30 | Mostrar margem como não calculável sem receita confiável, e avisar sobre despesas compartilhadas sem fretes do tipo Ciclo | Proposto; teste pendente |
 
 ## Critérios de aceite dos cálculos
 
@@ -60,6 +63,8 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 18. **Despesa provisória por veículo:** cadastrar mesmo com zero fretes, mantendo valor, data, fornecedor, categoria, placa e eventual odômetro. O valor não integra DRE até a atribuição futura por processo aprovado. Cancelamento mantém data/motivo e exclui o abastecimento associado dos cálculos de consumo.
 19. **Atribuição:** somente registro pendente ativo; selecionar frete salvo do mesmo veículo, ou ciclo salvo com ao menos um frete desse veículo. Confirmar com justificativa mínima; criar o lançamento financeiro de destino e marcar a origem como atribuída. O `abastecimentos` existente permanece único. Recusar aparente duplicidade e segunda atribuição da mesma origem.
 20. **Estorno:** devolver despesa atribuída ao estado pendente com justificativa e evento permanente. O lançamento financeiro do frete é removido; o do ciclo é cancelado mantendo histórico. O custo não deve permanecer contabilizado no destino após o estorno. Despesas atribuídas não podem ser excluídas por atalhos das telas de frete/ciclo. Enquanto houver gasto de veículo atribuído a um frete, alterar o veículo desse frete exige estornar a atribuição antes.
+21. **Conferência da base inteira:** a despesa financeira gerencial é a soma das despesas diretas de fretes com as despesas compartilhadas ativas de ciclos. A receita considerada de fretes com financeiro legado ambíguo deve permanecer excluída, com aviso de resultado parcial/incompleto. Despesas de veículo pendentes são exibidas separadamente e não entram na soma; despesas atribuídas já constam no destino, nunca como uma segunda linha de custo. Se um ciclo possui despesa ativa, mas nenhum frete do tipo Ciclo, manter esse custo na conferência global e avisar sobre a necessidade de revisão. Margem só é calculável quando a receita é positiva e não há ambiguidade financeira na base considerada.
+22. **Exportação coerente:** a opção **Base Completa** da Etapa 10 exporta fretes, despesas, fechamentos e conferência da base inteira, mesmo que a tabela de consultas esteja filtrada. A aba `Conferencia_Financeira` discrimina o tratamento de cada parcela e recebido de fato não é somado à receita negociada.
 
 ## Requisitos de integridade e implantação
 
@@ -90,6 +95,10 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - [ ] Atribuir provisória a custo compartilhado do ciclo; confirmar que o BI filtrado por frete não ganhou custo alocado indevidamente.
 - [ ] Estornar os dois destinos e conferir retorno a pendente, saída do DRE e permanência do histórico em `Atribuicoes_Despesas`.
 - [ ] Verificar bloqueios de veículo divergente, atribuição duplicada e exclusão direta de custo já atribuído.
+- [ ] Conferir os quatro blocos da Conferência Financeira Geral da Etapa 9 (fretes, compartilhadas, pendentes e já atribuídas) e a identidade receita − custos contabilizados = resultado parcial.
+- [ ] Gerar Excel e confirmar correspondência com `Conferencia_Financeira`, inclusive com zero fretes e com despesas compartilhadas sem fretes do tipo Ciclo.
+- [ ] Filtrar um cliente na Etapa 10, exportar **Base Completa** e confirmar que a planilha não mistura a lista filtrada com despesas de toda a base.
+- [ ] Conferir margem “Não calculável” para receita zero ou legado ambíguo, inclusive nos gráficos e PDF do BI.
 - [ ] Tentar trocar o veículo de um frete que recebeu uma despesa provisória; confirmar bloqueio até que a atribuição seja estornada.
 - [ ] Simular dois fretes legados com um único financeiro de ciclo; conferir aviso e receita não duplicada.
 - [ ] Registrar adiantamento recebido real, saldo recebido e um pagamento parcial adicional; conferir valores por frete/ciclo.

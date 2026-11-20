@@ -96,3 +96,77 @@ def consolidar_ciclos(fretes, despesas_ciclo=None):
         })
 
     return sorted(fechamentos, key=lambda f: (str(f["ciclo"]).casefold(), str(f["id_ciclo"])))
+
+
+def reconciliar_resultado_gerencial(fretes, despesas_ciclo=None, despesas_veiculo=None):
+    """Reconcilia a base inteira sem ratear custos nem repetir fontes financeiras.
+
+    A receita dos fretes com financeiro legado ambíguo já vem excluída no campo
+    receita_base. Os lançamentos em abastecimentos não participam da soma; uma
+    despesa de veículo atribuída já foi projetada em viagens_despesas ou
+    ciclos_despesas e não é somada novamente pela origem.
+    """
+    fretes_unicos = {
+        f.get("id_viagem") if f.get("id_viagem") is not None else f"sem_id:{i}": f
+        for i, f in enumerate(fretes or [])
+    }
+    ciclos_unicos = {
+        d.get("id_despesa_ciclo") if d.get("id_despesa_ciclo") is not None else f"sem_id:{i}": d
+        for i, d in enumerate(despesas_ciclo or [])
+    }
+    despesas_veiculo_unicas = {
+        d.get("id_despesa_veiculo") if d.get("id_despesa_veiculo") is not None else f"sem_id:{i}": d
+        for i, d in enumerate(despesas_veiculo or [])
+    }
+    fretes = list(fretes_unicos.values())
+    ciclos_ativos = [d for d in ciclos_unicos.values() if not d.get("cancelado")]
+    veiculos_ativos = [d for d in despesas_veiculo_unicas.values() if not d.get("cancelado")]
+    veiculos_pendentes = [
+        d for d in veiculos_ativos
+        if not d.get("id_despesa_viagem_destino") and not d.get("id_despesa_ciclo_destino")
+    ]
+    veiculos_atribuidos = [
+        d for d in veiculos_ativos
+        if d.get("id_despesa_viagem_destino") or d.get("id_despesa_ciclo_destino")
+    ]
+
+    def valor(obj, chave):
+        return float(obj.get(chave) or 0)
+    receita = round(sum(valor(f, "receita_base") for f in fretes), 2)
+    gastos_fretes = round(sum(valor(f, "total_despesas") for f in fretes), 2)
+    gastos_ciclos = round(sum(valor(d, "valor_total") for d in ciclos_ativos), 2)
+    gastos_totais = round(gastos_fretes + gastos_ciclos, 2)
+    total_recebido = round(sum(valor(f, "total_recebido") for f in fretes), 2)
+    saldos_confiaveis = all(f.get("saldo_a_receber") is not None for f in fretes)
+    saldos = (
+        round(sum(valor(f, "saldo_a_receber") for f in fretes), 2)
+        if saldos_confiaveis else None
+    )
+    ciclos_com_fretes = {
+        f.get("id_ciclo") for f in fretes if f.get("tipo_viagem") == "Ciclo"
+    }
+    qtd_legados_ambiguos = sum(
+        bool(f.get("financeiro_legado_ambiguo")) for f in fretes
+    )
+    return {
+        "qtd_fretes": len(fretes),
+        "receita_negociada_considerada": receita,
+        "despesas_fretes": gastos_fretes,
+        "despesas_compartilhadas": gastos_ciclos,
+        "despesas_financeiras_totais": gastos_totais,
+        "resultado_operacional_parcial": round(receita - gastos_totais, 2),
+        "margem_operacional_pct": round((receita - gastos_totais) / receita * 100, 2)
+        if receita > 0 and not qtd_legados_ambiguos else None,
+        "total_recebido": total_recebido,
+        "saldo_a_receber": saldos,
+        "despesas_veiculo_pendentes": round(
+            sum(valor(d, "valor_total") for d in veiculos_pendentes), 2
+        ),
+        "despesas_veiculo_ja_atribuidas": round(
+            sum(valor(d, "valor_total") for d in veiculos_atribuidos), 2
+        ),
+        "qtd_financeiros_legados_ambiguos": qtd_legados_ambiguos,
+        "qtd_despesas_ciclo_sem_fretes": sum(
+            d.get("id_ciclo") not in ciclos_com_fretes for d in ciclos_ativos
+        ),
+    }

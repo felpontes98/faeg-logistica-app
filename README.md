@@ -14,8 +14,9 @@ Sistema web de apoio ao controle operacional e financeiro da FAEG — Soluções
 - Histórico de Diesel e ARLA por **veículo**, inclusive sem frete selecionado, preenchido pelo próprio lançamento de despesa. A área de histórico é **somente consulta**, com estimativas de distância, km/L e R$/km entre registros consecutivos de Diesel.
 - Despesas financeiras por frete, **despesas compartilhadas por ciclo** e **despesas provisórias por veículo**. É possível atribuir explicitamente um gasto pendente a um frete/ciclo do mesmo veículo e estornar a atribuição com justificativa, preservando o registro original e uma trilha de eventos. Só o destino ativo entra no DRE.
 - Prévia financeira do ciclo na Etapa 8 e relatório de fechamento gerencial por ciclo na Etapa 9: soma receitas negociadas, despesas dos fretes e **uma única vez** os gastos compartilhados do ID Ciclo. O BI filtrável por frete/cliente exclui gastos compartilhados enquanto não existir critério de rateio aprovado.
+- A Etapa 9 também possui **Conferência Financeira Geral**, independente dos filtros do BI: reconcilia receita negociada considerada, despesas por frete, compartilhadas e resultado gerencial. Separa gastos provisórios do veículo que ainda estão fora do resultado e identifica os já atribuídos, sem contá-los uma segunda vez.
 - Registro de recebimentos efetivamente confirmados por frete na Etapa 4, com histórico de cancelamentos, total recebido e saldo em aberto por frete e por ciclo. O Excel inclui `Recebimentos_Fretes`.
-- Exportação Excel com `Fechamento_Ciclos` (despesas dos fretes e compartilhadas em colunas distintas), `Despesas_Ciclo`, `Despesas_Veiculo`, `Atribuicoes_Despesas` e `Abastecimentos_Veiculos` com origem e situação.
+- Exportação Excel com `Fechamento_Ciclos` (despesas dos fretes e compartilhadas em colunas distintas), `Conferencia_Financeira`, `Despesas_Ciclo`, `Despesas_Veiculo`, `Atribuicoes_Despesas` e `Abastecimentos_Veiculos` com origem e situação. Na Etapa 10, o botão **Exportar Base Completa** reúne um conjunto coerente de toda a base, independentemente dos filtros visuais da consulta.
 - Prévia e auditoria da planilha Excel. **A importação com gravação no banco permanece bloqueada.**
 
 ## Tecnologia
@@ -30,7 +31,7 @@ Python, Streamlit, Pandas, SQLAlchemy, PostgreSQL (`psycopg`) e OpenPyXL. O app 
 | [`database/connection.py`](database/connection.py) | Configuração da conexão SQLAlchemy |
 | [`database/models.py`](database/models.py) | Modelos, criação de tabelas e atualização de colunas |
 | [`database/controle_abastecimentos.py`](database/controle_abastecimentos.py) | Indicadores de consumo a partir do histórico por veículo |
-| [`database/fechamento_ciclos.py`](database/fechamento_ciclos.py) | Consolidação gerencial de fretes por ID de ciclo, sem duplicação de despesas |
+| [`database/fechamento_ciclos.py`](database/fechamento_ciclos.py) | Consolidação gerencial por ID de ciclo e conferência financeira da base inteira, sem duplicação de despesas |
 | [`database/atribuicao_despesas.py`](database/atribuicao_despesas.py) | Atribuição e estorno auditáveis de despesas provisórias do veículo para frete/ciclo |
 | [`database/importador_planilha.py`](database/importador_planilha.py) | Prévia controlada da importação Excel |
 | [`database/conciliacao_planilha.py`](database/conciliacao_planilha.py) | Auditoria de fretes e fechamentos na planilha |

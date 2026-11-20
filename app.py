@@ -13,7 +13,7 @@ from sqlalchemy import func
 from database.connection import SessionLocal
 from database.atribuicao_despesas import atribuir_despesa_veiculo, estornar_atribuicao_veiculo
 from database.controle_abastecimentos import calcular_indicadores_abastecimentos
-from database.fechamento_ciclos import consolidar_ciclos
+from database.fechamento_ciclos import consolidar_ciclos, reconciliar_resultado_gerencial
 from database.importador_planilha import preparar_previa_importacao_faeg
 from database.models import (
     Abastecimento,
@@ -1498,6 +1498,11 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
                 "CIOT": v["ciot"],
                 "Valor Divulgado (R$)": v["valor_divulgado"],
                 "Valor Negociado (R$)": v["valor_negociado"],
+                "Receita Considerada (R$)": v["receita_base"],
+                "Conferência Financeira": (
+                    "Legado ambíguo — conferir" if v["financeiro_legado_ambiguo"]
+                    else "Por frete"
+                ),
                 "Adiantamento (R$)": v["valor_adiantamento"],
                 "Saldo (R$)": v["valor_saldo"],
                 "Parcelas Previstas (R$)": v["total_previsto"],
@@ -1506,7 +1511,10 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
                 "Excedente Recebido (R$)": v["excedente_recebido"],
                 "Despesas Totais (R$)": v["total_despesas"],
                 "Resultado Operacional Parcial (R$)": v["resultado_liquido"],
-                "Margem (%)": round(v["margem_pct"], 2),
+                "Margem (%)": (
+                    round(v["margem_pct"], 2)
+                    if v["receita_base"] > 0 and not v["financeiro_legado_ambiguo"] else None
+                ),
                 "KM Rodado": v["km_rodado"],
                 "Custo por KM (R$)": round(v["custo_km"], 2) if v["custo_km"] is not None else None,
             }
@@ -1675,6 +1683,70 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         "ID Evento", "ID Despesa Veículo", "Ação", "Tipo Destino",
         "ID Frete/Ciclo Interno", "ID Lançamento Destino", "Data/Hora", "Justificativa",
     ])
+    conciliacao = reconciliar_resultado_gerencial(todas_viagens, despesas_ciclo, despesas_veiculo)
+    df_conciliacao = pd.DataFrame([
+        {
+            "Indicador": "Receita negociada considerada dos fretes",
+            "Valor (R$)": conciliacao["receita_negociada_considerada"],
+            "Tratamento": "Receita (financeiro legado ambíguo excluído)",
+        },
+        {
+            "Indicador": "Despesas financeiras dos fretes",
+            "Valor (R$)": conciliacao["despesas_fretes"],
+            "Tratamento": "Subtrair uma vez (origem viagens_despesas)",
+        },
+        {
+            "Indicador": "Despesas compartilhadas ativas dos ciclos",
+            "Valor (R$)": conciliacao["despesas_compartilhadas"],
+            "Tratamento": "Subtrair uma vez (origem ciclos_despesas), sem rateio",
+        },
+        {
+            "Indicador": "Total de despesas contabilizadas",
+            "Valor (R$)": conciliacao["despesas_financeiras_totais"],
+            "Tratamento": "Fretes + compartilhadas; sem abastecimento duplicado",
+        },
+        {
+            "Indicador": "Resultado operacional parcial gerencial",
+            "Valor (R$)": conciliacao["resultado_operacional_parcial"],
+            "Tratamento": "Receita considerada - despesas contabilizadas",
+        },
+        {
+            "Indicador": "Despesas de veículo ainda pendentes",
+            "Valor (R$)": conciliacao["despesas_veiculo_pendentes"],
+            "Tratamento": "NÃO somar ao resultado enquanto não atribuídas",
+        },
+        {
+            "Indicador": "Despesas de veículo já atribuídas (informativo)",
+            "Valor (R$)": conciliacao["despesas_veiculo_ja_atribuidas"],
+            "Tratamento": "JÁ incluídas no frete/ciclo — NÃO somar novamente",
+        },
+        {
+            "Indicador": "Recebido efetivamente dos fretes",
+            "Valor (R$)": conciliacao["total_recebido"],
+            "Tratamento": "Fluxo recebido; não é receita negociada adicional",
+        },
+        {
+            "Indicador": "Saldo a receber dos fretes",
+            "Valor (R$)": conciliacao["saldo_a_receber"],
+            "Tratamento": "Incalculável se houver financeiro legado ambíguo",
+        },
+        {
+            "Indicador": "Conferência: fretes com financeiro legado ambíguo",
+            "Valor (R$)": None,
+            "Tratamento": (
+                f"{conciliacao['qtd_financeiros_legados_ambiguos']} frete(s) — "
+                "receita excluída até individualização; resultado parcial"
+            ),
+        },
+        {
+            "Indicador": "Conferência: despesas de ciclo sem frete do tipo Ciclo",
+            "Valor (R$)": None,
+            "Tratamento": (
+                f"{conciliacao['qtd_despesas_ciclo_sem_fretes']} despesa(s) — "
+                "incluídas no total gerencial, mas ausentes dos fechamentos por ciclo"
+            ),
+        },
+    ], columns=["Indicador", "Valor (R$)", "Tratamento"])
 
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         df_viagens.to_excel(writer, sheet_name="Viagens_e_Ciclos", index=False)
@@ -1686,6 +1758,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         df_forn.to_excel(writer, sheet_name="Cad_Fornecedores", index=False)
         df_abast.to_excel(writer, sheet_name="Abastecimentos_Veiculos", index=False)
         df_ciclos.to_excel(writer, sheet_name="Fechamento_Ciclos", index=False)
+        df_conciliacao.to_excel(writer, sheet_name="Conferencia_Financeira", index=False)
         df_recebimentos.to_excel(writer, sheet_name="Recebimentos_Fretes", index=False)
         df_despesas_ciclo.to_excel(writer, sheet_name="Despesas_Ciclo", index=False)
         df_despesas_veiculo.to_excel(writer, sheet_name="Despesas_Veiculo", index=False)
@@ -4376,11 +4449,12 @@ with st.container(border=True):
             atribuicoes_veiculo=carregar_historico_atribuicoes_veiculo(),
         )
 
-        tab_rel_viagem, tab_rel_geral, tab_rel_ciclos = st.tabs(
+        tab_rel_viagem, tab_rel_geral, tab_rel_ciclos, tab_rel_conferencia = st.tabs(
             [
                 "📄 Relatório da Viagem Ativa",
                 "📊 Painel Geral (BI Consolidado)",
                 "📚 Fechamento por Ciclo",
+                "🧾 Conferência Financeira Geral",
             ]
         )
 
@@ -4412,14 +4486,14 @@ with st.container(border=True):
                 else None
             )
             custo_km_r = (custos_r / km_r) if km_r else None
-            margem_r = ((resultado_r / receita_r) * 100.0) if receita_r > 0 else 0.0
+            margem_r = ((resultado_r / receita_r) * 100.0) if receita_r > 0 else None
 
             k1, k2, k3, k4, k5 = st.columns(5)
             k1.metric("Receita Negociada", fmt_brl(receita_r))
             k2.metric("Custos Totais", fmt_brl(custos_r))
             k3.metric("Resultado Operacional Parcial", fmt_brl(resultado_r))
             k4.metric("Custo por KM", fmt_brl(custo_km_r) if custo_km_r is not None else "Não informado")
-            k5.metric("Margem Operacional", f"{margem_r:.1f}%")
+            k5.metric("Margem Operacional", f"{margem_r:.1f}%" if margem_r is not None else "Não calculável")
             k6, k7, k8 = st.columns(3)
             k6.metric("Recebido de Fato", fmt_brl(receb_real_r))
             k7.metric("Saldo a Receber", fmt_brl(saldo_real_r))
@@ -4444,7 +4518,7 @@ with st.container(border=True):
                 "despesa_fmt": fmt_brl(custos_r),
                 "resultado_fmt": fmt_brl(resultado_r),
                 "custo_km_fmt": fmt_brl(custo_km_r) if custo_km_r is not None else "Não informado",
-                "margem_fmt": f"{margem_r:.1f}%",
+                "margem_fmt": f"{margem_r:.1f}%" if margem_r is not None else "Não calculável",
                 "parcelas_previstas_fmt": fmt_brl(v_rec_r),
                 "recebido_real_fmt": fmt_brl(receb_real_r),
                 "saldo_receber_fmt": fmt_brl(saldo_real_r),
@@ -4543,7 +4617,11 @@ with st.container(border=True):
                 recebimentos_global = round(sum(v["total_recebido"] for v in vg_bi_filtradas), 2)
                 saldo_global_confiavel = all(v["saldo_a_receber"] is not None for v in vg_bi_filtradas)
                 saldo_global = round(sum(v["saldo_a_receber"] or 0 for v in vg_bi_filtradas), 2)
-                margem_global = ((res_global / rec_global) * 100.0) if rec_global > 0 else 0.0
+                margem_global = (
+                    (res_global / rec_global) * 100.0
+                    if rec_global > 0 and not any(v["financeiro_legado_ambiguo"] for v in vg_bi_filtradas)
+                    else None
+                )
                 km_global = sum(v["km_rodado"] or 0 for v in vg_bi_filtradas)
                 quantos_com_odometro = sum(v["km_rodado"] is not None for v in vg_bi_filtradas)
                 km_completo = quantos_com_odometro == len(vg_bi_filtradas) and bool(vg_bi_filtradas)
@@ -4561,7 +4639,7 @@ with st.container(border=True):
 
                 bg4, bg5, bg6 = st.columns(3)
                 bg4.metric("Resultado Operacional Parcial", fmt_brl(res_global))
-                bg5.metric("Margem Operacional", f"{margem_global:.1f}%")
+                bg5.metric("Margem Operacional", f"{margem_global:.1f}%" if margem_global is not None else "Não calculável")
                 bg6.metric(
                     "KM Registrado / Custo Médio KM",
                     f"{km_global_fmt} / {fmt_brl(custo_km_global) if custo_km_global is not None else 'Não informado'}",
@@ -4595,7 +4673,14 @@ with st.container(border=True):
                         .sort_values("resultado", ascending=False)
                     )
                     for _, row_c in grp_cli.iterrows():
-                        mg_c = ((row_c["resultado"] / row_c["receita"]) * 100.0) if row_c["receita"] > 0 else 0.0
+                        cliente_legado_ambiguo = any(
+                            v["financeiro_legado_ambiguo"] and v["cliente"] == row_c["cliente"]
+                            for v in vg_bi_filtradas
+                        )
+                        mg_c = (
+                            (row_c["resultado"] / row_c["receita"]) * 100.0
+                            if row_c["receita"] > 0 and not cliente_legado_ambiguo else None
+                        )
                         ranking_cli_lista.append(
                             {
                                 "cliente": row_c["cliente"],
@@ -4609,7 +4694,7 @@ with st.container(border=True):
                                 "recebido_fmt": fmt_brl(row_c["recebido"]),
                                 "despesa_fmt": fmt_brl(row_c["despesas"]),
                                 "resultado_fmt": fmt_brl(row_c["resultado"]),
-                                "margem_fmt": f"{mg_c:.1f}%",
+                                "margem_fmt": f"{mg_c:.1f}%" if mg_c is not None else "Não calculável",
                             }
                         )
 
@@ -4684,7 +4769,7 @@ with st.container(border=True):
                     "resultado_fmt": fmt_brl(res_global),
                     "recebido_fmt": fmt_brl(recebimentos_global),
                     "saldo_fmt": fmt_brl(saldo_global) if saldo_global_confiavel else "Conferir legado",
-                    "margem_fmt": f"{margem_global:.1f}%",
+                    "margem_fmt": f"{margem_global:.1f}%" if margem_global is not None else "Não calculável",
                 }
                 pdf_bi_bytes = gerar_pdf_relatorio_consolidado(
                     resumo_pdf_bi, ranking_cli_lista, desp_cat_lista
@@ -4788,6 +4873,63 @@ with st.container(border=True):
                         "a conferência e a individualização ainda são necessárias."
                     )
                 st.caption("O Excel da Etapa 9 inclui Fechamento_Ciclos (com os dois componentes de despesa) e Despesas_Ciclo (lançamentos ativos e cancelados).")
+
+        # ----------------------------------------------------------------------
+        # SUB-ABA 4: CONFERÊNCIA FINANCEIRA DA BASE INTEIRA (SEM FILTROS DO BI)
+        # ----------------------------------------------------------------------
+        with tab_rel_conferencia:
+            geral = reconciliar_resultado_gerencial(
+                todas_vg_exp, carregar_todas_despesas_ciclo(), carregar_todas_despesas_veiculo(),
+            )
+            st.info(
+                "Conferência de TODA a base salva, independente dos filtros do Painel Geral. "
+                "O resultado inclui custos diretos dos fretes e compartilhados dos ciclos "
+                "uma única vez. Não soma novamente abastecimentos ou despesas de veículo atribuídas."
+            )
+            cf1, cf2, cf3, cf4 = st.columns(4)
+            cf1.metric("RECEITA NEGOCIADA CONSIDERADA", fmt_brl(geral["receita_negociada_considerada"]))
+            cf2.metric("DESPESAS DOS FRETES", fmt_brl(geral["despesas_fretes"]))
+            cf3.metric("DESPESAS COMPARTILHADAS", fmt_brl(geral["despesas_compartilhadas"]))
+            cf4.metric("DESPESAS TOTAIS CONTABILIZADAS", fmt_brl(geral["despesas_financeiras_totais"]))
+            cf5, cf6, cf7, cf8 = st.columns(4)
+            cf5.metric("RESULTADO OPERACIONAL PARCIAL", fmt_brl(geral["resultado_operacional_parcial"]))
+            cf6.metric(
+                "MARGEM OPERACIONAL",
+                f"{geral['margem_operacional_pct']:.1f}%"
+                if geral["margem_operacional_pct"] is not None else "Não calculável",
+            )
+            cf7.metric("RECEBIDO DE FATO", fmt_brl(geral["total_recebido"]))
+            cf8.metric(
+                "SALDO A RECEBER",
+                fmt_brl(geral["saldo_a_receber"])
+                if geral["saldo_a_receber"] is not None else "Conferir financeiro legado",
+            )
+            st.markdown("**Despesas vinculadas ao veículo — controle separado**")
+            p1, p2 = st.columns(2)
+            p1.metric("PENDENTES — FORA DO RESULTADO", fmt_brl(geral["despesas_veiculo_pendentes"]))
+            p2.metric("JÁ ATRIBUÍDAS — NÃO SOMAR DE NOVO", fmt_brl(geral["despesas_veiculo_ja_atribuidas"]))
+            st.caption(
+                "Os gastos pendentes ainda não pertencem a frete/ciclo. Os já atribuídos "
+                "estão incluídos nas despesas financeiras de seus destinos, não são uma terceira despesa."
+            )
+            if geral["qtd_financeiros_legados_ambiguos"]:
+                st.warning(
+                    f"{geral['qtd_financeiros_legados_ambiguos']} frete(s) com financeiro legado "
+                    "ambíguo: a receita desses registros não foi considerada; portanto o "
+                    "resultado gerencial é incompleto até a individualização."
+                )
+            if geral["qtd_despesas_ciclo_sem_fretes"]:
+                st.warning(
+                    f"{geral['qtd_despesas_ciclo_sem_fretes']} despesa(s) compartilhada(s) ativa(s) "
+                    "pertencem a ciclos sem fretes do tipo Ciclo. Estão incluídas na conferência "
+                    "geral, mas exigem verificação do vínculo antes do fechamento."
+                )
+            st.caption(
+                "Recebido de fato é fluxo de caixa, não outra receita a somar ao negociado. "
+                "A planilha completa reproduz esta ponte na aba Conferencia_Financeira. "
+                "A conferência separa fontes financeiras; lançamentos manuais iguais em "
+                "destinos diferentes ainda exigem verificação humana."
+            )
 
         render_navegacao_rodape(8, MENU_ITENS)
 
@@ -4942,7 +5084,7 @@ with st.container(border=True):
             with ac3:
                 st.markdown('<div style="padding-top:1.35rem;"></div>', unsafe_allow_html=True)
                 xlsx_cons = gerar_excel_base_completa(
-                    filtradas, desp_detalhadas, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db,
+                    todas_viagens, desp_detalhadas, motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db,
                     abastecimentos=carregar_todos_abastecimentos(),
                     fechamentos_ciclos=consolidar_ciclos(todas_viagens, carregar_todas_despesas_ciclo()),
                     recebimentos=carregar_todos_recebimentos(),
@@ -4951,12 +5093,17 @@ with st.container(border=True):
                     atribuicoes_veiculo=carregar_historico_atribuicoes_veiculo(),
                 )
                 st.download_button(
-                    "📥 Exportar Excel (.xlsx)",
+                    "📥 Exportar Base Completa (.xlsx)",
                     data=xlsx_cons,
-                    file_name="Consulta_Viagens_FAEG.xlsx",
+                    file_name="Base_Completa_FAEG.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True,
                 )
+            st.caption(
+                "Os filtros acima alteram apenas a consulta na tela. "
+                "A exportação é da base completa, com fretes, despesas e fechamentos "
+                "do mesmo conjunto de registros, inclusive a aba Conferencia_Financeira."
+            )
 
         render_navegacao_rodape(9, MENU_ITENS)
 
