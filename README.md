@@ -2,7 +2,7 @@
 
 Sistema web de apoio ao controle operacional e financeiro da FAEG — Soluções Empresariais e Logísticas, desenvolvido a partir de planilha de viagens no contexto do Startup Challenge UMC 2026.
 
-**Status:** ajustes de código em preparação; **testes integrados e homologação do banco ainda não realizados**. Não considerar este repositório homologado para dados de produção.
+**Status:** ajustes de código em preparação; **verificações iniciais de segurança e estrutura do banco realizadas, com testes funcionais integrados e homologação ainda pendentes**. Não considerar este repositório homologado para dados de produção.
 
 ## O que o sistema contempla
 
@@ -43,8 +43,6 @@ Python, Streamlit, Pandas, SQLAlchemy, PostgreSQL (`psycopg`) e OpenPyXL. O app 
 | [`assets/`](assets/) | Identidade visual |
 | [`docs/`](docs/) | Documentação do produto e do banco |
 
-Não existe pasta `views/` neste pacote. Guias locais de VSCode ou planos pessoais de melhoria não integram o repositório.
-
 ## Preparação local — quando iniciar a rodada de testes
 
 1. Abra a pasta oficial do repositório no VSCode.
@@ -57,14 +55,25 @@ Não existe pasta `views/` neste pacote. Guias locais de VSCode ou planos pessoa
 
 ## Documentação
 
+### Documentação técnica
+
 - [Resumo do projeto](docs/resumo_faeg.md)
 - [Requisitos e checklist de homologação](docs/requisitos.md)
 - [Regras de negócio e fórmulas de KM](docs/regras_negocio.md)
 - [Arquitetura e integridade do banco](docs/arquitetura_banco.md)
-- [Kickoff do projeto](docs/kickoff.md)
+
+### Histórico de reuniões
+
+- [Reunião 01 — Kickoff do projeto](docs/reunioes/reuniao_01_kickoff.md)
+- [Reunião 02 — Apresentação do protótipo visual](docs/reunioes/reuniao_02_prototipo_visual.md)
+- [Reunião 03 — Acompanhamento das funcionalidades do MVP](docs/reunioes/reuniao_03_demonstracao_mvp.md)
+
+### Protótipo inicial
+
+- [Protótipo visual em HTML](docs/prototipo/prototipo_inicial.html)
 
 ## Equipe
 
 - Felipe Pontes — desenvolvimento
 - Larissa do Espírito Santo — desenvolvimento
-- Eduardo Pontes — referência operacional e validação de regras de negócio
+- Eduardo Pontes — cliente, referência operacional e validação de regras de negócio

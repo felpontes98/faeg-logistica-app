@@ -90,7 +90,7 @@ O campo `viagens_despesas.odometro_abastecimento` não é excluído. Em novos la
 
 ## RN-06 — Despesas e abastecimento
 
-- Cada despesa deve ter categoria, descrição, data, valor e associação clara a um **frete individual** ou a **um ciclo**.
+- Cada despesa deve ter categoria, descrição, data, valor e associação clara a **um frete**, **um ciclo** ou, provisoriamente, **um veículo**.
 - Despesa de uso comum no ciclo entra **uma vez** no fechamento consolidado, sem cópia integral em cada frete.
 - A Etapa 7 possui **um formulário único** para despesas, com campos agrupados em **Vínculo financeiro** e **Dados da despesa**: padrão **Frete atual**, opção **Ciclo inteiro** (`ciclos_despesas`, apenas ciclo salvo), opção **Veículo sem frete/ciclo** (`veiculos_despesas`, pendente). Despesas provisórias não entram em DRE/BI enquanto pendentes. A **atribuição posterior** a frete/ciclo é uma ação explícita, com justificativa, exclusiva para destinos do mesmo veículo; o custo passa ao destino, nunca é duplicado. Cancelamentos de gastos comuns/provisórios preservam histórico e motivo. A proteção de lançamentos semelhantes não elimina a necessidade de conferência humana.
 - Caso seja necessário mostrar custo individual de cada frete do ciclo, estabelecer antes um critério de rateio acordado (por exemplo, participação na receita ou quilômetros), identificando o valor rateado como estimativa gerencial. **O rateio ainda não foi definido.**

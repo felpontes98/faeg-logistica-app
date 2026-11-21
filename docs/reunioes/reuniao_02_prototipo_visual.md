@@ -39,4 +39,23 @@ Em continuidade ao kickoff de 30/10/2026, esta etapa documental registra a apres
 * **Nova demonstração:** Apresentar uma versão mais completa do sistema, incluindo consultas, cadastros e o fluxo operacional e financeiro.
 * **Preparação de testes:** Definir cenários para conferir o preenchimento, a recuperação dos dados e a consistência dos resultados.
 
+## 5. Registro do Protótipo Visual
+
+Para demonstrar a proposta inicial do Sistema FAEG, foi
+desenvolvido um protótipo utilizando HTML, CSS e JavaScript.
+
+O protótipo apresenta a organização das nove etapas previstas,
+permitindo visualizar o fluxo operacional, os formulários,
+o fechamento financeiro e a área de relatórios.
+
+Essa primeira versão teve como finalidade apresentar a estrutura
+visual e orientar o desenvolvimento da aplicação definitiva.
+
+Posteriormente, o projeto evoluiu para uma aplicação web
+desenvolvida em Python e Streamlit, com integração ao banco
+de dados PostgreSQL.
+
+**Arquivo de referência:**
+[Protótipo Visual Inicial](../prototipo/prototipo_inicial.html)
+
 ---

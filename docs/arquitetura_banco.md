@@ -1,12 +1,12 @@
 # Arquitetura do Banco de Dados — FAEG
 
-**Fonte:** revisão do código preparada em novembro de 2026, incluindo a separação financeira por frete. **Esta estrutura ainda não foi validada nem aplicada ao PostgreSQL em uso.**
+**Fonte:** revisão do código preparada em novembro de 2026, incluindo a separação financeira por frete. **Situação:** o aplicativo já sincronizou estruturas no Neon conectado. Uma conferência inicial somente leitura identificou quinze tabelas públicas e relacionamentos; isso não substitui a homologação funcional nem a verificação integral das restrições e permissões.
 
 ## 1. Arquitetura atual
 
 O Streamlit (`app.py`) acessa o PostgreSQL por sessões SQLAlchemy criadas em `database/connection.py`. Os modelos são definidos em `database/models.py`; o importador lê arquivos Excel por `database/importador_planilha.py`.
 
-### Tabelas no mapeamento ORM proposto (15 no total)
+### Tabelas mapeadas no ORM (15 no total)
 
 | Tabela | Chave primária | Finalidade e vínculo principal |
 | --- | --- | --- |

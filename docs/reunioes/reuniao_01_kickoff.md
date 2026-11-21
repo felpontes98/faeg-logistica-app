@@ -3,7 +3,7 @@
 **Data / Versão:** 30/10/2026 - v1.0
 **Autores / Responsáveis:** Felipe Pontes, Eduardo Pontes e Larissa do Espírito Santo
 
-> **Documento histórico:** este registro preserva os objetivos e o estágio da reunião inicial. Para a situação atual do código e as correções identificadas, consultar o [Resumo do projeto](resumo_faeg.md) e os [Requisitos](requisitos.md).
+> **Documento histórico:** este registro preserva os objetivos e o estágio da reunião inicial. Para a situação atual do código e as correções identificadas, consultar o [Resumo do projeto](../resumo_faeg.md) e os [Requisitos](../requisitos.md).
 
 ---
 
@@ -39,12 +39,12 @@ A primeira versão entregável (MVP) focará nas seguintes entregas estruturais:
     * Apresentação do protótipo visual de alta fidelidade (layout das telas, sem integração backend) para validação de usabilidade com o cliente.
     * Definição e apresentação do cronograma de testes para a versão funcional do MVP.
 
----
-
 ## 5. Registro de evolução documental — novembro/2026
 
 Após o kickoff, o código-fonte passou a contemplar uma aplicação Streamlit com onze etapas de navegação, nove modelos de banco, formulários operacionais, consultas, exportação de dados e relatórios. A implementação não foi homologada nesta revisão documental.
 
 O diagnóstico estático identificou pendências que precisam ser tratadas antes de considerar concluída a migração da planilha para o sistema: integração de importação, agrupamento de vários fretes em um ciclo, fechamento consolidado, separação entre parcelas previstas e recebimentos, segurança e testes.
 
-Os próximos passos técnicos e os critérios de aceite devem ser acompanhados em [Requisitos](requisitos.md) e [Arquitetura do banco](arquitetura_banco.md), sem alterar retrospectivamente o escopo registrado no kickoff original. A equipe poderá utilizar as Issues do GitHub para acompanhar a execução das correções.
+Os próximos passos técnicos e os critérios de aceite devem ser acompanhados em [Requisitos](../requisitos.md) e [Arquitetura do banco](../arquitetura_banco.md), sem alterar retrospectivamente o escopo registrado no kickoff original. A equipe poderá utilizar as Issues do GitHub para acompanhar a execução das correções.
+
+---

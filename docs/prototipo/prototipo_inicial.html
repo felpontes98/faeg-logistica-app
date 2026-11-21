@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAEG - Controle Operacional de Viagens</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Bibliotecas para Dashboard e Exportação -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        .tab-content { display: none; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .sidebar-item.active { background-color: #eff6ff; border-right: 4px solid #2563eb; color: #1d4ed8; font-weight: bold; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen overflow-hidden flex font-sans text-gray-800">
+
+    <!-- Sidebar / Menu Lateral -->
+    <aside class="w-64 bg-white shadow-lg z-10 flex flex-col h-full">
+        <div class="p-6 border-b border-gray-200">
+            <h1 class="text-2xl font-black text-blue-700 tracking-tight">FAEG LOG</h1>
+            <p class="text-xs text-gray-500 mt-1 uppercase font-semibold">Controle Operacional</p>
+        </div>
+        
+        <nav class="flex-1 overflow-y-auto py-4">
+            <ul class="space-y-1">
+                <li><button onclick="openTab('tab-1', this)" class="sidebar-item active w-full text-left px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors"><i class="fa-solid fa-truck mr-2 w-5"></i> 1. Frota FAEG</button></li>
+                <li><button onclick="openTab('tab-2', this)" class="sidebar-item w-full text-left px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors"><i class="fa-solid fa-file-invoice mr-2 w-5"></i> 2. Frete e Docs</button></li>
+                <li><button onclick="openTab('tab-3', this)" class="sidebar-item w-full text-left px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors"><i class="fa-solid fa-building mr-2 w-5"></i> 3. Cliente</button></li>
+                <li><button onclick="openTab('tab-4', this)" class="sidebar-item w-full text-left px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors"><i class="fa-solid fa-handshake mr-2 w-5"></i> 4. Negociação / Pgto</button></li>
+                <li><button onclick="openTab('tab-5', this)" class="sidebar-item w-full text-left px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors"><i class="fa-solid fa-location-arrow mr-2 w-5"></i> 5. Coleta (Origem)</button></li>
+                <li><button onclick="openTab('tab-6', this)" class="sidebar-item w-full text-left px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors"><i class="fa-solid fa-map-pin mr-2 w-5"></i> 6. Entrega (Destino)</button></li>
+                <li><button onclick="openTab('tab-7', this)" class="sidebar-item w-full text-left px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors"><i class="fa-solid fa-receipt mr-2 w-5"></i> 7. Despesas de Viagem</button></li>
+                <li><button onclick="openTab('tab-8', this)" class="sidebar-item w-full text-left px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors"><i class="fa-solid fa-flag-checkered mr-2 w-5"></i> 8. Fechamento Final</button></li>
+                <li><button onclick="openTab('tab-9', this)" class="sidebar-item w-full text-left px-6 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors"><i class="fa-solid fa-chart-pie mr-2 w-5"></i> 9. Relatórios / Exportar</button></li>
+            </ul>
+        </nav>
+        
+        <div class="p-4 border-t border-gray-200">
+            <button class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded shadow transition-colors text-sm" onclick="alert('Rascunho salvo com sucesso!')">
+                <i class="fa-solid fa-save mr-2"></i> Salvar Viagem
+            </button>
+        </div>
+    </aside>
+
+    <!-- Área de Conteúdo Principal -->
+    <main class="flex-1 overflow-y-auto bg-gray-50 p-6 md:p-10" id="area-exportacao">
+        <div class="max-w-6xl mx-auto bg-white rounded-xl shadow-sm border border-gray-100 p-8 min-h-full">
+            
+            <form id="viagem-form" onsubmit="event.preventDefault();">
+                
+                <!-- TAB 1: FAEG -->
+                <div id="tab-1" class="tab-content active">
+                    <h2 class="text-2xl font-bold text-gray-800 border-b pb-3 mb-6"><i class="fa-solid fa-truck text-blue-600 mr-2"></i> Informações FAEG</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">ID (Automático)</label><input type="text" value="FAEG-202611-001" disabled class="w-full p-2.5 border rounded bg-gray-100 text-gray-600"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Carro (Frota)</label><input type="text" placeholder="Ex: Caminhão 05" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-500"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Placa</label><input type="text" placeholder="Ex: ABC-1234" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-500 uppercase"></div>
+                        <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Motorista</label><input type="text" placeholder="Nome completo do condutor" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-500"></div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: FRETE -->
+                <div id="tab-2" class="tab-content">
+                    <h2 class="text-2xl font-bold text-gray-800 border-b pb-3 mb-6"><i class="fa-solid fa-file-invoice text-blue-600 mr-2"></i> Frete, Carga e Documentos</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">ID Frete</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Data</label><input type="date" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Ciclo</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo</label>
+                            <select class="w-full p-2.5 border rounded bg-white"><option>Individual</option><option>Dedicado</option></select>
+                        </div>
+                        
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Rota (Resumo)</label><input type="text" placeholder="Ex: SP -> RJ" class="w-full p-2.5 border rounded"></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">KM x Rota</label><input type="number" class="w-full p-2.5 border rounded"></div>
+                        
+                        <!-- Carga -->
+                        <div class="col-span-4 mt-4 border-t pt-4"><h3 class="text-sm font-bold text-gray-700 uppercase">Detalhes da Carga</h3></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo de Material</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">QT de Volumes</label><input type="number" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Volume (m³)</label><input type="number" step="0.01" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Peso Bruto (KG)</label><input type="number" step="0.01" class="w-full p-2.5 border rounded"></div>
+                        
+                        <!-- Documentos Fiscais -->
+                        <div class="col-span-4 mt-4 border-t pt-4"><h3 class="text-sm font-bold text-gray-700 uppercase">Documentos Fiscais</h3></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">NF-e / Carga</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">CT-e (Conhecimento Transporte)</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">MDF-e (Manifesto)</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">CIOT</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: CLIENTE -->
+                <div id="tab-3" class="tab-content">
+                    <h2 class="text-2xl font-bold text-gray-800 border-b pb-3 mb-6"><i class="fa-solid fa-building text-blue-600 mr-2"></i> Cliente / Contratante</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Empresa</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Responsável</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Contato (Telefone/Email)</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: FINANCEIRO -->
+                <div id="tab-4" class="tab-content">
+                    <h2 class="text-2xl font-bold text-gray-800 border-b pb-3 mb-6"><i class="fa-solid fa-handshake text-blue-600 mr-2"></i> Negociação e Recebimentos</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Forma de Contratação</label><select class="w-full p-2.5 border rounded bg-white"><option>Tonelada</option><option>Viagem Fechada</option></select></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Divulgado (R$)</label><input type="number" step="0.01" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1 text-blue-600">Valor Negociado (R$)</label><input type="number" step="0.01" id="val-negociado" class="w-full p-2.5 border-2 border-blue-200 rounded bg-blue-50 font-bold" oninput="calcFinanceiro()"></div>
+                        
+                        <div class="col-span-3 mt-4 border-t pt-4"><h3 class="text-sm font-bold text-gray-700 uppercase">Adiantamento</h3></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">% Adiantamento</label><input type="number" step="0.1" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Data Adiantamento</label><input type="date" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Adiantamento (R$)</label><input type="number" step="0.01" id="val-adiantamento" class="w-full p-2.5 border rounded" oninput="calcFinanceiro()"></div>
+                        
+                        <div class="col-span-3 mt-4 border-t pt-4"><h3 class="text-sm font-bold text-gray-700 uppercase">Saldo a Receber</h3></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">% Saldo</label><input type="number" step="0.1" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Data Saldo</label><input type="date" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Saldo (R$)</label><input type="number" step="0.01" id="val-saldo" class="w-full p-2.5 border rounded" oninput="calcFinanceiro()"></div>
+                        
+                        <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Observação referente ao Saldo</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        
+                        <div class="col-span-3 mt-4 border-t pt-4"><h3 class="text-sm font-bold text-gray-700 uppercase">Dados de Pagamento</h3></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Forma de Pagamento</label><select class="w-full p-2.5 border rounded bg-white"><option>Pix</option><option>Fretebras</option><option>Transferência</option></select></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Banco / Conta</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        
+                        <div class="col-span-3 bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex justify-between items-center mt-2">
+                            <span class="text-emerald-800 font-bold uppercase text-sm">Valor Total Recebido (Adiant. + Saldo):</span>
+                            <span id="display-total-recebido" class="text-2xl font-black text-emerald-700">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: COLETA -->
+                <div id="tab-5" class="tab-content">
+                    <h2 class="text-2xl font-bold text-gray-800 border-b pb-3 mb-6"><i class="fa-solid fa-location-arrow text-blue-600 mr-2"></i> Local de Coleta (Origem)</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+                        <div class="md:col-span-4"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Empresa / Local para Coleta</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">CEP</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Endereço (Rua/Av, Número)</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Bairro</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cidade</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">UF</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        
+                        <div class="col-span-4 mt-4 border-t pt-4"><h3 class="text-sm font-bold text-gray-700 uppercase">Contatos e Horários</h3></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Responsável Despacho</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Contato Responsável</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Data Coleta</label><input type="date" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Horário Planejado</label><input type="time" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Horário Real</label><input type="time" class="w-full p-2.5 border rounded"></div>
+                        <div class="md:col-span-4"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Observações da Coleta</label><textarea rows="2" class="w-full p-2.5 border rounded"></textarea></div>
+                    </div>
+                </div>
+
+                <!-- TAB 6: ENTREGA -->
+                <div id="tab-6" class="tab-content">
+                    <h2 class="text-2xl font-bold text-gray-800 border-b pb-3 mb-6"><i class="fa-solid fa-map-pin text-blue-600 mr-2"></i> Local de Entrega (Destino)</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+                        <div class="md:col-span-4"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Empresa / Local para Entrega</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">CEP</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Endereço (Rua/Av, Número)</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Bairro</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cidade</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">UF</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        
+                        <div class="col-span-4 mt-4 border-t pt-4"><h3 class="text-sm font-bold text-gray-700 uppercase">Contatos e Horários</h3></div>
+                        <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Responsável Recebimento</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Contato Responsável</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Documento Exigido</label><input type="text" class="w-full p-2.5 border rounded"></div>
+                        
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Data Entrega</label><input type="date" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Horário Planejado</label><input type="time" class="w-full p-2.5 border rounded"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Horário Real</label><input type="time" class="w-full p-2.5 border rounded"></div>
+                        <div class="md:col-span-4"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Observações da Entrega</label><textarea rows="2" class="w-full p-2.5 border rounded"></textarea></div>
+                    </div>
+                </div>
+
+                <!-- TAB 7: DESPESAS UNIFICADAS -->
+                <div id="tab-7" class="tab-content">
+                    <h2 class="text-2xl font-bold text-gray-800 border-b pb-3 mb-6"><i class="fa-solid fa-receipt text-blue-600 mr-2"></i> Despesas de Viagem</h2>
+                    
+                    <!-- Formulário CRUD -->
+                    <div class="bg-gray-100 p-5 rounded-xl border border-gray-200 mb-6 shadow-sm">
+                        <h3 class="text-sm font-bold text-gray-700 uppercase mb-4" id="form-titulo">Adicionar Nova Despesa</h3>
+                        <input type="hidden" id="edit-index" value="-1">
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo de Despesa</label>
+                                <select id="desp-tipo" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-500 bg-white">
+                                    <option value="Diesel">Abast. Diesel</option>
+                                    <option value="ARLA">Abast. ARLA</option>
+                                    <option value="Pedágio">Pedágio</option>
+                                    <option value="Alimentação">Alimentação</option>
+                                    <option value="Hospedagem">Hospedagem</option>
+                                    <option value="Manutenção">Manutenção</option>
+                                    <option value="Chapa">Chapa / Ajudante</option>
+                                    <option value="Outros">Outros</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Descrição / Local</label>
+                                <input type="text" id="desp-desc" placeholder="Ex: Posto Graal KM 150" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Qtd / Litros</label>
+                                <input type="number" step="0.01" id="desp-qtd" value="1" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-500" oninput="calcTotalDespesaForm()">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Valor Unitário (R$)</label>
+                                <input type="number" step="0.01" id="desp-valor" placeholder="0.00" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-500" oninput="calcTotalDespesaForm()">
+                            </div>
+                        </div>
+                        <div class="mt-5 flex flex-col md:flex-row justify-between items-center bg-white p-3 rounded border">
+                            <div class="text-gray-600 font-bold uppercase text-sm mb-3 md:mb-0">
+                                Valor Total do Item: <span id="desp-total-preview" class="text-2xl text-rose-600 ml-2">R$ 0,00</span>
+                            </div>
+                            <div class="space-x-2 w-full md:w-auto flex">
+                                <button type="button" onclick="limparFormDespesa()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2.5 rounded font-bold transition-colors w-full md:w-auto hidden" id="btn-cancelar-desp">Cancelar</button>
+                                <button type="button" onclick="salvarDespesa()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded font-bold shadow transition-colors w-full md:w-auto" id="btn-salvar-desp">
+                                    <i class="fa-solid fa-plus mr-1"></i> Adicionar à Lista
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de Despesas -->
+                    <div class="overflow-x-auto bg-white rounded-lg border shadow-sm">
+                        <table class="w-full text-left border-collapse" id="tabela-despesas-export">
+                            <thead>
+                                <tr class="bg-gray-800 text-white text-xs uppercase tracking-wider">
+                                    <th class="p-4 rounded-tl-lg">Tipo</th>
+                                    <th class="p-4">Descrição / Local</th>
+                                    <th class="p-4 text-center">Qtd / Litros</th>
+                                    <th class="p-4 text-right">V. Unitário</th>
+                                    <th class="p-4 text-right">V. Total</th>
+                                    <th class="p-4 rounded-tr-lg text-center data-ignore w-24">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-despesas" class="text-sm divide-y divide-gray-100">
+                                <!-- Linhas injetadas via JS -->
+                                <tr><td colspan="6" class="p-6 text-center text-gray-400 italic">Nenhuma despesa lançada ainda.</td></tr>
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-rose-50 font-bold text-rose-800 border-t-2 border-rose-200">
+                                    <td colspan="4" class="p-4 text-right uppercase text-xs tracking-wider">Custo Total da Viagem:</td>
+                                    <td class="p-4 text-right text-xl" id="total-geral-despesas">R$ 0,00</td>
+                                    <td class="data-ignore"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB 8: FECHAMENTO -->
+                <div id="tab-8" class="tab-content">
+                    <h2 class="text-2xl font-bold text-gray-800 border-b pb-3 mb-6"><i class="fa-solid fa-flag-checkered text-blue-600 mr-2"></i> Fechamento Final</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Odômetro Inicial</label><input type="number" id="km-ini" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-500" oninput="calcFechamento()"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Odômetro Final</label><input type="number" id="km-fin" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-500" oninput="calcFechamento()"></div>
+                        <div><label class="block text-xs font-bold text-gray-500 uppercase mb-1 text-blue-600">KM Real Rodado</label><input type="number" id="km-real" disabled class="w-full p-2.5 border rounded bg-blue-50 font-bold text-blue-700"></div>
+                        
+                        <div class="md:col-span-3 mt-2"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Status da Viagem</label>
+                            <select class="w-full p-3 border rounded bg-white font-bold text-gray-700 focus:ring-2 focus:ring-blue-500">
+                                <option>Em Andamento</option>
+                                <option>Concluída</option>
+                                <option>Cancelada</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-3"><label class="block text-xs font-bold text-gray-500 uppercase mb-1">Observação Geral da Viagem</label><textarea rows="4" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-500"></textarea></div>
+                    </div>
+
+                    <!-- Mini DRE de Fechamento -->
+                    <div class="bg-gray-900 rounded-xl p-6 shadow-lg text-white">
+                        <h3 class="text-center font-bold uppercase tracking-wider mb-6 text-gray-400 border-b border-gray-700 pb-2">Resumo Financeiro (DRE)</h3>
+                        
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-gray-300">Receita Total (Frete Negociado)</span>
+                            <span id="dre-receita" class="text-xl font-bold text-emerald-400">R$ 0,00</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-6">
+                            <span class="text-gray-300">Custos Totais (Combustível, Pedágio, etc)</span>
+                            <span id="dre-despesa" class="text-xl font-bold text-rose-400">- R$ 0,00</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center border-t border-gray-700 pt-4">
+                            <span class="text-lg font-bold uppercase">Resultado Líquido da Viagem</span>
+                            <span id="dre-resultado" class="text-4xl font-black">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 9: DASHBOARD E EXPORTAÇÃO -->
+                <div id="tab-9" class="tab-content">
+                    <div class="flex flex-col md:flex-row justify-between items-center border-b pb-4 mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4 md:mb-0"><i class="fa-solid fa-chart-pie text-blue-600 mr-2"></i> Dashboard & Exportação</h2>
+                        <div class="space-x-3 flex">
+                            <button type="button" onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded text-sm font-bold shadow transition-colors flex items-center"><i class="fa-solid fa-file-excel mr-2"></i> Baixar Excel</button>
+                            <button type="button" onclick="exportarPDF()" class="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 rounded text-sm font-bold shadow transition-colors flex items-center"><i class="fa-solid fa-file-pdf mr-2"></i> Gerar PDF</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Gráfico de Distribuição -->
+                        <div class="bg-white border p-6 rounded-xl shadow-sm flex flex-col items-center">
+                            <h3 class="font-bold text-gray-600 mb-4 uppercase text-sm tracking-wider">Distribuição de Gastos</h3>
+                            <div class="w-full max-w-sm">
+                                <canvas id="graficoDespesas"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- Indicadores de Desempenho -->
+                        <div class="bg-white border rounded-xl shadow-sm p-6 flex flex-col justify-center space-y-6">
+                            <h3 class="font-bold text-gray-600 uppercase text-sm tracking-wider text-center border-b pb-2">Indicadores de Desempenho (KPIs)</h3>
+                            
+                            <div class="bg-blue-50 p-4 rounded-lg flex justify-between items-center border border-blue-100">
+                                <span class="text-blue-800 font-semibold text-sm uppercase">Custo Médio por KM</span>
+                                <span id="kpi-custo-km" class="text-2xl font-black text-blue-700">R$ 0,00</span>
+                            </div>
+
+                            <div class="bg-emerald-50 p-4 rounded-lg flex justify-between items-center border border-emerald-100">
+                                <span class="text-emerald-800 font-semibold text-sm uppercase">Margem de Lucro (%)</span>
+                                <span id="kpi-margem" class="text-2xl font-black text-emerald-700">0%</span>
+                            </div>
+                            
+                            <p class="text-xs text-gray-400 text-center mt-4"><i class="fa-solid fa-info-circle mr-1"></i> Preencha o KM Real e o Valor Negociado para calcular os KPIs.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </form>
+        </div>
+    </main>
+
+    <script>
+        // Navegação de Abas
+        function openTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+            
+            // Atualiza o gráfico se for a aba do Dashboard
+            if(tabId === 'tab-9') atualizarDashboard();
+        }
+
+        // Variáveis Globais
+        let despesas = [];
+        let meuGrafico = null;
+        
+        // Funções Auxiliares
+        const getVal = (id) => Number(document.getElementById(id).value) || 0;
+        const formatMoney = (val) => Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        // Cálculos Aba 4: Financeiro
+        function calcFinanceiro() {
+            let adiantamento = getVal('val-adiantamento');
+            let saldo = getVal('val-saldo');
+            let total = adiantamento + saldo;
+            document.getElementById('display-total-recebido').innerText = formatMoney(total);
+            atualizarDRE(); // Sempre que mexer na grana, atualiza o resumo final
+        }
+
+        // Cálculos Aba 8: Fechamento (KM)
+        function calcFechamento() {
+            let kmIni = getVal('km-ini');
+            let kmFin = getVal('km-fin');
+            let kmReal = kmFin > kmIni ? kmFin - kmIni : 0;
+            document.getElementById('km-real').value = kmReal;
+            atualizarDRE();
+        }
+
+        // --- SISTEMA CRUD DE DESPESAS (Aba 7) ---
+        function calcTotalDespesaForm() {
+            let qtd = getVal('desp-qtd');
+            let valor = getVal('desp-valor');
+            document.getElementById('desp-total-preview').innerText = formatMoney(qtd * valor);
+        }
+
+        function salvarDespesa() {
+            let tipo = document.getElementById('desp-tipo').value;
+            let desc = document.getElementById('desp-desc').value;
+            let qtd = getVal('desp-qtd') || 1;
+            let valorUnitario = getVal('desp-valor');
+            let total = qtd * valorUnitario;
+            let index = parseInt(document.getElementById('edit-index').value);
+
+            if (valorUnitario <= 0) return alert("Por favor, preencha o valor unitário da despesa.");
+            if (desc.trim() === '') return alert("Por favor, insira uma descrição ou local.");
+
+            let novaDespesa = { tipo, desc, qtd, valorUnitario, total };
+
+            if (index >= 0) {
+                despesas[index] = novaDespesa; // Atualiza existente
+            } else {
+                despesas.push(novaDespesa); // Cria nova
+            }
+            
+            limparFormDespesa();
+            renderizarTabela();
+        }
+
+        function renderizarTabela() {
+            const tbody = document.getElementById('lista-despesas');
+            tbody.innerHTML = '';
+            let totalGeral = 0;
+
+            if (despesas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-400 italic">Nenhuma despesa lançada ainda.</td></tr>';
+            } else {
+                despesas.forEach((d, i) => {
+                    totalGeral += d.total;
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="p-4 font-semibold text-gray-700">${d.tipo}</td>
+                            <td class="p-4 text-gray-600">${d.desc}</td>
+                            <td class="p-4 text-center text-gray-600">${d.qtd}</td>
+                            <td class="p-4 text-right text-gray-600">${formatMoney(d.valorUnitario)}</td>
+                            <td class="p-4 text-right font-bold text-rose-600">${formatMoney(d.total)}</td>
+                            <td class="p-4 text-center data-ignore">
+                                <button type="button" onclick="editarDespesa(${i})" class="text-blue-500 hover:text-blue-800 mr-3 transition-colors" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                                <button type="button" onclick="removerDespesa(${i})" class="text-red-400 hover:text-red-700 transition-colors" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+
+            document.getElementById('total-geral-despesas').innerText = formatMoney(totalGeral);
+            atualizarDRE(); // Sincroniza as finanças com as despesas
+        }
+
+        function editarDespesa(index) {
+            let d = despesas[index];
+            document.getElementById('desp-tipo').value = d.tipo;
+            document.getElementById('desp-desc').value = d.desc;
+            document.getElementById('desp-qtd').value = d.qtd;
+            document.getElementById('desp-valor').value = d.valorUnitario;
+            document.getElementById('edit-index').value = index;
+            
+            // Estética do modo edição
+            document.getElementById('form-titulo').innerText = "Editar Despesa Selecionada";
+            document.getElementById('form-titulo').classList.replace('text-gray-700', 'text-emerald-600');
+            document.getElementById('btn-salvar-desp').innerHTML = "<i class='fa-solid fa-check mr-1'></i> Atualizar Despesa";
+            document.getElementById('btn-salvar-desp').classList.replace('bg-blue-600', 'bg-emerald-600');
+            document.getElementById('btn-cancelar-desp').classList.remove('hidden');
+            
+            calcTotalDespesaForm();
+            document.getElementById('desp-desc').focus();
+        }
+
+        function removerDespesa(index) {
+            if(confirm("Tem certeza que deseja remover este item?")) {
+                despesas.splice(index, 1);
+                renderizarTabela();
+            }
+        }
+
+        function limparFormDespesa() {
+            document.getElementById('desp-tipo').value = 'Diesel';
+            document.getElementById('desp-desc').value = '';
+            document.getElementById('desp-qtd').value = '1';
+            document.getElementById('desp-valor').value = '';
+            document.getElementById('edit-index').value = '-1';
+            
+            // Restaura estética original
+            document.getElementById('form-titulo').innerText = "Adicionar Nova Despesa";
+            document.getElementById('form-titulo').classList.replace('text-emerald-600', 'text-gray-700');
+            document.getElementById('btn-salvar-desp').innerHTML = "<i class='fa-solid fa-plus mr-1'></i> Adicionar à Lista";
+            document.getElementById('btn-salvar-desp').classList.replace('bg-emerald-600', 'bg-blue-600');
+            document.getElementById('btn-cancelar-desp').classList.add('hidden');
+            
+            calcTotalDespesaForm();
+        }
+
+        // --- ATUALIZAÇÃO DO DRE E KPIs ---
+        function atualizarDRE() {
+            // Receita (Aba 4)
+            let negociado = getVal('val-negociado');
+            let totalRecebido = getVal('val-adiantamento') + getVal('val-saldo');
+            let receitaBase = negociado > 0 ? negociado : totalRecebido; 
+
+            // Despesas (Aba 7)
+            let totalDespesas = despesas.reduce((acc, curr) => acc + curr.total, 0);
+            
+            // Resultado
+            let resultado = receitaBase - totalDespesas;
+
+            // Atualiza DRE na Aba 8
+            document.getElementById('dre-receita').innerText = formatMoney(receitaBase);
+            document.getElementById('dre-despesa').innerText = '- ' + formatMoney(totalDespesas);
+            
+            let resEl = document.getElementById('dre-resultado');
+            resEl.innerText = formatMoney(resultado);
+            
+            if (resultado < 0) {
+                resEl.className = "text-4xl font-black text-rose-500";
+            } else if (resultado > 0) {
+                resEl.className = "text-4xl font-black text-emerald-400";
+            } else {
+                resEl.className = "text-4xl font-black text-white";
+            }
+
+            // Atualiza KPIs na Aba 9
+            let kmReal = getVal('km-real');
+            let custoKM = kmReal > 0 ? (totalDespesas / kmReal) : 0;
+            document.getElementById('kpi-custo-km').innerText = formatMoney(custoKM);
+
+            let margem = receitaBase > 0 ? ((resultado / receitaBase) * 100).toFixed(1) : 0;
+            let margemEl = document.getElementById('kpi-margem');
+            margemEl.innerText = margem + '%';
+            margemEl.className = margem >= 0 ? "text-2xl font-black text-emerald-700" : "text-2xl font-black text-rose-600";
+        }
+
+        // --- DASHBOARD (Chart.js) ---
+        function atualizarDashboard() {
+            let agrupado = {};
+            despesas.forEach(d => {
+                agrupado[d.tipo] = (agrupado[d.tipo] || 0) + d.total;
+            });
+
+            // Se não houver despesas, mostra um gráfico vazio
+            let labels = Object.keys(agrupado).length > 0 ? Object.keys(agrupado) : ['Sem dados'];
+            let data = Object.keys(agrupado).length > 0 ? Object.values(agrupado) : [1];
+            let colors = Object.keys(agrupado).length > 0 ? ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b', '#ec4899', '#14b8a6'] : ['#e2e8f0'];
+
+            const ctx = document.getElementById('graficoDespesas').getContext('2d');
+            if(meuGrafico) meuGrafico.destroy();
+
+            meuGrafico = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors,
+                        borderWidth: 1
+                    }]
+                },
+                options: { 
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { position: 'bottom', labels: { boxWidth: 12 } },
+                        tooltip: { callbacks: { label: function(context) { 
+                            if(labels[0] === 'Sem dados') return 'Nenhuma despesa lançada';
+                            return ' ' + formatMoney(context.raw); 
+                        }}}
+                    } 
+                }
+            });
+        }
+
+        // --- EXPORTAÇÕES (SheetJS e html2pdf) ---
+        function exportarExcel() {
+            if(despesas.length === 0) return alert("Não há despesas lançadas para exportar.");
+            
+            let ws_data = despesas.map(d => ({
+                "Tipo de Despesa": d.tipo, 
+                "Descrição / Local": d.desc, 
+                "Quantidade / Litros": d.qtd, 
+                "Valor Unitário (R$)": d.valorUnitario, 
+                "Valor Total (R$)": d.total
+            }));
+            
+            // Adiciona uma linha de total
+            ws_data.push({
+                "Tipo de Despesa": "TOTAL", 
+                "Descrição / Local": "", 
+                "Quantidade / Litros": "", 
+                "Valor Unitário (R$)": "", 
+                "Valor Total (R$)": despesas.reduce((acc, curr) => acc + curr.total, 0)
+            });
+
+            let ws = XLSX.utils.json_to_sheet(ws_data);
+            let wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Despesas_Viagem");
+            XLSX.writeFile(wb, "Controle_Despesas_FAEG.xlsx");
+        }
+
+        function exportarPDF() {
+            // Seleciona a div inteira do formulário para gerar o PDF
+            const elemento = document.getElementById('area-exportacao');
+            
+            // Configurações do PDF
+            const opt = {
+                margin:       [10, 10, 10, 10],
+                filename:     'Relatorio_Viagem_FAEG.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            
+            // Prepara a tela para impressão
+            // Oculta os botões de ação e abas laterais visualmente para o print
+            const sidebar = document.querySelector('aside');
+            const dataIgnores = document.querySelectorAll('.data-ignore');
+            const formCrud = document.querySelector('#tab-7 .bg-gray-100'); // Esconde o formulário de adicionar despesa
+            
+            sidebar.style.display = 'none';
+            formCrud.style.display = 'none';
+            dataIgnores.forEach(el => el.style.display = 'none');
+            
+            // Abre todas as abas temporariamente para o PDF pegar todas as informações
+            const conteudos = document.querySelectorAll('.tab-content');
+            conteudos.forEach(el => el.style.display = 'block');
+
+            // Gera o PDF
+            html2pdf().set(opt).from(elemento).save().then(() => {
+                // Restaura a visualização normal após salvar
+                sidebar.style.display = 'flex';
+                formCrud.style.display = 'block';
+                dataIgnores.forEach(el => el.style.display = '');
+                
+                // Restaura apenas a aba ativa
+                conteudos.forEach(el => {
+                    if(!el.classList.contains('active')) {
+                        el.style.display = 'none';
+                    } else {
+                        el.style.display = 'block';
+                    }
+                });
+            });
+        }
+    </script>
+</body>
+</html>
