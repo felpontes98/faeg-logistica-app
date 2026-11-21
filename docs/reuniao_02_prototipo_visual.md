@@ -32,8 +32,6 @@ Em continuidade ao kickoff de 30/10/2026, esta etapa documental registra a apres
 * **Regras operacionais e financeiras:** Validar, em testes posteriores, como os dados inseridos alimentam cálculos, indicadores e relatórios.
 * **Gravação de informações:** Confirmar, na versão funcional, que o comando de salvamento mantém os registros corretamente no banco de dados.
 
-Esses itens são **pontos de verificação derivados da demonstração**, e não decisões ou compromissos cuja fala tenha sido transcrita.
-
 ## 4. Próximos Passos e Alinhamentos Propostos
 
 * **Evolução do protótipo:** Consolidar a estrutura visual das etapas e ajustar eventuais campos ou agrupamentos identificados durante a avaliação.
