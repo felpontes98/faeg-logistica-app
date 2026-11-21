@@ -6349,7 +6349,7 @@ with st.container(border=True):
                         placeholder="ABC1D23",
                         value=vei_edit_obj["placa"] if vei_edit_obj else "",
                     )
-                    tipos_v = ["Carreta", "Bitrem", "Rodotrem", "Truck", "Toco", "3/4", "VUC", "Utilitário"]
+                    tipos_v = ["Van", "HR", "Carreta", "Bitrem", "Rodotrem", "Truck", "Toco", "3/4", "VUC", "Utilitário"]
                     idx_tv = (
                         tipos_v.index(vei_edit_obj["tipo_veiculo"])
                         if vei_edit_obj and vei_edit_obj.get("tipo_veiculo") in tipos_v
