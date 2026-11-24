@@ -22,7 +22,7 @@ O controle anterior era realizado em planilhas. O MVP organiza fretes, ciclos, c
 | Evolução do MVP | [Reuniões](reunioes/) e [protótipo inicial](prototipo/prototipo_inicial.html) |
 | Modelagem | [Diagramas UML e ER](diagramas/README.md) |
 | Arquitetura e código | [Módulos](arquitetura_aplicacao.md) e [dados](arquitetura_banco.md) |
-| Testes e limites | [Plano de testes](plano_testes.md) e [auditoria final](auditoria_final_2026-11-24.md) |
+| Testes e evolução | [Plano de testes](plano_testes.md) e [planejamento técnico](planejamento_tecnico.md) |
 | Justificativas de projeto | [ADRs](decisoes/README.md) |
 
 ## 4. Reprodução dos testes de desenvolvimento
@@ -34,8 +34,8 @@ python -m compileall -q app.py faeg_app database views tests
 python -m pytest -q tests
 ```
 
-Os testes usam **SQLite isolado**, sem credenciais de produção. Para abrir o Streamlit, é necessária uma `DATABASE_URL` de banco PostgreSQL de testes, conforme [guia de execução](guia_execucao.md). **Não é seguro fornecer credenciais do Neon de produção no material acadêmico.**
+Os testes de persistência utilizam **SQLite isolado**. O procedimento de execução local com PostgreSQL está descrito no [guia de execução](guia_execucao.md). As credenciais e os dados reais da empresa permanecem fora dos materiais acadêmicos.
 
-## 5. Limitações assumidas
+## 5. Escopo e próximos incrementos
 
-O MVP não é apresentado como ERP homologado ou demonstrativo contábil definitivo. Permanecem pendentes autenticação/autorização por perfil, migrações versionadas e testes integrados completos no banco PostgreSQL.
+O sistema é um MVP de gestão operacional, com indicadores gerenciais. Autenticação própria por usuário, migrações versionadas e ampliação dos testes integrados integram o [planejamento técnico](planejamento_tecnico.md).

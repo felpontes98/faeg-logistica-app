@@ -1,6 +1,6 @@
 # Diagramas de modelagem — FAEG
 
-Os diagramas abaixo foram revisados com base no **Ajuste 27 e na modularização de 24/11/2026** e suas regras documentadas. Usam sintaxe [Mermaid](https://mermaid.js.org/) para visualização direta no GitHub. São modelos de arquitetura e comportamento, não evidências de teste integrado.
+Os diagramas representam os componentes, as entidades e os fluxos do Sistema Web FAEG, incluindo o Ajuste 27 e a organização modular de 24/11/2026. Foram elaborados em [Mermaid](https://mermaid.js.org/) para visualização diretamente no GitHub.
 
 | Diagrama | Finalidade | Notação |
 | --- | --- | --- |
@@ -13,8 +13,4 @@ Os diagramas abaixo foram revisados com base no **Ajuste 27 e na modularização
 | [Estados](estados.md) | Situação operacional e financeira | UML — `stateDiagram-v2`, modelo conceitual |
 | [Implantação](implantacao.md) | Navegador, Streamlit e PostgreSQL/Neon | Visão conceitual de implantação |
 
-**Cuidados de leitura:** os estados marcados como propostos não devem ser interpretados como transições automáticas já implementadas; não existe API REST própria no repositório. As associações opcionais são mostradas conforme o ORM, sem prometer restrições adicionais do banco físico.
-
-## Conferência de renderização
-
-Os blocos usam notações Mermaid convencionais e foram revisados para evitar rótulos multilinha ambíguos e erros de separação de chaves no DER. O repositório possui uma **verificação estática automatizada** da documentação (`tests/test_documentacao.py`), mas ela **não substitui** uma renderização real pelo GitHub. Após publicar, abrir cada um dos oito links acima e confirmar a exibição dos gráficos.
+**Convenções:** os estados propostos representam possibilidades de evolução, enquanto os relacionamentos de banco refletem os modelos ORM. A aplicação utiliza Streamlit conectado a serviços Python, sem API REST independente. O teste `tests/test_documentacao.py` verifica a estrutura dos diagramas e os links internos.

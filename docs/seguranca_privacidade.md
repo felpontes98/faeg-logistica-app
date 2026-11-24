@@ -1,29 +1,22 @@
-# Segurança, privacidade e riscos técnicos
+# Segurança e privacidade
 
-**Classificação:** diagnóstico documental do código compartilhado em 24/11/2026; **não foi realizado teste de invasão, auditoria LGPD ou análise de configuração da conta em nuvem**.
+## Dados sob responsabilidade da aplicação
 
-## Dados potencialmente sensíveis
+O sistema manipula informações operacionais e comerciais, como documentos de transporte, contatos, dados de veículos e motoristas, endereços, clientes e valores financeiros. O acesso e o compartilhamento desses registros devem respeitar as necessidades da operação e a legislação aplicável.
 
-O modelo inclui CPF, CNH, telefone, identificação de veículos, dados de empresas, documentos de transporte, endereços e valores financeiros. Considerar dados pessoais e confidenciais; permitir acesso somente a usuários autorizados.
+## Controles da versão atual
 
-## Observações verificadas no repositório
-
-| Aspecto | Situação verificada / ação recomendada |
+| Tema | Implementação e diretriz |
 | --- | --- |
-| Segredos | `.env` e `.streamlit/secrets.toml` constam do `.gitignore`; `DATABASE_URL` é obtida do ambiente. Não publicar valores reais. |
-| Controle de acesso | Não foi identificado no `app.py` controle próprio de autenticação, permissões por perfil ou autorização de operações. Prioridade antes de ampliar acesso. |
-| Banco de dados | A aplicação realiza operações de leitura/escrita e executa sincronização de esquema na inicialização. Planejar papel de banco de menor privilégio e migrações versionadas. |
-| Trilha de auditoria | Existem cancelamentos e eventos de atribuição de despesas; **não** representam auditoria geral de toda edição e acesso. |
-| Exportação | Relatórios e exportações podem reunir informações de terceiros: restringir compartilhamento e armazenamento. |
-| Dependências | `requirements.txt` utiliza dependências sem versões fixadas; faltam reprodutibilidade e rotina de atualização controlada. |
-| Testes | A CI de documentação executa testes isolados de saídas; não testa autorização, backups, integridade ampla nem produção. |
+| Configurações sensíveis | A conexão ao banco utiliza `DATABASE_URL`; os arquivos locais `.env` e `.streamlit/secrets.toml` estão excluídos do versionamento pelo `.gitignore`. |
+| Controle de acesso | O MVP ainda não implementa autenticação própria nem permissões individuais por perfil. O acesso deve ser controlado na implantação e pelos responsáveis pelo ambiente. |
+| Persistência | O SQLAlchemy realiza operações de leitura e escrita no PostgreSQL. A inicialização sincroniza o esquema, motivo pelo qual mudanças estruturais requerem controle de versão e backup. |
+| Histórico operacional | Cancelamentos e atribuições de despesas possuem registros específicos. Uma trilha geral de auditoria por usuário integra a evolução técnica planejada. |
+| Exportações | Os relatórios podem conter informações comerciais ou pessoais; devem ser gerados e compartilhados somente em contextos autorizados. |
+| Bibliotecas | As dependências são declaradas em `requirements.txt`. A fixação de versões e a política de atualização fazem parte do planejamento técnico. |
 
-## Ações priorizadas
+## Evolução de segurança
 
-**Alta prioridade:** autenticação, autorização por função, isolamento de dados, política de backup/restauração testada, revisão das credenciais e permissões Neon/Streamlit.
+O planejamento contempla autenticação por usuário, autorização por função, revisão de permissões, política de backup e restauração, retenção adequada de dados, registro de ações críticas e proteção de exportações.
 
-**Média prioridade:** migrações versionadas, trilha de auditoria para edições críticas, análise de tratamento de dados pessoais (base legal, finalidade, retenção), validações de importação e proteção das exportações.
-
-**Evolução:** política de dependências com versões/lock, pipeline de testes integrados PostgreSQL e revisão periódica de acessos.
-
-Não adicionar telas com usuário/senha no código sem desenhar autenticação e gerenciamento de sessão adequados. A existência de controles de hospedagem (quando houver) **não deve ser confundida** com autorização por usuário dentro do aplicativo.
+As informações de credenciais e os dados de clientes não devem ser publicados em commits, documentos, imagens ou repositórios públicos. Consulte [planejamento técnico](planejamento_tecnico.md) e [guia de execução](guia_execucao.md).

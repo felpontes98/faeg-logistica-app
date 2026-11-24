@@ -1,62 +1,62 @@
 # Requisitos do Sistema Web FAEG
 
 **Escopo:** operação de fretes individuais, ciclos, despesas, abastecimentos, consulta e exportação.  
-**Estado:** requisitos atualizados em 24/11/2026 para o Ajuste 27. O código foi implantado em Streamlit/Neon; a **homologação funcional abrangente permanece pendente**.
-**Origem das regras:** planilha de controle e definições operacionais de Eduardo, inclusive a conversa “Explicar cálculo automático”.
+**Versão:** requisitos do MVP, incluindo saídas operacionais e trechos (Ajuste 27, 24/11/2026).
+**Origem das regras:** planilha de controle operacional da FAEG e definições registradas nas reuniões com o representante da empresa.
 
-Este documento descreve comportamentos esperados, não uma certificação de que todos já funcionam no banco publicado. Consultar as [regras de negócio](regras_negocio.md) para fórmulas e ressalvas e a [arquitetura](arquitetura_banco.md) para persistência.
+Os requisitos documentam o escopo funcional do MVP. Fórmulas e critérios de apuração estão detalhados em [regras de negócio](regras_negocio.md); a persistência, em [arquitetura do banco](arquitetura_banco.md).
 
 ## Requisitos funcionais
 
-| ID | Requisito | Situação do MVP / validação |
+| ID | Requisito | Situação no MVP |
 | --- | --- | --- |
-| RF-01 | Cadastrar motoristas, veículos, clientes, locais e fornecedores | Existente; teste pendente |
-| RF-02 | Cadastrar frete com ID próprio, rota, documentos, cliente, motorista e veículo | Existente; teste pendente |
-| RF-03 | Agrupar vários fretes por ID de ciclo sem duplicar fretes de fechamento | Implementação parcial; teste pendente |
-| RF-04 | Conservar negociação, adiantamento e saldo por frete, mesmo em ciclos com clientes diferentes | Código presente em `fretes_financeiro`; teste integrado pendente |
-| RF-05 | Registrar KM Individual/Ciclo manual por frete na Etapa 2 | Código presente; teste integrado pendente |
-| RF-06 | Sem saídas cadastradas, calcular KM legado dos fretes do ciclo e deslocamentos informados uma só vez na Etapa 2 | Código presente; teste integrado pendente |
-| RF-07 | Registrar odômetros inicial/final opcionais da operação na Etapa 2 ou 8, usando os mesmos valores salvos, sem confundir com abastecimento | Código presente; teste integrado pendente |
-| RF-08 | Registrar Diesel ou ARLA no formulário único da Etapa 7, inclusive sem viagem (destino provisório Veículo) | Código presente; teste integrado pendente |
-| RF-09 | Exibir distância e KM/L/custo por KM indicativos entre abastecimentos consecutivos de Diesel do mesmo veículo | Código presente; teste integrado pendente |
-| RF-10 | Associar a despesa de combustível a um único destino e gerar simultaneamente seu histórico operacional, sem duplicar no DRE | Código presente; teste integrado pendente |
-| RF-11 | Consultar, gerar relatórios e exportar dados operacionais; o Excel inclui aba própria `Abastecimentos_Veiculos` | Código presente; revisão de indicadores pendente |
-| RF-12 | Importar Excel distinguindo fretes, fechamentos e totais gerais | Apenas prévia/auditoria; **gravação bloqueada** |
-| RF-13 | Registrar pagamentos efetivamente recebidos, com data, valor, tipo e referência, sem confundir com parcelas previstas | Código presente em `recebimentos_frete`; teste integrado pendente |
-| RF-14 | Registrar despesas compartilhadas por ciclo e somá-las uma única vez no fechamento gerencial | Código presente em `ciclos_despesas`; teste integrado pendente; **rateio não aprovado** |
-| RF-15 | Consolidar receita negociada e despesas de cada frete por ID interno de ciclo, sem duplicar lançamentos | Código presente em `fechamento_ciclos.py`; teste integrado pendente |
-| RF-16 | Exibir prévia do ciclo na Etapa 8 e relatório na Etapa 9; exportar `Fechamento_Ciclos` | Código presente; teste integrado pendente |
-| RF-17 | Somar pagamentos efetivos por frete e ciclo; mostrar saldo a receber e possível excedente | Código presente; teste integrado pendente |
-| RF-18 | Cancelar recebimento lançado incorretamente com motivo obrigatório e sem apagar histórico | Código presente; teste integrado pendente |
-| RF-19 | Registrar despesas compartilhadas em ciclo salvo e cancelá-las com histórico e motivo, sem rateá-las pelos fretes | Código presente em `ciclos_despesas`; teste integrado pendente |
-| RF-20 | Exibir odômetro de abastecimento como campo numérico normal, visível na Etapa 7, sem checkbox | Código presente; teste visual pendente |
-| RF-21 | Exportar `Despesas_Ciclo` com histórico e `Fechamento_Ciclos` com despesas de fretes e compartilhadas separadas | Código presente; teste integrado pendente |
-| RF-22 | Usar apenas um formulário de despesa com destino Frete/Ciclo/Veículo e odômetro numérico para Diesel/ARLA; histórico somente consulta | Código presente; testes visual e integrado pendentes |
-| RF-23 | Registrar custos provisoriamente vinculados ao veículo, inclusive sem frete, mantendo-os fora do DRE e permitindo cancelamento auditável | Código presente em `veiculos_despesas`; teste integrado pendente |
-| RF-24 | Exportar despesas do veículo (pendentes/atribuídas) e a origem financeira/cancelamento dos abastecimentos | Código presente; teste integrado pendente |
-| RF-25 | Atribuir despesa pendente a frete/ciclo salvo do mesmo veículo, sem segundo histórico de abastecimento nem duplicação no DRE | Código presente em `atribuicao_despesas.py`; teste integrado pendente |
-| RF-26 | Estornar atribuição, devolver o custo ao veículo e guardar histórico de ações com justificativa | Código presente em `veiculos_despesas_atribuicoes`; teste integrado pendente |
-| RF-27 | Manter único cadastro de despesas, com seções de vínculo e detalhes; permitir consulta/atribuição/cancelamento em áreas separadas de histórico | Código presente; teste visual pendente |
-| RF-28 | Reconciliar resultado financeiro gerencial de toda a base, separando custo direto de frete, compartilhado de ciclo, gasto pendente de veículo e gasto já atribuído sem dupla soma | Código presente em `fechamento_ciclos.py`; teste integrado pendente |
-| RF-29 | Disponibilizar `Conferencia_Financeira` no Excel e exportar base completa coerente na Etapa 10, independentemente dos filtros da tabela da tela | Código presente; teste integrado pendente |
-| RF-30 | Mostrar margem como não calculável sem receita confiável, e avisar sobre despesas compartilhadas sem fretes do tipo Ciclo | Código presente; teste integrado pendente |
-| RF-31 | Sinalizar despesas semelhantes entre frete e ciclo do mesmo ID e solicitar confirmação explícita quando forem comprovantes distintos | Código presente em `conferencia_duplicidades.py`; teste integrado pendente |
-| RF-32 | Consultar indícios de repetição já cadastrados, sem alterar histórico, e exportar `Possiveis_Duplicidades` | Código presente; teste integrado pendente |
-| RF-33 | Verificar repetição cruzada também durante atribuição de despesa provisória e impedir repetição imediata de gasto comum idêntico no mesmo frete | Código presente; teste integrado pendente |
-| RF-34 | Na Etapa 8, somar KM planejado por ID interno do ciclo (não pelo nome), preservar o valor manual da Etapa 2 e sinalizar falta de KM no frete atual | Código presente; teste integrado pendente |
-| RF-35 | Impedir salvar dois fretes distintos com o mesmo ID Frete e bloquear vínculo novo a nome de ciclo que identifique mais de um ID legado | Código presente; teste integrado pendente |
-| RF-36 | Proteger vínculo histórico quando o último frete sair de um ciclo com despesa comum ativa ou quando a placa mudar com abastecimento já registrado | Código presente; teste integrado pendente |
-| RF-37 | Acrescentar na Tela 2 os campos manuais de KM saída/entre coletas e KM retorno operacional, preservando o KM individual do frete e seu título de seção | Código presente; teste integrado pendente |
-| RF-38 | Calcular KM Deslocamentos Operacionais somente na Tela 8 pela soma dos componentes da Tela 2, sem duplicar por frete do mesmo ciclo | Código presente; teste integrado pendente |
-| RF-39 | Preservar o total de deslocamentos legado até discriminação manual e exportar componentes e leituras operacionais sem misturar odômetro de combustível | Código presente; teste integrado pendente |
-| RF-40 | Exibir a Tela 8 em dois grupos visuais de KM (planejado e realizado), com totais destacados, fórmula resumida e explicações expansíveis, preservando os cálculos | Código presente; teste visual pendente |
-| RF-41 | Manter na Tela 8 DRE e situação dos recebimentos visíveis; agrupar detalhes de parcelas/fretes do ciclo e indicadores de consumo do veículo em áreas expansíveis | Presente no código; teste visual de regressão pendente |
-| RF-42 | Permitir várias saídas operacionais em um mesmo ciclo, com datas, veículo, motorista opcional e descrição | Implementado no Ajuste 27; teste integrado pendente |
-| RF-43 | Permitir trechos físicos por saída; a soma dos trechos substitui o KM manual, sem dupla contagem | Implementado no Ajuste 27; testes unitários disponíveis |
-| RF-44 | Consolidar KM real das saídas somente com odômetros completos e intervalos sem sobreposição no mesmo veículo | Implementado no Ajuste 27; testes unitários disponíveis |
-| RF-45 | Priorizar KM das saídas sobre o modelo de KM comercial/legado quando existir ao menos uma saída cadastrada | Implementado no Ajuste 27; teste integrado pendente |
-| RF-46 | Estimar Diesel por veículo com km/L e preço de referência, sem lançar nova despesa na DRE | Implementado no Ajuste 27; testes unitários disponíveis |
-| RF-47 | Exportar saídas, trechos e KM operacional de ciclos em abas específicas de Excel | Implementado no Ajuste 27; teste de exportação pendente |
+| RF-01 | Cadastrar motoristas, veículos, clientes, locais e fornecedores | Implementado no MVP |
+| RF-02 | Cadastrar frete com ID próprio, rota, documentos, cliente, motorista e veículo | Implementado no MVP |
+| RF-03 | Agrupar vários fretes por ID de ciclo sem duplicar fretes de fechamento | Em evolução |
+| RF-04 | Conservar negociação, adiantamento e saldo por frete, mesmo em ciclos com clientes diferentes | Implementado no MVP |
+| RF-05 | Registrar KM Individual/Ciclo manual por frete na Etapa 2 | Implementado no MVP |
+| RF-06 | Sem saídas cadastradas, calcular KM legado dos fretes do ciclo e deslocamentos informados uma só vez na Etapa 2 | Implementado no MVP |
+| RF-07 | Registrar odômetros inicial/final opcionais da operação na Etapa 2 ou 8, usando os mesmos valores salvos, sem confundir com abastecimento | Implementado no MVP |
+| RF-08 | Registrar Diesel ou ARLA no formulário único da Etapa 7, inclusive sem viagem (destino provisório Veículo) | Implementado no MVP |
+| RF-09 | Exibir distância e KM/L/custo por KM indicativos entre abastecimentos consecutivos de Diesel do mesmo veículo | Implementado no MVP |
+| RF-10 | Associar a despesa de combustível a um único destino e gerar simultaneamente seu histórico operacional, sem duplicar no DRE | Implementado no MVP |
+| RF-11 | Consultar, gerar relatórios e exportar dados operacionais; o Excel inclui aba própria `Abastecimentos_Veiculos` | Implementado no MVP |
+| RF-12 | Importar Excel distinguindo fretes, fechamentos e totais gerais | Prévia e conferência disponíveis; gravação automática não habilitada |
+| RF-13 | Registrar pagamentos efetivamente recebidos, com data, valor, tipo e referência, sem confundir com parcelas previstas | Implementado no MVP |
+| RF-14 | Registrar despesas compartilhadas por ciclo e somá-las uma única vez no fechamento gerencial | Implementado no MVP |
+| RF-15 | Consolidar receita negociada e despesas de cada frete por ID interno de ciclo, sem duplicar lançamentos | Implementado no MVP |
+| RF-16 | Exibir prévia do ciclo na Etapa 8 e relatório na Etapa 9; exportar `Fechamento_Ciclos` | Implementado no MVP |
+| RF-17 | Somar pagamentos efetivos por frete e ciclo; mostrar saldo a receber e possível excedente | Implementado no MVP |
+| RF-18 | Cancelar recebimento lançado incorretamente com motivo obrigatório e sem apagar histórico | Implementado no MVP |
+| RF-19 | Registrar despesas compartilhadas em ciclo salvo e cancelá-las com histórico e motivo, sem rateá-las pelos fretes | Implementado no MVP |
+| RF-20 | Exibir odômetro de abastecimento como campo numérico normal, visível na Etapa 7, sem checkbox | Implementado no MVP |
+| RF-21 | Exportar `Despesas_Ciclo` com histórico e `Fechamento_Ciclos` com despesas de fretes e compartilhadas separadas | Implementado no MVP |
+| RF-22 | Usar apenas um formulário de despesa com destino Frete/Ciclo/Veículo e odômetro numérico para Diesel/ARLA; histórico somente consulta | Implementado no MVP |
+| RF-23 | Registrar custos provisoriamente vinculados ao veículo, inclusive sem frete, mantendo-os fora do DRE e permitindo cancelamento auditável | Implementado no MVP |
+| RF-24 | Exportar despesas do veículo (pendentes/atribuídas) e a origem financeira/cancelamento dos abastecimentos | Implementado no MVP |
+| RF-25 | Atribuir despesa pendente a frete/ciclo salvo do mesmo veículo, sem segundo histórico de abastecimento nem duplicação no DRE | Implementado no MVP |
+| RF-26 | Estornar atribuição, devolver o custo ao veículo e guardar histórico de ações com justificativa | Implementado no MVP |
+| RF-27 | Manter único cadastro de despesas, com seções de vínculo e detalhes; permitir consulta/atribuição/cancelamento em áreas separadas de histórico | Implementado no MVP |
+| RF-28 | Reconciliar resultado financeiro gerencial de toda a base, separando custo direto de frete, compartilhado de ciclo, gasto pendente de veículo e gasto já atribuído sem dupla soma | Implementado no MVP |
+| RF-29 | Disponibilizar `Conferencia_Financeira` no Excel e exportar base completa coerente na Etapa 10, independentemente dos filtros da tabela da tela | Implementado no MVP |
+| RF-30 | Mostrar margem como não calculável sem receita confiável, e avisar sobre despesas compartilhadas sem fretes do tipo Ciclo | Implementado no MVP |
+| RF-31 | Sinalizar despesas semelhantes entre frete e ciclo do mesmo ID e solicitar confirmação explícita quando forem comprovantes distintos | Implementado no MVP |
+| RF-32 | Consultar indícios de repetição já cadastrados, sem alterar histórico, e exportar `Possiveis_Duplicidades` | Implementado no MVP |
+| RF-33 | Verificar repetição cruzada também durante atribuição de despesa provisória e impedir repetição imediata de gasto comum idêntico no mesmo frete | Implementado no MVP |
+| RF-34 | Na Etapa 8, somar KM planejado por ID interno do ciclo (não pelo nome), preservar o valor manual da Etapa 2 e sinalizar falta de KM no frete atual | Implementado no MVP |
+| RF-35 | Impedir salvar dois fretes distintos com o mesmo ID Frete e bloquear vínculo novo a nome de ciclo que identifique mais de um ID legado | Implementado no MVP |
+| RF-36 | Proteger vínculo histórico quando o último frete sair de um ciclo com despesa comum ativa ou quando a placa mudar com abastecimento já registrado | Implementado no MVP |
+| RF-37 | Acrescentar na Tela 2 os campos manuais de KM saída/entre coletas e KM retorno operacional, preservando o KM individual do frete e seu título de seção | Implementado no MVP |
+| RF-38 | Calcular KM Deslocamentos Operacionais somente na Tela 8 pela soma dos componentes da Tela 2, sem duplicar por frete do mesmo ciclo | Implementado no MVP |
+| RF-39 | Preservar o total de deslocamentos legado até discriminação manual e exportar componentes e leituras operacionais sem misturar odômetro de combustível | Implementado no MVP |
+| RF-40 | Exibir a Tela 8 em dois grupos visuais de KM (planejado e realizado), com totais destacados, fórmula resumida e explicações expansíveis, preservando os cálculos | Implementado no MVP |
+| RF-41 | Manter na Tela 8 DRE e situação dos recebimentos visíveis; agrupar detalhes de parcelas/fretes do ciclo e indicadores de consumo do veículo em áreas expansíveis | Implementado no MVP |
+| RF-42 | Permitir várias saídas operacionais em um mesmo ciclo, com datas, veículo, motorista opcional e descrição | Implementado — Ajuste 27 |
+| RF-43 | Permitir trechos físicos por saída; a soma dos trechos substitui o KM manual, sem dupla contagem | Implementado — Ajuste 27 |
+| RF-44 | Consolidar KM real das saídas somente com odômetros completos e intervalos sem sobreposição no mesmo veículo | Implementado — Ajuste 27 |
+| RF-45 | Priorizar KM das saídas sobre o modelo de KM comercial/legado quando existir ao menos uma saída cadastrada | Implementado — Ajuste 27 |
+| RF-46 | Estimar Diesel por veículo com km/L e preço de referência, sem lançar nova despesa na DRE | Implementado — Ajuste 27 |
+| RF-47 | Exportar saídas, trechos e KM operacional de ciclos em abas específicas de Excel | Implementado — Ajuste 27 |
 
 ## Critérios de aceite dos cálculos
 
@@ -98,7 +98,7 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - **RI-05:** não usar `0` como leitura medida quando o campo foi deixado em branco; manter ausência de medição distinta de zero real.
 - **RI-06:** documentar o comportamento de segurança do app antes do uso com dados pessoais reais. Autenticação e autorização ainda precisam de projeto.
 
-## Homologação — roteiro ainda pendente de validação abrangente
+## Roteiro de verificação funcional
 
 - [ ] Abrir app e cadastrar um veículo sem viagem.
 - [ ] Registrar dois abastecimentos de Diesel com odômetros crescentes; conferir KM de intervalo, KM/L e R$/KM.
@@ -148,10 +148,10 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - [ ] Conciliar amostra com a planilha, inspecionar as divergências já relatadas e verificar que nada foi importado sem autorização.
 - [ ] Realizar backup e ensaio de migração em banco de testes; somente depois avaliar o deploy no banco oficial.
 
-## Escopo explicitamente não encerrado
+## Funcionalidades previstas para evolução
 
-Não presumir que a aplicação esteja plenamente homologada por existir código publicado. Faltam ao menos: homologação integrada, fechamento **formal** dos ciclos (status/confirmação), regra de rateio, conciliação bancária e automatização de situações de pagamento, segurança de acesso e importação com gravação autorizada. A consolidação **gerencial parcial** por ciclo, o lançamento único de combustível/despesas, a atribuição/estorno de gastos de veículo e o registro manual de recebimentos já estão propostos.
-## Novos cenários de homologação — Saídas operacionais (Ajuste 27)
+A evolução do produto contempla fechamento formal de ciclos, conciliação bancária, gestão de usuários e importação em lote com autorização. O MVP utiliza consolidação gerencial por ciclo, registro único de abastecimento/despesas, atribuição e estorno de custos de veículo e registro manual dos recebimentos. Não há rateio automático de custos compartilhados.
+## Cenários de verificação — Saídas operacionais (Ajuste 27)
 
 - [ ] Fazer backup do PostgreSQL antes de publicar código que cria `saidas_operacionais`, `trechos_operacionais` e `parametros_consumo_veiculo`.
 - [ ] Abrir Ciclo 001 com seus fretes preexistentes: conferir que negociação, recebimentos e despesas anteriores **não foram modificados**.

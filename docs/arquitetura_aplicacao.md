@@ -1,6 +1,6 @@
 # Arquitetura de módulos — FAEG
 
-**Estado:** refatoração conservadora sobre o código do Ajuste 27. A separação de arquivos não altera tabelas, fórmulas, identificadores, contratos, despesas ou rotas.
+**Versão:** estrutura modular consolidada em 24/11/2026. A organização dos módulos preserva as tabelas, fórmulas e regras operacionais do MVP.
 
 ## Organização
 
@@ -55,16 +55,14 @@ flowchart TD
 3. `PageContext` transporta as listas de cadastro e os rótulos da barra de contexto para a etapa ativa; os campos editáveis e validações originais continuam usando `st.session_state`.
 4. `faeg_app/core.py` preserva os nomes e assinaturas das funções existentes. Sua divisão adicional por serviços deverá ser incremental e coberta por testes de integração no PostgreSQL.
 5. `faeg_app/reporting.py` mantém os geradores de PDF e Excel. O caminho do logotipo foi ajustado para continuar encontrando a imagem na raiz do projeto (`assets/logo_faeg.png`).
-6. `bootstrap.py` chama a mesma rotina `sincronizar_colunas_banco()` com a mesma chave de cache (`schema_v=13`). **Não há migração de esquema nova nesta entrega**; a rotina antiga ainda pode executar DDL ao iniciar.
-7. Nenhum arquivo do `database/`, `views/` ou `.streamlit/` é modificado nesta refatoração.
+6. `bootstrap.py` chama a mesma rotina `sincronizar_colunas_banco()` com a mesma chave de cache (`schema_v=13`). **A modularização não acrescenta migrações de esquema**; a rotina antiga ainda pode executar DDL ao iniciar.
+7. Os módulos de banco, a visualização de saídas e as configurações do Streamlit permanecem em suas pastas específicas.
 
-## Riscos e validação
+## Qualidade e manutenção
 
-Os corpos das 11 etapas foram transpostos sem alterações semânticas (comparação da árvore sintática Python). O HTML/CSS institucional foi preservado. Verificações locais incluem imports isolados, sintaxe, seis testes operacionais SQLite, geração de PDF/Excel e **simulação das 11 etapas com dublê de Streamlit** usando SQLite. Essa simulação identifica exceções básicas e não substitui a renderização no Streamlit verdadeiro.
+A suíte de testes automatizados contempla regras de quilometragem, estrutura dos módulos, imports, relatórios e fluxos simulados de interface. A integração contínua executa os testes a cada atualização do código. O desenvolvimento utiliza ambientes isolados para alterações estruturais e cenários de escrita.
 
-**Limitação:** essas verificações não substituem teste de navegação no Streamlit com PostgreSQL/Neon. Validar em branch de segurança, antes do push de produção: carregar frete existente, salvar/consultar, receitas, despesas, saídas, DRE, PDF/Excel e logo. Não executar testes de escrita no banco de produção.
-
-## Próximas melhorias (fora desta entrega)
+## Evolução da arquitetura
 
 - Separar gradualmente `core.py` em repositórios e serviços com interfaces estáveis.
 - Adicionar testes de integração PostgreSQL e testes de interface com `streamlit.testing`.

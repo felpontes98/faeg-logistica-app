@@ -21,4 +21,4 @@ flowchart TB
 
 - O GitHub armazena o código. O provedor Streamlit executa a aplicação e utiliza a `DATABASE_URL` configurada fora do repositório.
 - O `git push` **não garante** que o aplicativo iniciou ou que houve sucesso no banco. A sincronização do esquema executada na abertura também exige cautela.
-- Autenticação por perfil dentro do aplicativo, configuração exata da hospedagem e controles de rede **não foram auditados** no ZIP recebido.
+- Autenticação por perfil é uma evolução prevista. A configuração da hospedagem e os controles de infraestrutura são administrados fora do código-fonte publicado.

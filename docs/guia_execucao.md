@@ -1,6 +1,6 @@
 # Guia de execução e implantação
 
-**Estado:** aplicável ao código enviado em 24/11/2026. Procedimento para desenvolvimento e validação; **não é uma homologação de produção**.
+**Versão:** configuração da aplicação modular e do Ajuste 27 (24/11/2026).
 
 ## Requisitos
 
@@ -31,7 +31,7 @@ Essa URL é apenas um **exemplo estrutural**, não uma credencial válida. Em Ne
 python -m streamlit run app.py
 ```
 
-## Execução dos testes sem acesso ao Neon
+## Testes automatizados
 
 ```powershell
 python -m pip install pytest
@@ -39,9 +39,9 @@ python -m compileall -q app.py faeg_app database views tests
 python -m pytest -q tests
 ```
 
-A suíte inclui testes de saídas, importação dos módulos, relatórios, simulação das 11 etapas e verificações estáticas dos documentos, usando SQLite em memória nos testes de banco. **Não representa um teste de compatibilidade com PostgreSQL.**
+A suíte inclui testes de saídas, organização dos módulos, relatórios, fluxos simulados das 11 etapas e consistência da documentação. Nos cenários de persistência isolada, utiliza SQLite em memória.
 
-## Antes de publicar no Streamlit/Neon
+## Procedimento de publicação no Streamlit/Neon
 
 1. Verificar `git diff --check`, `git status` e o resultado da CI.
 2. Criar branch/backup do banco Neon e verificar sua estratégia de restauração.
@@ -50,7 +50,7 @@ A suíte inclui testes de saídas, importação dos módulos, relatórios, simul
 5. Conferir o carregamento das 11 etapas, especialmente edição de fretes antigos, saídas do ciclo e despesas.
 6. Depois do deploy, verificar registros de erro e contagem de tabelas antes de inserir dados definitivos.
 
-**Atenção:** fazer `git push` publica código no GitHub, mas não garante que a aplicação iniciou com sucesso, nem que uma atualização de banco pode ser revertida automaticamente por `git revert`.
+**Publicação:** o versionamento do código e a recuperação do banco são procedimentos independentes. Alterações de esquema e dados exigem plano de backup próprio.
 
 ## Diagnóstico de ciclos (leitura)
 

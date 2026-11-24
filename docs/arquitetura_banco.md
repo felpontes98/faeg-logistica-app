@@ -1,6 +1,6 @@
 # Arquitetura do Banco de Dados — FAEG
 
-**Fonte:** classes SQLAlchemy em `database/models.py` (Ajuste 27, 24/11/2026). **Situação:** 18 modelos de tabelas ORM; a aplicação foi publicada em Streamlit/Neon e as novas tabelas foram verificadas visualmente no painel Neon. A estrutura publicada ainda requer homologação funcional, inspeção de restrições e revisão de permissões.
+**Modelo de dados:** classes SQLAlchemy em `database/models.py` (Ajuste 27, 24/11/2026), com 18 tabelas ORM utilizadas pela aplicação Streamlit/PostgreSQL (Neon). A evolução técnica inclui migrações versionadas e administração de permissões.
 
 ## 1. Arquitetura atual
 
@@ -79,7 +79,7 @@ Na evolução anterior do sistema, a tela de cadastro foi desenhada para funcion
 16. O módulo `database/conferencia_duplicidades.py` compara despesas de frete e compartilhadas **no mesmo ID de ciclo** por data, categoria, descrição, fornecedor, quantidade, preço e valor; para combustível, utiliza veículo/odômetro quando disponíveis. Retorna **alertas**, nunca ordens de exclusão. A Etapa 7 solicita confirmação explícita se um novo lançamento se parece com custo de outro destino; a atribuição do veículo também verifica o destino cruzado e exige confirmação com justificativa quando a despesa é efetivamente distinta. A Etapa 9 e a aba Excel `Possiveis_Duplicidades` exibem indícios históricos e os IDs para conferência dos comprovantes. Nenhuma nova tabela é criada nesta etapa.
 17. As Etapas 2 e 8 mantêm a decisão de Eduardo: `KM X ROTA PLANEJADO` é apenas título; os três componentes da rota são manuais na Etapa 2; `KM PLANEJADO` é soma dos fretes do mesmo ID interno; `KM DESLOCAMENTOS OPERACIONAIS` é saída/entre coletas + retorno, único por operação/ciclo; `KM TOTAL PLANEJADO` soma os componentes; `KM TOTAL REAL` e diferença dependem dos odômetros da operação preenchidos na Etapa 2. A edição valida ID Frete não reutilizado, impede troca de veículo com abastecimento ativo e bloqueia saída do último frete de ciclo com despesas compartilhadas ativas. Não há transferência automática de custos ou reagrupamento de ciclos antigos.
 
-**Limitação:** ciclos duplicados já existentes na base não são mesclados; isso exige migração específica, conferência e backup. O **resumo gerencial**, os **recebimentos**, o **lançamento único de combustível/despesa** e a **atribuição/estorno manual de gastos do veículo** foram preparados no código. **Rateio automático, conciliação bancária, estornos externos e fechamento formal com alteração de status** não foram implementados.
+**Compatibilidade histórica:** ciclos duplicados já existentes na base não são mesclados; isso exige migração específica, conferência e backup. O **resumo gerencial**, os **recebimentos**, o **lançamento único de combustível/despesa** e a **atribuição/estorno manual de gastos do veículo** foram preparados no código. **Rateio automático, conciliação bancária, estornos externos e fechamento formal com alteração de status** não foram implementados.
 
 **Critério de segurança:** a proximidade entre uma linha de fechamento e os fretes anteriores é utilizada para sugerir a correspondência na auditoria. Ela **não autoriza corrigir automaticamente** o ID do ciclo nem transferir valores ou despesas. Linhas interpretadas como total geral não são somadas como fretes adicionais.
 
@@ -130,7 +130,7 @@ Os itens abaixo são **evoluções anteriores**, presentes no esquema descrito p
 5. Registrar trilha mínima de alteração/importação e evitar exclusão física sem avaliação do histórico.
 6. Substituir alterações automáticas de esquema na abertura de cada sessão por um processo controlado de atualização.
 
-## 5. Verificações necessárias com banco de testes
+## 5. Cenários de integridade e manutenção do banco
 
 - [ ] Conferir se a estrutura física hospedada corresponde aos modelos ORM.
 - [ ] Executar `python -m database.diagnostico_ciclos` usando primeiro o `DATABASE_URL` do banco de testes e revisar o resultado.
@@ -186,6 +186,6 @@ O Ajuste 27 acrescentou **três tabelas sem excluir as 15 anteriores**. A funç�
 
 **Exportação:** `Saidas_Operacionais`, `Trechos_Operacionais` e `KM_Operacional_Ciclos` são acrescentadas à base Excel. O indicador de consumo estimado é somente consultivo e não altera a DRE.
 
-**Limitações operacionais desta versão:** não há movimentação de estoques de diesel nem alocação automática do combustível consumido a um ciclo; despesas históricas não são realocadas; sobreposição de odômetros entre ciclos distintos ainda deve ser conferida manualmente; não existe ainda vínculo automático entre cada frete e os trechos físicos onde foi transportado.
+**Regras e limites do escopo atual:** não há movimentação de estoques de diesel nem alocação automática do combustível consumido a um ciclo; despesas históricas não são realocadas; sobreposição de odômetros entre ciclos distintos ainda deve ser conferida manualmente; não existe ainda vínculo automático entre cada frete e os trechos físicos onde foi transportado.
 
 **Nota de arquitetura:** o projeto não possui uma API REST independente. O acesso é feito por `faeg_app/pages/`, `faeg_app/core.py` e módulos Python a sessões do SQLAlchemy. A sincronização automática na inicialização não é um sistema de migrações versionadas; adotar procedimento revisável antes de evoluções estruturais.

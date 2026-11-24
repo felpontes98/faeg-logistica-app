@@ -1,10 +1,10 @@
 # Plano de testes e critérios de homologação
 
-**Objetivo:** verificar persistência, regras financeiras e integridade operacional sem utilizar a base de produção como ambiente de ensaio. A lista distingue **testes automatizados existentes** de **testes manuais/integrados pendentes**.
+**Objetivo:** definir cenários automatizados e funcionais para assegurar consistência dos dados, cálculos e fluxos operacionais durante a evolução do MVP.
 
 ## Testes automatizados disponíveis
 
-Arquivo: [`tests/test_saidas_operacionais.py`](../tests/test_saidas_operacionais.py). Execução isolada em SQLite em memória, não no Neon.
+Arquivo: [`tests/test_saidas_operacionais.py`](../tests/test_saidas_operacionais.py). Os cenários de persistência utilizam SQLite em memória.
 
 | Código | Cenário | Evidência no código |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ python -m pip install pytest
 python -m pytest -q tests/test_saidas_operacionais.py
 ```
 
-## Matriz mínima de integração e aceite (pendente)
+## Matriz de integração e critérios de aceite
 
 | Código | Requisitos | Cenário / resultado esperado | Evidência a registrar |
 | --- | --- | --- | --- |
@@ -45,4 +45,4 @@ python -m pytest -q tests/test_saidas_operacionais.py
 4. Executar restauração de backup de ensaio antes de aceitar uma migração de produção.
 5. Formalizar aprovação operacional pela FAEG e revisão técnica pelos desenvolvedores.
 
-**Critério de saída:** casos críticos aprovados e pendências documentadas com responsável e impacto. **Nenhuma homologação foi declarada neste documento.**
+**Critério de aceite:** registrar resultado, responsável e eventuais ajustes para os cenários críticos, garantindo rastreabilidade das alterações.

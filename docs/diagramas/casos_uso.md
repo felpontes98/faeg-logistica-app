@@ -30,4 +30,4 @@ flowchart LR
     DV -.-> C9
 ```
 
-A equipe de desenvolvimento mantém o código e executa testes **fora do fluxo de negócio**. Autenticação, emissão fiscal automática e importação persistente de planilha não foram comprovadas no MVP.
+A equipe de desenvolvimento mantém os módulos e a suíte de testes. Autenticação própria, emissão fiscal automática e importação persistente de planilhas não integram o escopo atual do MVP.

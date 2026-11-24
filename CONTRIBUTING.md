@@ -16,7 +16,7 @@ Este projeto combina desenvolvimento acadêmico e utilização operacional real.
 - Código e documentação em português, com termos técnicos padronizados no [glossário](docs/glossario.md).
 - Requisitos identificados por `RF-XX` e decisões documentadas em [ADRs](docs/decisoes/README.md).
 - Nenhuma credencial, CPF, CNH, telefone real, dados financeiros reais ou screenshot com dados privados no repositório.
-- Novas funcionalidades com testes automatizados, quando viável; distinguir teste local de homologação.
+- Desenvolver cenários de verificação para novas funcionalidades, especialmente quando envolvem dados financeiros e operacionais.
 - Evitar mudanças automáticas/destrutivas em dados legados sem autorização explícita e plano de recuperação.
 
 ## Diagrama e Markdown

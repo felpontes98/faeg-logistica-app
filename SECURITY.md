@@ -1,7 +1,13 @@
-# Política de relato de problemas de segurança
+# Segurança — Sistema Web FAEG
 
-O repositório acadêmico é utilizado como base de uma aplicação com dados operacionais. **Não publique credenciais, dados pessoais ou detalhes exploráveis de vulnerabilidades em issues públicas.**
+O Sistema Web FAEG utiliza dados operacionais e comerciais. Credenciais, informações pessoais e detalhes sensíveis de infraestrutura não devem ser publicados em issues, commits ou documentação pública.
 
-Caso identifique um problema de segurança, informe-o de forma privada aos mantenedores do repositório, usando o canal de contato acordado com a equipe do projeto. Evite testar vulnerabilidades contra a implantação produtiva sem autorização.
+## Comunicação de questões de segurança
 
-Consulte [`docs/seguranca_privacidade.md`](docs/seguranca_privacidade.md) para os riscos e controles ainda pendentes. A existência desta política **não significa que há autenticação ou homologação de segurança implementada**.
+Questões relacionadas a segurança e privacidade devem ser encaminhadas diretamente aos responsáveis pelo desenvolvimento, por um canal privado previamente acordado com a equipe FAEG.
+
+## Controles e evolução
+
+O MVP utiliza configurações de ambiente para a conexão com o banco. A autenticação própria por usuário e as permissões por perfil estão previstas para evolução do produto; o acesso à implantação deve ser administrado pelos responsáveis pelo ambiente.
+
+Para diretrizes adicionais, consulte [`docs/seguranca_privacidade.md`](docs/seguranca_privacidade.md).

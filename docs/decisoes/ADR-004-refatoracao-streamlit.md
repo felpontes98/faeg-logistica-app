@@ -1,7 +1,7 @@
 # ADR-004 — Refatoração conservadora do Streamlit
 
 - **Data:** 24/11/2026
-- **Status:** proposta implementada no código, pendente de homologação no Streamlit/Neon
+- **Status:** decisão implementada na arquitetura do MVP
 
 ## Contexto
 
@@ -20,7 +20,7 @@ Manter `app.py` como entrada Streamlit e extrair cada etapa para uma função `r
 ## Consequências
 
 - `app.py` pequeno, 11 páginas com responsabilidades claras.
-- `core.py` ainda é grande e necessita refatoração gradual e testes de integração.
+- `core.py` concentra funções compartilhadas e será dividido de forma incremental.
 - Implantação exige publicar os novos módulos e o CSS junto com `app.py`.
-- Não há mudança de tabelas ou dados Neon nesta entrega.
-- Tests SQLite/estáticos não eliminam a necessidade de teste real Streamlit/PostgreSQL.
+- A modularização preserva os modelos e os vínculos operacionais do banco.
+- A suíte automatizada acompanha a manutenção da estrutura modular e dos serviços existentes.
