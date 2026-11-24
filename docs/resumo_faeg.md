@@ -22,7 +22,7 @@ O código ORM contém **18 tabelas**, conforme o [inventário técnico](arquitet
 
 ## Tecnologia e organização
 
-- **Interface:** Python e Streamlit; código principal em `app.py`, com módulo visual em `views/`.
+- **Interface:** Python e Streamlit; entrada em `app.py`, onze módulos em `faeg_app/pages/`, recursos compartilhados em `faeg_app/` e módulo visual específico em `views/`.
 - **Persistência:** SQLAlchemy e PostgreSQL/Neon, configurados por `DATABASE_URL`.
 - **Dados:** Pandas e OpenPyXL; importação Excel com prévia, sem gravação automática liberada.
 - **Relatórios:** exportações Excel e PDF; indicadores financeiros parciais.

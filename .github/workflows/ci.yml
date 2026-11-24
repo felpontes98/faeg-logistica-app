@@ -24,8 +24,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pytest
       - name: Verificar sintaxe
-        run: python -m compileall -q app.py database views tests
-      - name: Testar saidas operacionais (SQLite isolado)
-        run: python -m pytest -q tests/test_saidas_operacionais.py
+        run: python -m compileall -q app.py faeg_app database views tests
+      - name: Testes unitarios e verificacoes de modularizacao (SQLite isolado)
+        run: python -m pytest -q tests
         env:
           DATABASE_URL: 'sqlite:///:memory:'

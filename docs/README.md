@@ -34,3 +34,8 @@
 - [Histórico das alterações](../CHANGELOG.md)
 
 **Nota:** documentos históricos de reuniões registram o conhecimento existente na respectiva data. Não foram reescritos para simular funcionalidades posteriores.
+
+## Organização da aplicação após modularização
+
+- [Arquitetura dos módulos Python e sequência de execução](arquitetura_aplicacao.md)
+- [ADR-004 — Refatoração incremental do Streamlit](decisoes/ADR-004-refatoracao-streamlit.md)

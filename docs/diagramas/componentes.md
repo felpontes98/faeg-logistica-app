@@ -31,4 +31,23 @@ SessionLocal"]
 
 **Características reais:** o aplicativo opera como processo Streamlit com acesso ao banco via SQLAlchemy; não há camada HTTP REST independente entre `app.py` e a persistência. A geração de relatórios ocorre na aplicação. A sincronização de tabelas/colunas é chamada no início de `app.py`.
 
-**Ponto de evolução:** separar o arquivo `app.py` (mais de 7 mil linhas na versão revisada) por páginas/serviços, mas somente com testes de regressão e sem reorganizar código produtivo nesta atualização documental.
+**Nota histórica:** na revisão documental anterior, `app.py` ainda tinha mais de 7 mil linhas. A modularização conservadora foi realizada posteriormente; consulte o complemento abaixo e a [arquitetura da aplicação](../arquitetura_aplicacao.md).
+
+## Complemento — módulos após refatoração
+
+```mermaid
+flowchart TB
+    A[app.py] --> B[faeg_app/layout.py]
+    A --> C[faeg_app/pages — 11 etapas]
+    A --> D[faeg_app/bootstrap.py]
+    A --> E[faeg_app/theme.py]
+    C --> F[faeg_app/core.py]
+    C --> G[faeg_app/reporting.py]
+    F --> H[database/ — ORM e regras]
+    G --> H
+    H --> I[(PostgreSQL / Neon)]
+    C --> J[views/saidas_operacionais.py]
+    E --> K[assets/faeg_styles.html]
+```
+
+A modularização é interna ao mesmo processo Streamlit; **não cria API REST nem novos microserviços**.

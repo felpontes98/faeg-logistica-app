@@ -42,3 +42,7 @@
 **Não foram alterados:** `app.py`, `database/`, `views/`, `tests/`, `requirements.txt`, identidade visual ou qualquer registro no Neon. Foram atualizados a documentação, a política de licença para novas contribuições e a CI. A licença MIT original foi mantida integralmente no histórico `licenses/`. A CI terá execução inicial após ser enviada ao GitHub.
 
 A [matriz de rastreabilidade](rastreabilidade.md) relaciona requisitos e módulos; o [plano de testes](plano_testes.md) descreve as evidências ainda necessárias.
+
+## Atualização posterior — modularização conservadora (24/11/2026)
+
+O inventário acima é um registro histórico da revisão anterior, quando o `app.py` tinha mais de 7 mil linhas. Na nova entrega, o ponto de entrada possui **74 linhas** e as 11 etapas foram movidas para `faeg_app/pages/`. As funções compartilhadas foram isoladas em `faeg_app/core.py`, relatórios em `faeg_app/reporting.py`, aparência em `faeg_app/theme.py`, contexto visual em `faeg_app/layout.py`. A restrição sobre alterações automáticas de esquema e a ausência de testes integrados PostgreSQL **permanecem**. Consulte [arquitetura da aplicação](arquitetura_aplicacao.md).

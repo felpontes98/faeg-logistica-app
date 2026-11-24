@@ -27,3 +27,11 @@ Registro resumido de marcos conhecidos. **Não substitui o histórico do Git**, 
 - Histórico de reuniões e protótipo visual anterior ao Streamlit.
 
 Para requisitos funcionais detalhados, consultar [`docs/requisitos.md`](docs/requisitos.md). A sequência histórica exata dos ajustes anteriores pode ser levantada pelos commits do GitHub.
+
+## 2026-11-24 — Organização modular do aplicativo (após Ajuste 27)
+
+- Separação das 11 etapas em `faeg_app/pages/` mantendo o conteúdo e as regras existentes.
+- Extração de CSS, layout, consultas/callbacks e geradores Excel/PDF.
+- Correção do caminho de assets após extração do carregador de logo.
+- Inclusão de testes estruturais, de exportação e de simulação de abertura das 11 telas, sem acesso ao Neon.
+- Nenhuma alteração em modelos SQLAlchemy, tabelas, dados ou licenciamento.

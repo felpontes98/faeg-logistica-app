@@ -29,21 +29,26 @@ Aplicação web para cadastrar fretes, agrupar serviços em ciclos operacionais,
 
 | Camada | Tecnologias | Arquivos principais |
 | --- | --- | --- |
-| Interface web | Python, Streamlit | [`app.py`](app.py), [`views/`](views/) |
-| Regras e serviços | Python | [`database/`](database/) |
+| Interface web | Python, Streamlit | [`app.py`](app.py), [`faeg_app/pages/`](faeg_app/pages/), [`views/`](views/) |
+| Lógica compartilhada e callbacks | Python | [`faeg_app/core.py`](faeg_app/core.py) |
+| Regras, dados e serviços | Python | [`database/`](database/) |
 | Persistência | SQLAlchemy ORM | [`database/models.py`](database/models.py) |
 | Banco relacional | PostgreSQL — Neon | Configurado por `DATABASE_URL` |
-| Dados e exportações | Pandas, OpenPyXL, geração PDF | `app.py` e módulos de importação |
+| Dados e exportações | Pandas, OpenPyXL, geração PDF | [`faeg_app/reporting.py`](faeg_app/reporting.py) e módulos de importação |
 | Testes automatizados | Pytest + SQLite em memória | [`tests/`](tests/) |
 
 ```mermaid
 flowchart LR
     U[Usuário operacional] --> UI[Interface Streamlit]
-    UI --> DOM[Regras e serviços Python]
+    UI --> PAG[Etapas em faeg_app/pages]
+    PAG --> CORE[faeg_app/core: formulários e callbacks]
+    CORE --> DOM[Serviços em database]
     DOM --> ORM[SQLAlchemy ORM]
     ORM --> DB[(PostgreSQL / Neon)]
-    UI --> REL[Relatórios PDF / Excel]
+    PAG --> REL[faeg_app/reporting: PDF e Excel]
 ```
+
+O `app.py` é somente o ponto de entrada (74 linhas na refatoração de 24/11/2026). As 11 etapas estão em `faeg_app/pages/`, as consultas/callbacks compartilhadas em `faeg_app/core.py`, a identidade visual em `faeg_app/theme.py` e os relatórios em `faeg_app/reporting.py`. Detalhes: [estrutura de módulos](docs/arquitetura_aplicacao.md).
 
 O projeto **não implementa uma API REST independente**: a interface chama diretamente funções Python e sessões SQLAlchemy. O modelo atual possui **18 tabelas ORM**. Consulte os [diagramas técnicos](docs/diagramas/README.md) e o [inventário do banco](docs/arquitetura_banco.md).
 
@@ -69,18 +74,18 @@ Em Linux/macOS, ative o ambiente com `source .venv/bin/activate` e use `cp .env.
 
 ```powershell
 python -m pip install pytest
-python -m compileall -q app.py database views tests
-python -m pytest -q tests/test_saidas_operacionais.py
+python -m compileall -q app.py faeg_app database views tests
+python -m pytest -q tests
 ```
 
-Os testes atuais verificam seis cenários da nova estrutura de saídas com **SQLite em memória**, sem conexão com o Neon. A rotina de CI em [`.github/workflows/ci.yml`](.github/workflows/ci.yml) executa essas verificações em pushes e pull requests; **não** certifica integração completa com o PostgreSQL. Consulte o [plano de testes](docs/plano_testes.md).
+Os testes verificam seis cenários da estrutura de saídas com **SQLite em memória** e verificações de estrutura, imports, relatórios e simulação das 11 etapas, sem conexão com o Neon. A rotina de CI em [`.github/workflows/ci.yml`](.github/workflows/ci.yml) executa essas verificações em pushes e pull requests; **não** certifica integração completa com o PostgreSQL. Consulte o [plano de testes](docs/plano_testes.md).
 
 ## Documentação do projeto
 
 O [índice da documentação](docs/README.md) organiza os materiais técnicos e acadêmicos, incluindo:
 
 - [Requisitos funcionais e critérios de aceite](docs/requisitos.md) · [Regras de negócio](docs/regras_negocio.md)
-- [Arquitetura e modelo de dados](docs/arquitetura_banco.md) · [Diagramas UML e de arquitetura](docs/diagramas/README.md)
+- [Arquitetura da aplicação](docs/arquitetura_aplicacao.md) · [Arquitetura e modelo de dados](docs/arquitetura_banco.md) · [Diagramas UML e de arquitetura](docs/diagramas/README.md)
 - [Plano de testes](docs/plano_testes.md) · [Matriz de rastreabilidade](docs/rastreabilidade.md) · [Avaliação técnica](docs/avaliacao_repositorio.md)
 - [Histórico das reuniões](docs/reunioes/) · [Protótipo inicial](docs/prototipo/prototipo_inicial.html)
 - [Registro de decisões técnicas](docs/decisoes/README.md) · [Histórico de versões](CHANGELOG.md)
