@@ -1,21 +1,52 @@
-MIT License
+FAEG — SISTEMA WEB DE GESTÃO LOGÍSTICA
+AVISO DE DIREITOS AUTORAIS E LICENCIAMENTO
 
-Copyright (c) 2026 Felipe Pontes
+Copyright (c) 2026 Felipe Pontes.
+Todos os direitos reservados, ressalvados os direitos anteriormente concedidos
+sob outras licenças e os direitos de eventuais outros titulares.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. REGRA PARA NOVAS CONTRIBUIÇÕES
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+A partir do commit que incorporar este aviso ao repositório, novas contribuições
+originais e materiais inéditos inseridos por seus titulares de direitos não
+recebem, por este arquivo, autorização pública para cópia, modificação,
+distribuição, sublicenciamento ou exploração comercial.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Qualquer utilização desses novos materiais fora dos limites permitidos por lei
+ou por autorização previamente existente exige autorização expressa do(s)
+respectivo(s) titular(es) de direitos.
+
+2. VERSÕES ANTERIORES SOB LICENÇA MIT
+
+O código e os materiais efetivamente disponibilizados antes desta mudança sob
+a licença MIT continuam sujeitos aos direitos e condições daquela licença.
+Esta declaração NÃO revoga retroativamente permissões já concedidas e NÃO
+transforma automaticamente material anteriormente licenciado sob MIT em
+material proprietário.
+
+O texto integral da licença MIT anteriormente publicada está preservado em:
+licenses/MIT-VERSOES-ANTERIORES.txt
+
+O histórico de commits do Git identifica as versões anteriores. Quem utilizar
+material licenciado sob MIT deve cumprir as condições da respectiva licença,
+inclusive a preservação dos avisos de direitos autorais e da licença.
+
+3. CONTRIBUIDORES, MARCA E DEPENDÊNCIAS
+
+O nome de Felipe Pontes é reproduzido conforme o aviso de direitos autorais da
+licença MIT originalmente presente no repositório. Esta declaração não
+constitui cessão de direitos autorais à FAEG Ltda nem afasta eventuais direitos
+de outros contribuidores. A titularidade e as autorizações para novas
+contribuições devem ser confirmadas entre as partes envolvidas.
+
+A marca FAEG, logotipos, dados institucionais e informações de clientes não
+são licenciados sob MIT por este aviso.
+
+Bibliotecas, frameworks e componentes de terceiros mantêm as próprias
+licenças. Este arquivo não restringe direitos válidos concedidos por elas.
+
+4. INFORMAÇÕES
+
+Este documento é um aviso de licenciamento do repositório e não constitui
+contrato de cessão de direitos patrimoniais. Para orientações sobre versões,
+permissões e histórico, consultar docs/licenciamento.md.

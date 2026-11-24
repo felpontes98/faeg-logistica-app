@@ -1,7 +1,7 @@
 # Requisitos do Sistema Web FAEG
 
 **Escopo:** operação de fretes individuais, ciclos, despesas, abastecimentos, consulta e exportação.  
-**Estado:** requisitos consolidados em novembro de 2026; as alterações de código estão **pendentes de testes integrados**.  
+**Estado:** requisitos atualizados em 24/11/2026 para o Ajuste 27. O código foi implantado em Streamlit/Neon; a **homologação funcional abrangente permanece pendente**.
 **Origem das regras:** planilha de controle e definições operacionais de Eduardo, inclusive a conversa “Explicar cálculo automático”.
 
 Este documento descreve comportamentos esperados, não uma certificação de que todos já funcionam no banco publicado. Consultar as [regras de negócio](regras_negocio.md) para fórmulas e ressalvas e a [arquitetura](arquitetura_banco.md) para persistência.
@@ -50,9 +50,17 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 | RF-38 | Calcular KM Deslocamentos Operacionais somente na Tela 8 pela soma dos componentes da Tela 2, sem duplicar por frete do mesmo ciclo | Proposto; teste pendente |
 | RF-39 | Preservar o total de deslocamentos legado até discriminação manual e exportar componentes e leituras operacionais sem misturar odômetro de combustível | Proposto; teste pendente |
 | RF-40 | Exibir a Tela 8 em dois grupos visuais de KM (planejado e realizado), com totais destacados, fórmula resumida e explicações expansíveis, preservando os cálculos | Proposto; teste visual pendente |
-| RF-41 | Manter na Tela 8 DRE e situação dos recebimentos visíveis; agrupar detalhes de parcelas/fretes do ciclo e indicadores de consumo do veículo em áreas expansíveis | Proposto; teste visual pendente |
+| RF-41 | Manter na Tela 8 DRE e situação dos recebimentos visíveis; agrupar detalhes de parcelas/fretes do ciclo e indicadores de consumo do veículo em áreas expansíveis | Presente no código; teste visual de regressão pendente |
+| RF-42 | Permitir várias saídas operacionais em um mesmo ciclo, com datas, veículo, motorista opcional e descrição | Implementado no Ajuste 27; teste integrado pendente |
+| RF-43 | Permitir trechos físicos por saída; a soma dos trechos substitui o KM manual, sem dupla contagem | Implementado no Ajuste 27; testes unitários disponíveis |
+| RF-44 | Consolidar KM real das saídas somente com odômetros completos e intervalos sem sobreposição no mesmo veículo | Implementado no Ajuste 27; testes unitários disponíveis |
+| RF-45 | Priorizar KM das saídas sobre o modelo de KM comercial/legado quando existir ao menos uma saída cadastrada | Implementado no Ajuste 27; teste integrado pendente |
+| RF-46 | Estimar Diesel por veículo com km/L e preço de referência, sem lançar nova despesa na DRE | Implementado no Ajuste 27; testes unitários disponíveis |
+| RF-47 | Exportar saídas, trechos e KM operacional de ciclos em abas específicas de Excel | Implementado no Ajuste 27; teste de exportação pendente |
 
 ## Critérios de aceite dos cálculos
+
+> **Atenção (Ajuste 27):** os critérios 1 a 6 descrevem a **compatibilidade legada**, válida enquanto o ciclo/individual não possui saídas operacionais. Quando existem saídas, os critérios de precedência física RF-42 a RF-45 e RN-11 substituem a soma comercial antiga.
 
 1. **Frete individual:** `KM Planejado` recebe `KM Individual / Ciclo` do próprio frete.
 2. **Ciclo:** `KM Planejado` é a soma de `KM Individual / Ciclo` de todos os fretes do mesmo **ID interno do ciclo**, incluindo o valor ainda não salvo do frete em edição, sem contá-lo duas vezes. Ciclos com nome igual e IDs internos diferentes não são somados em conjunto.
@@ -90,7 +98,7 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 - **RI-05:** não usar `0` como leitura medida quando o campo foi deixado em branco; manter ausência de medição distinta de zero real.
 - **RI-06:** documentar o comportamento de segurança do app antes do uso com dados pessoais reais. Autenticação e autorização ainda precisam de projeto.
 
-## Homologação — executar apenas quando a rodada de ajustes estiver concluída
+## Homologação — roteiro ainda pendente de validação abrangente
 
 - [ ] Abrir app e cadastrar um veículo sem viagem.
 - [ ] Registrar dois abastecimentos de Diesel com odômetros crescentes; conferir KM de intervalo, KM/L e R$/KM.
@@ -142,8 +150,8 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 
 ## Escopo explicitamente não encerrado
 
-Não presumir que a aplicação esteja pronta para produção por existir código. Faltam ao menos: homologação integrada, fechamento **formal** dos ciclos (status/confirmação), regra de rateio, conciliação bancária e automatização de situações de pagamento, segurança de acesso e importação com gravação autorizada. A consolidação **gerencial parcial** por ciclo, o lançamento único de combustível/despesas, a atribuição/estorno de gastos de veículo e o registro manual de recebimentos já estão propostos.
-## Novos cenários de homologação — Saídas operacionais
+Não presumir que a aplicação esteja plenamente homologada por existir código publicado. Faltam ao menos: homologação integrada, fechamento **formal** dos ciclos (status/confirmação), regra de rateio, conciliação bancária e automatização de situações de pagamento, segurança de acesso e importação com gravação autorizada. A consolidação **gerencial parcial** por ciclo, o lançamento único de combustível/despesas, a atribuição/estorno de gastos de veículo e o registro manual de recebimentos já estão propostos.
+## Novos cenários de homologação — Saídas operacionais (Ajuste 27)
 
 - [ ] Fazer backup do PostgreSQL antes de publicar código que cria `saidas_operacionais`, `trechos_operacionais` e `parametros_consumo_veiculo`.
 - [ ] Abrir Ciclo 001 com seus fretes preexistentes: conferir que negociação, recebimentos e despesas anteriores **não foram modificados**.

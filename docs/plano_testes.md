@@ -1,0 +1,48 @@
+# Plano de testes e critérios de homologação
+
+**Objetivo:** verificar persistência, regras financeiras e integridade operacional sem utilizar a base de produção como ambiente de ensaio. A lista distingue **testes automatizados existentes** de **testes manuais/integrados pendentes**.
+
+## Testes automatizados disponíveis
+
+Arquivo: [`tests/test_saidas_operacionais.py`](../tests/test_saidas_operacionais.py). Execução isolada em SQLite em memória, não no Neon.
+
+| Código | Cenário | Evidência no código |
+| --- | --- | --- |
+| TU-01 | Várias saídas no ciclo somadas uma única vez | `test_varias_saidas_na_mesma_operacao_sem_somar_duas_vezes` |
+| TU-02 | Trechos prevalecem sobre KM manual da saída | `test_trechos_substituem_plano_manual_sem_dupla_soma` |
+| TU-03 | Odômetros ausentes ou sobrepostos não geram KM real falso | `test_odometros_ausentes_ou_sobrepostos_nao_viram_zero` |
+| TU-04 | Estimativa de Diesel não cria despesa | `test_estimar_diesel_nao_e_lancamento_financeiro` |
+| TU-05 | Datas, odômetros e ciclo inexistente são rejeitados | `test_validacao_datas_odometros_e_estrangeiros` |
+| TU-06 | Cadastro de saída não reescreve KM legado | `test_legacy_cycle_fields_remain_unchanged` |
+
+```powershell
+python -m pip install pytest
+python -m pytest -q tests/test_saidas_operacionais.py
+```
+
+## Matriz mínima de integração e aceite (pendente)
+
+| Código | Requisitos | Cenário / resultado esperado | Evidência a registrar |
+| --- | --- | --- | --- |
+| TI-01 | RF-01–04 | Criar frete individual e reabrir sem perder cliente, veículo, documentos e negociação | Capturas e identificadores de teste |
+| TI-02 | RF-03, RF-13–19 | Criar ciclo com 3 fretes e clientes distintos; receitas e recebimentos individuais corretamente somados | Extrato financeiro do ciclo |
+| TI-03 | RF-14, RF-22–28 | Lançar despesa compartilhada e despesa exclusiva; não duplicar custo | Demonstrativo e consulta SQL |
+| TI-04 | RF-08–10 | Abastecer Diesel/ARLA uma vez; visualizar histórico sem novo custo na DRE | Histórico e resultado |
+| TI-05 | RF-25–26 | Atribuir e estornar despesa provisória com trilha; custo ativo em um único destino | Eventos de auditoria |
+| TI-06 | RF-42–45 | Cadastrar saídas preparatórias, entregas e retorno no mesmo ciclo | Tela 8 e tabelas novas |
+| TI-07 | RF-43–44 | Somar trechos uma vez; rejeitar intervalos sobrepostos ou incompletos | Comparação com odômetros |
+| TI-08 | RF-46 | Estimar consumo sem alterar custo contabilizado | Painel de consumo e DRE |
+| TI-09 | RF-11, RF-29, RF-47 | Exportar relatórios do ciclo, saídas e trechos; conferir totais com banco | Arquivos de teste |
+| TI-10 | RF-12 | Prévia de Excel funciona; gravação no banco permanece bloqueada | Captura/relatório de prévia |
+| TI-11 | RF-35–36 | Tentar IDs repetidos, ciclo ambíguo e troca de veículo com abastecimento | Mensagens e registros preservados |
+| TI-12 | RI-01–06 | Revisar permissões, restauração do backup e dados pessoais | Plano de segurança e ata de aceite |
+
+### Processo de execução
+
+1. Criar dados **fictícios** em PostgreSQL isolado/branch de teste; não usar dados pessoais reais em issues ou relatórios públicos.
+2. Registrar ambiente, versão/commit, data, responsável, entrada, resultado esperado, resultado observado e evidências sanitizadas.
+3. Distinguir falha do código, regra em validação e divergência de dados legados; não corrigir histórico automaticamente.
+4. Executar restauração de backup de ensaio antes de aceitar uma migração de produção.
+5. Formalizar aprovação operacional pela FAEG e revisão técnica pelos desenvolvedores.
+
+**Critério de saída:** casos críticos aprovados e pendências documentadas com responsável e impacto. **Nenhuma homologação foi declarada neste documento.**

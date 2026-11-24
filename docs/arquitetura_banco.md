@@ -1,12 +1,12 @@
 # Arquitetura do Banco de Dados — FAEG
 
-**Fonte:** revisão do código preparada em novembro de 2026, incluindo a separação financeira por frete. **Situação:** o aplicativo já sincronizou estruturas no Neon conectado. Uma conferência inicial somente leitura identificou quinze tabelas públicas e relacionamentos; isso não substitui a homologação funcional nem a verificação integral das restrições e permissões.
+**Fonte:** classes SQLAlchemy em `database/models.py` (Ajuste 27, 24/11/2026). **Situação:** 18 modelos de tabelas ORM; a aplicação foi publicada em Streamlit/Neon e as novas tabelas foram verificadas visualmente no painel Neon. A estrutura publicada ainda requer homologação funcional, inspeção de restrições e revisão de permissões.
 
 ## 1. Arquitetura atual
 
 O Streamlit (`app.py`) acessa o PostgreSQL por sessões SQLAlchemy criadas em `database/connection.py`. Os modelos são definidos em `database/models.py`; o importador lê arquivos Excel por `database/importador_planilha.py`.
 
-### Tabelas mapeadas no ORM (15 no total)
+### Tabelas mapeadas no ORM (18 no total)
 
 | Tabela | Chave primária | Finalidade e vínculo principal |
 | --- | --- | --- |
@@ -25,8 +25,11 @@ O Streamlit (`app.py`) acessa o PostgreSQL por sessões SQLAlchemy criadas em `d
 | `veiculos_despesas` | `id_despesa_veiculo` | Origem de gasto do veículo: **pendente fora dos resultados** ou atribuído a frete/ciclo (contabilizado apenas no destino), com cancelamento auditável |
 | `veiculos_despesas_atribuicoes` | `id_evento` | Eventos imutáveis de atribuição/estorno com destino, data/hora e justificativa |
 | `abastecimentos` | `id_abastecimento` | Visão operacional de Diesel/ARLA por veículo, criada a partir da **mesma despesa**, com vínculo à despesa de frete/ciclo/veículo, odômetro e cancelamento |
+| `saidas_operacionais` | `id_saida` | Saídas físicas de um ciclo (inclusive individual), com veículo, motorista opcional, datas, KM planejado e odômetros |
+| `trechos_operacionais` | `id_trecho` | Trechos físicos pertencentes a uma saída; usados como KM planejado quando cadastrados |
+| `parametros_consumo_veiculo` | `id_veiculo` (também FK) | km/L e preço/litro referenciais por veículo para estimativa de consumo |
 
-### Relacionamentos definidos
+### Relacionamentos definidos (visão histórica simplificada)
 
 ```mermaid
 erDiagram
@@ -52,11 +55,11 @@ erDiagram
     VEICULOS_DESPESAS ||--o| ABASTECIMENTOS : origina
 ```
 
-Cada viagem possui ainda duas referências a `locais`, uma para coleta e outra para entrega.
+Cada viagem possui ainda duas referências a `locais`, uma para coleta e outra para entrega. O diagrama acima resume a estrutura anterior ao Ajuste 27; para **todas as 18 tabelas**, consulte o [DER atualizado](diagramas/entidade_relacionamento.md) e o [diagrama de classes](diagramas/classes.md).
 
-## 2. Correções incluídas nesta etapa de código
+## 2. Evolução histórica do modelo (ajustes já presentes no código)
 
-Nesta proposta, a tela de cadastro passa a funcionar da seguinte maneira:
+Na evolução anterior do sistema, a tela de cadastro foi desenhada para funcionar da seguinte maneira:
 
 1. Ao salvar uma nova viagem do tipo **Ciclo**, procura um `CicloOperacional` pelo número digitado (sem distinguir maiúsculas/minúsculas e espaços nas extremidades). Se o ciclo já existir, o novo frete é vinculado a ele.
 2. Os dados do contratante, valor negociado, adiantamento e saldo passam a ser armazenados por viagem em `fretes_financeiro`, permitindo **vários clientes no mesmo ciclo**.
@@ -80,7 +83,7 @@ Nesta proposta, a tela de cadastro passa a funcionar da seguinte maneira:
 
 **Critério de segurança:** a proximidade entre uma linha de fechamento e os fretes anteriores é utilizada para sugerir a correspondência na auditoria. Ela **não autoriza corrigir automaticamente** o ID do ciclo nem transferir valores ou despesas. Linhas interpretadas como total geral não são somadas como fretes adicionais.
 
-## 3. Estrutura lógica futura (itens ainda não implementados)
+## 3. Estrutura lógica futura (itens ainda não implementados integralmente)
 
 | Entidade | Responsabilidade proposta |
 | --- | --- |
@@ -173,9 +176,9 @@ Os códigos de negócio devem ser gerados e validados no banco de forma segura p
 - [ ] Simular migração e restauração em banco de teste antes de alterar dados reais.
 
 Para as decisões operacionais que motivam esse redesenho, consultar [Regras de negócio](regras_negocio.md). Os requisitos, critérios de aceite e validações estão em [Requisitos](requisitos.md); a equipe deve acompanhar as alterações de código em Issues do GitHub.
-## Evolução operacional — Novas tabelas (Ajuste 27)
+## 6. Evolução operacional — Tabelas implantadas no Ajuste 27
 
-A implementação acrescenta **três tabelas sem alterar nem remover dados das 15 existentes**. A função `sincronizar_colunas_banco()` as cria com `Base.metadata.create_all()` quando a aplicação atualizada inicia conectada ao PostgreSQL. **Fazer backup antes da implantação**, pois é uma mudança de esquema.
+O Ajuste 27 acrescentou **três tabelas sem excluir as 15 anteriores**. A função `sincronizar_colunas_banco()` as cria com `Base.metadata.create_all()` quando a aplicação atualizada inicia conectada ao PostgreSQL. **A implantação já foi realizada; para novas alterações, manter backup e validação de migração**, pois modificações do esquema exigem plano de recuperação.
 
 | Tabela | Chave | Relacionamento / finalidade |
 | --- | --- | --- |
@@ -188,3 +191,5 @@ A implementação acrescenta **três tabelas sem alterar nem remover dados das 1
 **Exportação:** `Saidas_Operacionais`, `Trechos_Operacionais` e `KM_Operacional_Ciclos` são acrescentadas à base Excel. O indicador de consumo estimado é somente consultivo e não altera a DRE.
 
 **Limitações operacionais desta versão:** não há movimentação de estoques de diesel nem alocação automática do combustível consumido a um ciclo; despesas históricas não são realocadas; sobreposição de odômetros entre ciclos distintos ainda deve ser conferida manualmente; não existe ainda vínculo automático entre cada frete e os trechos físicos onde foi transportado.
+
+**Nota de arquitetura:** o projeto não possui uma API REST independente. O acesso é feito por `app.py` e módulos Python a sessões do SQLAlchemy. A sincronização automática na inicialização não é um sistema de migrações versionadas; adotar procedimento revisável antes de evoluções estruturais.

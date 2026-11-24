@@ -50,7 +50,9 @@ Uma alteração em uma classificação não deve apagar o cliente, o preço, a i
 
 **Atenção:** adiantamento e saldo negociados não significam dinheiro recebido. Na Etapa 4, depois de salvar o frete, os pagamentos recebidos de fato possuem lançamento próprio com data, valor, tipo de parcela, forma de pagamento, referência opcional e observação. O **Total recebido** soma somente lançamentos confirmados; **A receber = máximo entre zero e (valor negociado − total recebido)**. Recebimento acima do negociado exige confirmação explícita e aparece como excedente para conferência. Um lançamento incorreto pode ser cancelado mediante motivo obrigatório, permanecendo no histórico, mas deixa de compor os totais. Não se presume quitação operacional/financeira automaticamente com base na soma.
 
-## RN-04 — Quilometragem planejada por frete e ciclo
+## RN-04 — Quilometragem planejada por frete e ciclo (modo legado)
+
+> **Prioridade da versão atual:** as regras de soma por frete abaixo aplicam-se **somente enquanto não existir saída operacional cadastrada** para a operação. Com saídas, prevalece a RN-11 e o KM comercial dos fretes não é somado novamente.
 
 Conforme a proposta operacional apresentada por Eduardo para o sistema:
 
@@ -68,7 +70,9 @@ Esse valor é estimado, não uma leitura real de odômetro. A ausência de KM de
 
 **Proteções de edição:** se o KM manual do frete atual permanece zero, a Etapa 8 alerta que a estimativa pode estar incompleta. Ao editar um frete já salvo, a prévia usa o ID interno de seu ciclo atual, enquanto um novo frete com número de ciclo homônimo em mais de um ID não é vinculado automaticamente. O KM compartilhado não é copiado de um ciclo ambíguo; ao transformar uma operação em Individual, os deslocamentos do ciclo antigo não devem ser carregados indevidamente.
 
-## RN-05 — Odômetro de saída, chegada e abastecimento
+## RN-05 — Odômetro de saída, chegada e abastecimento (modo legado e histórico)
+
+> **Prioridade da versão atual:** com saídas operacionais, o KM real físico é a soma das diferenças dos odômetros das saídas, com verificação de dados ausentes e sobreposição. As leituras legadas dos fretes permanecem preservadas e distintas das leituras de abastecimento. Consulte a RN-11.
 
 Manter três conceitos independentes:
 
@@ -136,7 +140,7 @@ O importador precisa reconhecer os IDs de frete e ciclo, as linhas de fechamento
 
 Campos ausentes não devem ser substituídos por datas atuais ou valores zero sem regra explícita. Antes de gravar, apresentar divergências e solicitar confirmação; em uma reimportação, não apagar despesas editadas manualmente sem autorização.
 
-## RN-10 — Validação antes de programar mudanças
+## RN-10 — Validação e decisões ainda pendentes
 
 - [x] Eduardo definiu a separação entre KM Individual/Ciclo, deslocamentos operacionais e total planejado. A implementação ainda precisa de teste integrado.
 - [x] Gastos comuns podem ser registrados uma vez por ID do ciclo, sem rateio automático (implementação pendente de testes).
@@ -146,7 +150,7 @@ Campos ausentes não devem ser substituídos por datas atuais ou valores zero se
 - [ ] A equipe aprova a nomenclatura final das situações operacional e financeira.
 - [ ] São preparados cenários reais anonimizados para teste individual e por ciclo.
 - [ ] Todas as alterações preservam histórico já cadastrado após teste de migração.
-## RN-16 — Saídas operacionais, trechos e custo de combustível (nova implantação)
+## RN-11 — Saídas operacionais, trechos e custo de combustível (Ajuste 27)
 
 **Regra prioritária quando existem saídas cadastradas no mesmo ID interno da operação** (individual ou ciclo):
 

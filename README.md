@@ -1,79 +1,103 @@
-# FAEG — Sistema de Gestão Logística
+# FAEG — Sistema Web de Gestão Logística
 
-Sistema web de apoio ao controle operacional e financeiro da FAEG — Soluções Empresariais e Logísticas, desenvolvido a partir de planilha de viagens no contexto do Startup Challenge UMC 2026.
+**FAEG — Soluções Empresariais e Logísticas** · Projeto acadêmico aplicado à operação real de transporte de cargas · Startup Challenge UMC 2026.
 
-**Status:** ajustes de código em preparação; **verificações iniciais de segurança e estrutura do banco realizadas, com testes funcionais integrados e homologação ainda pendentes**. Não considerar este repositório homologado para dados de produção.
+Aplicação web para cadastrar fretes, agrupar serviços em ciclos operacionais, controlar receitas e despesas, acompanhar deslocamentos e emitir consultas e relatórios gerenciais. O projeto evoluiu de uma planilha de controle de viagens para um MVP em **Python/Streamlit**, com persistência em **PostgreSQL (Neon)**.
 
-## O que o sistema contempla
+> **Estado em 24/11/2026:** MVP implantado e acessível em Streamlit/Neon, com o Ajuste 27 (saídas operacionais e trechos). A publicação **não equivale a homologação completa**: testes integrados, segurança de acesso e cenários de dados históricos ainda exigem validação. Não utilizar indicadores parciais como demonstrações contábeis oficiais.
 
-- Cadastros de veículos, motoristas, clientes, locais e fornecedores.
-- Fretes com rota, documentos e negociação individual; agrupamento por ciclo operacional.
-- **Tela 2:** “KM X ROTA PLANEJADO” é somente um título; os campos de **KM saída/entre coletas**, **KM individual/ciclo**, **KM retorno operacional** e **odômetros inicial/final da operação** são manuais. **Tela 8:** “KM PLANEJADO” soma os fretes do mesmo **ID interno do ciclo**, “KM DESLOCAMENTOS OPERACIONAIS” soma saída/entre coletas + retorno apenas uma vez por ciclo, e “KM TOTAL PLANEJADO” soma planejado + deslocamentos. O **KM REAL RODADO** do topo é final − inicial do frete atual; **KM TOTAL REAL** consolida os intervalos válidos dos fretes do ciclo sem sobreposição no mesmo veículo. A diferença é total real − planejado. Registros históricos com deslocamento apenas total são mantidos até discriminação explícita.
-- **Organização visual da Tela 8:** painel responsivo com dois grupos de indicadores (**Planejado** e **Realizado e comparação**), memória resumida da fórmula, DRE financeiro mantido em destaque e explicações detalhadas em seções expansíveis. A consulta de consumo por abastecimentos e o detalhamento das parcelas do ciclo continuam disponíveis, mas não disputam espaço com o fechamento principal. As demais telas não receberam alterações estéticas sem necessidade comprovada.
-- Ao editar fretes, há proteções contra reutilização de ID Frete, associação automática a nomes de ciclo históricos repetidos, troca da placa com abastecimento ativo e saída do último frete de ciclo com despesas compartilhadas ativas. Essas situações são apresentadas para correção humana, sem migrar dados silenciosamente.
-- Odômetros de saída/chegada da operação podem ser digitados na Tela 2 ou na Tela 8, **usando os mesmos dois campos persistidos**, distintos das leituras de abastecimento. Na Etapa 7, ao selecionar Diesel ou ARLA, **ODÔMETRO NO ABASTECIMENTO (KM)** aparece como campo numérico direto, sem checkbox; `0` significa leitura não informada (`NULL`). Abastecimentos não substituem automaticamente a leitura de início/fim da operação.
-- **Um único formulário para despesas e abastecimentos** na Etapa 7: informar litros, preço e odômetro no mesmo lançamento. O custo é atribuído a **um frete, a um ciclo ou provisoriamente a um veículo**, sem duas áreas para cadastrar combustível.
-- Histórico de Diesel e ARLA por **veículo**, inclusive sem frete selecionado, preenchido pelo próprio lançamento de despesa. A área de histórico é **somente consulta**, com estimativas de distância, km/L e R$/km entre registros consecutivos de Diesel.
-- Despesas financeiras por frete, **despesas compartilhadas por ciclo** e **despesas provisórias por veículo**. É possível atribuir explicitamente um gasto pendente a um frete/ciclo do mesmo veículo e estornar a atribuição com justificativa, preservando o registro original e uma trilha de eventos. Só o destino ativo entra no DRE.
-- Prévia financeira do ciclo na Etapa 8 e relatório de fechamento gerencial por ciclo na Etapa 9: soma receitas negociadas, despesas dos fretes e **uma única vez** os gastos compartilhados do ID Ciclo. O BI filtrável por frete/cliente exclui gastos compartilhados enquanto não existir critério de rateio aprovado.
-- A Etapa 9 também possui **Conferência Financeira Geral**, independente dos filtros do BI: reconcilia receita negociada considerada, despesas por frete, compartilhadas e resultado gerencial. Separa gastos provisórios do veículo que ainda estão fora do resultado e identifica os já atribuídos, sem contá-los uma segunda vez.
-- **Conferência cruzada de possíveis despesas duplicadas** entre frete e ciclo do mesmo ID: o lançamento avisa sobre coincidências relevantes e solicita confirmação de que são custos distintos; a atribuição de gasto provisório também exige confirmação se encontrar semelhanças. Os indícios históricos aparecem na Etapa 9 para conferência de comprovantes; nenhum custo antigo é alterado automaticamente.
-- Registro de recebimentos efetivamente confirmados por frete na Etapa 4, com histórico de cancelamentos, total recebido e saldo em aberto por frete e por ciclo. O Excel inclui `Recebimentos_Fretes`.
-- Exportação Excel com `Fechamento_Ciclos` (despesas dos fretes e compartilhadas em colunas distintas, KM de saída/entre coletas e retorno), `Viagens_e_Ciclos` (KM individuais e odômetros), `Conferencia_Financeira`, `Possiveis_Duplicidades`, `Despesas_Ciclo`, `Despesas_Veiculo`, `Atribuicoes_Despesas` e `Abastecimentos_Veiculos` com origem e situação. Na Etapa 10, o botão **Exportar Base Completa** reúne um conjunto coerente de toda a base, independentemente dos filtros visuais da consulta.
-- Prévia e auditoria da planilha Excel. **A importação com gravação no banco permanece bloqueada.**
+## Visão geral
 
-## Tecnologia
+- **Frete:** serviço comercial individual, com cliente, carga, documentos, negociação e recebimentos próprios.
+- **Ciclo operacional:** agrupa um ou mais fretes; consolida receitas e despesas compartilhadas sem rateio automático.
+- **Saída operacional:** deslocamento físico com veículo, datas, KM planejado e leituras de odômetro; um ciclo pode ter várias saídas.
+- **Trecho:** etapa de uma saída, por exemplo base → coleta → entrega → retorno. Se houver trechos, o KM planejado é a soma dos trechos, sem duplicar o KM manual da saída.
+- **Abastecimento:** compra efetiva de Diesel/ARLA registrada uma vez; o consumo por KM é uma **estimativa gerencial separada** da DRE.
 
-Python, Streamlit, Pandas, SQLAlchemy, PostgreSQL (`psycopg`) e OpenPyXL. O app pode ser executado localmente e foi preparado para uso com PostgreSQL/Neon, desde que o ambiente seja configurado corretamente.
+### As 11 etapas da aplicação
 
-## Estrutura real do repositório
-
-| Caminho | Finalidade |
+| Etapas | Atividades |
 | --- | --- |
-| [`app.py`](app.py) | Interface Streamlit com as onze etapas |
-| [`database/connection.py`](database/connection.py) | Configuração da conexão SQLAlchemy |
-| [`database/models.py`](database/models.py) | Modelos, criação de tabelas e atualização de colunas |
-| [`database/controle_abastecimentos.py`](database/controle_abastecimentos.py) | Indicadores de consumo a partir do histórico por veículo |
-| [`database/fechamento_ciclos.py`](database/fechamento_ciclos.py) | Consolidação gerencial por ID de ciclo e conferência financeira da base inteira, sem duplicação de despesas |
-| [`database/atribuicao_despesas.py`](database/atribuicao_despesas.py) | Atribuição e estorno auditáveis de despesas provisórias do veículo para frete/ciclo |
-| [`database/conferencia_duplicidades.py`](database/conferencia_duplicidades.py) | Sinalização conservadora de gastos semelhantes entre frete e ciclo do mesmo ID, sem alterar histórico |
-| [`database/importador_planilha.py`](database/importador_planilha.py) | Prévia controlada da importação Excel |
-| [`database/conciliacao_planilha.py`](database/conciliacao_planilha.py) | Auditoria de fretes e fechamentos na planilha |
-| [`database/diagnostico_ciclos.py`](database/diagnostico_ciclos.py) | Diagnóstico somente leitura dos ciclos no PostgreSQL |
-| [`assets/`](assets/) | Identidade visual |
-| [`docs/`](docs/) | Documentação do produto e do banco |
+| 1–3 | Frota/viagem, frete/documentos e cliente contratante |
+| 4–6 | Negociação/recebimentos, coleta e entrega |
+| 7 | Despesas de frete/ciclo/veículo e histórico de abastecimentos |
+| 8 | Saídas/trechos, quilometragem, situação operacional e fechamento |
+| 9 | Relatórios, indicadores, conferência financeira e exportações |
+| 10–11 | Consultas gerais e cadastros de referência |
 
-## Preparação local — quando iniciar a rodada de testes
+## Tecnologias e arquitetura
 
-1. Abra a pasta oficial do repositório no VSCode.
-2. Crie um ambiente Python virtual, ative-o e instale `pip install -r requirements.txt`.
-3. Configure `DATABASE_URL` para um **banco PostgreSQL de testes**, usando variável de ambiente ou arquivo `.env` local, nunca versionado.
-4. Inicie com `python -m streamlit run app.py`.
-5. Execute os critérios documentados em [Requisitos](docs/requisitos.md) após concluir os ajustes.
+| Camada | Tecnologias | Arquivos principais |
+| --- | --- | --- |
+| Interface web | Python, Streamlit | [`app.py`](app.py), [`views/`](views/) |
+| Regras e serviços | Python | [`database/`](database/) |
+| Persistência | SQLAlchemy ORM | [`database/models.py`](database/models.py) |
+| Banco relacional | PostgreSQL — Neon | Configurado por `DATABASE_URL` |
+| Dados e exportações | Pandas, OpenPyXL, geração PDF | `app.py` e módulos de importação |
+| Testes automatizados | Pytest + SQLite em memória | [`tests/`](tests/) |
 
-**Atenção:** a inicialização de `app.py` chama `sincronizar_colunas_banco()` e pode **criar tabelas/alterar colunas** no banco indicado por `DATABASE_URL`. Faça backup e ensaio em banco de testes antes de apontar o app para o banco oficial. O diagnóstico de ciclos, por sua vez, é somente leitura.
+```mermaid
+flowchart LR
+    U[Usuário operacional] --> UI[Interface Streamlit]
+    UI --> DOM[Regras e serviços Python]
+    DOM --> ORM[SQLAlchemy ORM]
+    ORM --> DB[(PostgreSQL / Neon)]
+    UI --> REL[Relatórios PDF / Excel]
+```
 
-## Documentação
+O projeto **não implementa uma API REST independente**: a interface chama diretamente funções Python e sessões SQLAlchemy. O modelo atual possui **18 tabelas ORM**. Consulte os [diagramas técnicos](docs/diagramas/README.md) e o [inventário do banco](docs/arquitetura_banco.md).
 
-### Documentação técnica
+## Executar localmente
 
-- [Resumo do projeto](docs/resumo_faeg.md)
-- [Requisitos e checklist de homologação](docs/requisitos.md)
-- [Regras de negócio e fórmulas de KM](docs/regras_negocio.md)
-- [Arquitetura e integridade do banco](docs/arquitetura_banco.md)
+**Pré-requisitos:** Python 3.11 ou superior recomendado, Git, acesso autorizado a um banco de **teste** PostgreSQL e credenciais próprias. Não compartilhe a `DATABASE_URL`.
 
-### Histórico de reuniões
+```powershell
+# Na pasta do repositório (PowerShell)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+# Edite .env e configure DATABASE_URL para um banco DE TESTES.
+python -m streamlit run app.py
+```
 
-- [Reunião 01 — Kickoff do projeto](docs/reunioes/reuniao_01_kickoff.md)
-- [Reunião 02 — Apresentação do protótipo visual](docs/reunioes/reuniao_02_prototipo_visual.md)
-- [Reunião 03 — Acompanhamento das funcionalidades do MVP](docs/reunioes/reuniao_03_demonstracao_mvp.md)
+Em Linux/macOS, ative o ambiente com `source .venv/bin/activate` e use `cp .env.example .env`.
 
-### Protótipo inicial
+**Atenção ao banco:** `app.py` executa `sincronizar_colunas_banco()` ao iniciar e pode **criar tabelas ou adicionar colunas**. Use primeiro uma branch isolada do Neon ou PostgreSQL de teste; faça backup antes de qualquer mudança em produção. **Não execute o aplicativo local apontando acidentalmente para a base produtiva.** Mais informações: [instalação e operação](docs/guia_execucao.md).
 
-- [Protótipo visual em HTML](docs/prototipo/prototipo_inicial.html)
+## Testes de desenvolvimento
 
-## Equipe
+```powershell
+python -m pip install pytest
+python -m compileall -q app.py database views tests
+python -m pytest -q tests/test_saidas_operacionais.py
+```
 
-- Felipe Pontes — desenvolvimento
-- Larissa do Espírito Santo — desenvolvimento
-- Eduardo Pontes — cliente, referência operacional e validação de regras de negócio
+Os testes atuais verificam seis cenários da nova estrutura de saídas com **SQLite em memória**, sem conexão com o Neon. A rotina de CI em [`.github/workflows/ci.yml`](.github/workflows/ci.yml) executa essas verificações em pushes e pull requests; **não** certifica integração completa com o PostgreSQL. Consulte o [plano de testes](docs/plano_testes.md).
+
+## Documentação do projeto
+
+O [índice da documentação](docs/README.md) organiza os materiais técnicos e acadêmicos, incluindo:
+
+- [Requisitos funcionais e critérios de aceite](docs/requisitos.md) · [Regras de negócio](docs/regras_negocio.md)
+- [Arquitetura e modelo de dados](docs/arquitetura_banco.md) · [Diagramas UML e de arquitetura](docs/diagramas/README.md)
+- [Plano de testes](docs/plano_testes.md) · [Matriz de rastreabilidade](docs/rastreabilidade.md) · [Avaliação técnica](docs/avaliacao_repositorio.md)
+- [Histórico das reuniões](docs/reunioes/) · [Protótipo inicial](docs/prototipo/prototipo_inicial.html)
+- [Registro de decisões técnicas](docs/decisoes/README.md) · [Histórico de versões](CHANGELOG.md)
+
+## Limitações e próximos passos
+
+- Autenticação/autorização própria não foi identificada no código analisado; restringir o acesso à implantação e às credenciais.
+- A sincronização automática do esquema deve evoluir para migrações versionadas após planejamento.
+- Não há rateio aprovado de custos compartilhados; **saldo comercial por frete de um ciclo não representa lucro individual**.
+- O consumo de Diesel por KM é estimativo e **não substitui** a conciliação do combustível comprado e consumido.
+- Importação Excel: existem prévia e auditoria; a gravação automática permanece bloqueada.
+- Faltam testes end-to-end, verificação de restauração de backup e homologação abrangente com base isolada.
+
+## Equipe e licença
+
+- **Felipe Pontes:** desenvolvimento de software.
+- **Larissa do Espírito Santo:** desenvolvimento de software.
+- **Eduardo Pontes:** cliente/representante da FAEG, regras operacionais e validação do negócio.
+
+**Licenciamento:** política de [direitos reservados para novas contribuições](LICENSE), **respeitando a MIT das versões anteriores**. Consulte o [histórico de licenciamento](docs/licenciamento.md) e a [MIT previamente publicada](licenses/MIT-VERSOES-ANTERIORES.txt). A marca e os dados institucionais da FAEG não são abrangidos por autorização de uso do código.

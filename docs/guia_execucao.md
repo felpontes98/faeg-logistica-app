@@ -1,0 +1,69 @@
+# Guia de execução e implantação
+
+**Estado:** aplicável ao código enviado em 24/11/2026. Procedimento para desenvolvimento e validação; **não é uma homologação de produção**.
+
+## Requisitos
+
+- Python 3.11+ (versão recomendada para execução local e CI; demais versões requerem validação).
+- PostgreSQL de testes ou branch isolada do Neon; conexão em `DATABASE_URL`.
+- Pacotes em [`requirements.txt`](../requirements.txt).
+- Acesso ao código e ao ambiente de implantação sob controle da equipe.
+
+## Instalação (PowerShell / Windows)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Editar o `.env` local **sem versionar** suas credenciais:
+
+```dotenv
+DATABASE_URL=postgresql+psycopg://usuario:SENHA@host:5432/banco_de_testes?sslmode=require
+```
+
+Essa URL é apenas um **exemplo estrutural**, não uma credencial válida. Em Neon, utilizar exatamente o formato de conexão fornecido pelo painel do projeto. Nunca copiar credenciais para capturas, commits, issues ou arquivos de teste.
+
+```powershell
+python -m streamlit run app.py
+```
+
+## Execução dos testes sem acesso ao Neon
+
+```powershell
+python -m pip install pytest
+python -m compileall -q app.py database views tests
+python -m pytest -q tests/test_saidas_operacionais.py
+```
+
+A suíte usa SQLite em memória, definida no arquivo de teste. **Não representa um teste de compatibilidade com PostgreSQL.**
+
+## Antes de publicar no Streamlit/Neon
+
+1. Verificar `git diff --check`, `git status` e o resultado da CI.
+2. Criar branch/backup do banco Neon e verificar sua estratégia de restauração.
+3. Revisar mudanças em `database/models.py` e em `sincronizar_colunas_banco()`; esta função roda na inicialização e pode alterar o esquema.
+4. Confirmar que as variáveis de ambiente estão configuradas apenas nos mecanismos de segredo da implantação, nunca em `.env` versionado.
+5. Conferir o carregamento das 11 etapas, especialmente edição de fretes antigos, saídas do ciclo e despesas.
+6. Depois do deploy, verificar registros de erro e contagem de tabelas antes de inserir dados definitivos.
+
+**Atenção:** fazer `git push` publica código no GitHub, mas não garante que a aplicação iniciou com sucesso, nem que uma atualização de banco pode ser revertida automaticamente por `git revert`.
+
+## Diagnóstico de ciclos (leitura)
+
+```powershell
+python -m database.diagnostico_ciclos
+```
+
+Executar preferencialmente em uma conexão de leitura autorizada. O diagnóstico implementa transação somente leitura, mas o operador deve conferir o ambiente e não combinar esse comando com execução automática de `app.py` em produção.
+
+## Procedimento de rollback
+
+1. Em erro de código, interromper a implantação ou reverter para um commit validado do Git.
+2. Em mudança de esquema ou dados, utilizar **plano específico de recuperação do Neon**; um rollback de código não desfaz DDL.
+3. Nunca apagar tabelas ou registros para “corrigir” um deploy sem cópia de segurança, conferência e autorização.
+
+Consulte [segurança](seguranca_privacidade.md), [arquitetura](arquitetura_banco.md) e [plano de testes](plano_testes.md).
