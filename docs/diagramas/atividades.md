@@ -1,29 +1,27 @@
-# Diagrama de atividades — operação e fechamento
+# Diagrama de atividades — ciclo, saídas e fechamento
 
 ```mermaid
 flowchart TD
-    A([Início]) --> B[Definir operação individual ou ciclo]
-    B --> C[Cadastrar e salvar primeiro frete]
-    C --> D{Surge outro frete na mesma operação física?}
-    D -- Sim --> E[Vincular novo frete ao ciclo]
+    A(["Início"]) --> B["Definir operação individual ou ciclo"]
+    B --> C["Cadastrar e salvar frete"]
+    C --> D{"Novo frete na mesma operação?"}
+    D -->|"Sim"| E["Vincular outro frete ao ciclo"]
     E --> D
-    D -- Não / continuar --> F[Registrar saídas operacionais]
-    F --> G{Possui trechos detalhados?}
-    G -- Sim --> H[KM planejado da saída = soma de trechos]
-    G -- Não --> I[KM planejado da saída = valor manual]
-    H --> J[Registrar odômetros e gastos]
+    D -->|"Não ou continuar"| F["Registrar saídas operacionais"]
+    F --> G{"Saída possui trechos?"}
+    G -->|"Sim"| H["KM planejado: soma dos trechos"]
+    G -->|"Não"| I["KM planejado: valor da saída"]
+    H --> J["Registrar leituras e despesas"]
     I --> J
-    J --> K{Todas as saídas com odômetros válidos e sem sobreposição?}
-    K -- Não --> L[KM real pendente de conferência]
-    K -- Sim --> M[Somar KM real por saída]
-    L --> N[Consolidar financeiro do ciclo]
+    J --> K{"Odômetros válidos e sem sobreposição?"}
+    K -->|"Não"| L["KM real pendente"]
+    K -->|"Sim"| M["Somar KM real das saídas"]
+    L --> N["Consolidar receitas e custos uma vez"]
     M --> N
-    N --> O[Somar receitas negociadas por frete]
-    O --> P[Subtrair despesas exclusivas e compartilhadas uma vez]
-    P --> Q[Apresentar resultado operacional parcial]
-    Q --> R{Todas as entregas concluídas?}
-    R -- Não --> F
-    R -- Sim --> S([Encerramento operacional; recebimentos podem seguir pendentes])
+    N --> O["Exibir resultado gerencial parcial"]
+    O --> P{"Operação concluída?"}
+    P -->|"Não"| F
+    P -->|"Sim"| Q(["Encerramento operacional"])
 ```
 
-A sequência mostra as decisões conceituais relevantes. O encerramento formal automático do ciclo **ainda não foi homologado** e não deve ser inferido deste diagrama.
+**Modelo conceitual:** o encerramento automático do ciclo e todos os rótulos operacionais ainda dependem de validação. Os recebimentos podem permanecer pendentes após a entrega.

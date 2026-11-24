@@ -2,7 +2,7 @@
 
 Registro resumido de marcos conhecidos. **Não substitui o histórico do Git**, que permanece a fonte detalhada de commits e diferenças.
 
-## Não publicado — atualização documental (24/11/2026)
+## 2026-11-24 — Documentação, modelagem e licenciamento
 
 - README reorganizado como ponto de entrada do projeto.
 - Inventário do banco atualizado para 18 entidades ORM.
@@ -10,7 +10,7 @@ Registro resumido de marcos conhecidos. **Não substitui o histórico do Git**, 
 - Guia de instalação, plano de testes, glossário, segurança e ADRs.
 - Fluxo de CI com verificação de sintaxe e testes existentes, sem conexão ao Neon.
 - Política para novas contribuições com direitos reservados; licença MIT anterior arquivada e direitos históricos preservados.
-- **Nenhuma alteração em `app.py` ou nos modelos de banco nesta atualização documental.**
+- Atualização documental sem alterar os modelos de banco; o código foi modularizado em etapa posterior.
 
 ## 2026-11-24 — Ajuste 27 (commit `01a675f`)
 
@@ -35,3 +35,11 @@ Para requisitos funcionais detalhados, consultar [`docs/requisitos.md`](docs/req
 - Correção do caminho de assets após extração do carregador de logo.
 - Inclusão de testes estruturais, de exportação e de simulação de abertura das 11 telas, sem acesso ao Neon.
 - Nenhuma alteração em modelos SQLAlchemy, tabelas, dados ou licenciamento.
+
+## 2026-11-24 — Revisão final para apresentação acadêmica
+
+- Revisão das notações Mermaid e adequação dos diagramas de componentes, implantação, atividades e ER aos módulos existentes.
+- Atualização dos documentos que ainda descreviam o `app.py` pré-modularização.
+- Verificação estática automatizada de links, blocos Mermaid, chaves ORM e navegação documental.
+- Relatório de auditoria final com distinção entre evidências testadas e pendências de homologação.
+- Sem alteração nas regras de negócio, modelos ORM, banco Neon ou interface operacional.

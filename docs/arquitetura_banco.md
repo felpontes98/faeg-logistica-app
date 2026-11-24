@@ -18,7 +18,7 @@ O Streamlit (`app.py`) acessa o PostgreSQL por sessões SQLAlchemy criadas em `d
 | `ciclos_operacionais` | `id_ciclo` | Nome, cliente de referência, datas, status, total `km_deslocamentos_operacionais` e componentes opcionais `km_saida_entre_coletas` e `km_retorno_operacional` (únicos por ciclo) |
 | `ciclos_financeiro` | `id_ciclo` (também FK) | Valores legados do ciclo; mantidos para compatibilidade histórica |
 | `viagens` | `id_viagem` | Frete/viagem com código, motorista, veículo, rota e documentos; `id_ciclo` pode ser compartilhado |
-| `fretes_financeiro` | `id_viagem` (também FK) | **Nova tabela** com cliente, negociação, percentuais e parcelas específicos do frete |
+| `fretes_financeiro` | `id_viagem` (também FK) | Tabela vigente com cliente, negociação, percentuais e parcelas específicos do frete |
 | `recebimentos_frete` | `id_recebimento` | Pagamentos efetivos, cada um associado a um frete via `id_viagem`, com data, valor, forma, referência e status de cancelamento |
 | `viagens_despesas` | `id_despesa` | Despesa financeira ligada a `id_viagem`; fornecedor e campo legado `odometro_abastecimento` são opcionais |
 | `ciclos_despesas` | `id_despesa_ciclo` | Despesa compartilhada associada uma vez ao `id_ciclo`, com fornecedor opcional e cancelamento auditável; não é distribuída por frete |
@@ -108,26 +108,22 @@ Os códigos de negócio devem ser gerados e validados no banco de forma segura p
 
 ## 4. Integridade, segurança e migração
 
-### Estado do código proposto
+### Histórico das alterações estruturais já incorporadas
 
-- `database/models.py` usa `Base.metadata.create_all()` e comandos manuais `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. **Na primeira abertura do app alterado, `create_all()` tentará criar a nova tabela `fretes_financeiro` no banco configurado.**
-- A atualização do cálculo de KM acrescenta a coluna `km_deslocamentos_operacionais` em `ciclos_operacionais` por meio de `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`; essa alteração de esquema ocorre na inicialização do aplicativo atualizado.
-- O novo detalhamento da Etapa 2 adiciona **duas colunas opcionais** em `ciclos_operacionais`: `km_saida_entre_coletas` e `km_retorno_operacional` (`NUMERIC(12,2)`, inicialmente `NULL` em linhas legadas). A migração preserva o total preexistente em `km_deslocamentos_operacionais`; só uma edição explícita da composição atualiza as duas colunas e o total. A inicialização do aplicativo modificado executa os `ADD COLUMN IF NOT EXISTS` — ensaiar primeiro em cópia do PostgreSQL.
-- A revisão visual da Tela 8 utiliza `schema_v=12` na chave do cache de inicialização para **não reutilizar** indevidamente a inicialização anterior de versão 11 após a inclusão dessas duas colunas. O aumento de versão não altera registros por si só; a sincronização estrutural permanece sujeita à validação prévia em banco de testes.
-- O controle do odômetro no abastecimento acrescenta `odometro_abastecimento INTEGER NULL` à tabela `viagens_despesas`; essa coluna também é criada automaticamente na inicialização da nova versão.
-- A tabela independente `abastecimentos` (com FK para `veiculos` e fornecedor opcional) é criada por `Base.metadata.create_all()` na inicialização da versão 6. O schema existente de `viagens_despesas` não é removido nem reescrito.
-- A tabela `recebimentos_frete` é criada por `Base.metadata.create_all()` na inicialização da versão 8. Nenhuma coluna de dados históricos é removida e os recebimentos não são deduzidos automaticamente das parcelas previstas.
-- A tabela `ciclos_despesas` é criada por `Base.metadata.create_all()` na inicialização da versão 9. Não redistribui custos existentes nem converte registros de abastecimento em despesas financeiras.
-- A versão 10 cria `veiculos_despesas`, adiciona FKs opcionais de origem e campos de cancelamento em `abastecimentos`, e amplia a precisão do valor unitário em `viagens_despesas` e `ciclos_despesas` para quatro decimais. A inicialização altera esquema, mas **não reclassifica nem copia automaticamente os dados legados**.
-- A versão 11 cria `veiculos_despesas_atribuicoes` e adiciona em `veiculos_despesas` duas FKs opcionais para o lançamento financeiro de destino e a data de atribuição. Não atribui gastos antigos automaticamente; somente ações explícitas na Etapa 7 produzem eventos.
-- `app.py` chama `sincronizar_colunas_banco()` na inicialização.
-- `database/diagnostico_ciclos.py` pode ser executado separadamente com `python -m database.diagnostico_ciclos`. Esse diagnóstico **não inicializa o app nem migra o banco**: faz exclusivamente consultas SQL em transação `READ ONLY`, identifica IDs de ciclo duplicados e diferencia os valores legados dos financeiros individuais. O resultado é exibido no terminal como JSON.
-- A string de conexão é lida da variável `DATABASE_URL` após `load_dotenv()`.
-- Existem restrições `unique` em alguns campos, como placas e `codigo_viagem`, e chaves estrangeiras nos relacionamentos descritos.
+Os itens abaixo são **evoluções anteriores**, presentes no esquema descrito pelo ORM. Não representam novas migrações desta revisão documental:
+
+- O banco utiliza `Base.metadata.create_all()` e comandos `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` dentro de `sincronizar_colunas_banco()`. Esse mecanismo **continua ativo** e pode executar DDL na abertura do aplicativo, conforme o banco configurado.
+- As tabelas `fretes_financeiro`, `recebimentos_frete`, `ciclos_despesas`, `veiculos_despesas`, `veiculos_despesas_atribuicoes` e `abastecimentos` pertencem às versões anteriores. A tabela `fretes_financeiro` permite informações comerciais individuais em um mesmo ciclo.
+- As colunas `km_deslocamentos_operacionais`, `km_saida_entre_coletas` e `km_retorno_operacional` de `ciclos_operacionais` preservam a compatibilidade com os campos legados de deslocamento. A separação posterior em **saídas operacionais e trechos** prevalece no cálculo físico quando há saídas registradas.
+- O campo opcional `odometro_abastecimento` em `viagens_despesas` e a tabela `abastecimentos` suportam o histórico de combustível sem segundo lançamento financeiro.
+- Os modelos `saidas_operacionais`, `trechos_operacionais` e `parametros_consumo_veiculo` foram incorporados no Ajuste 27. Os registros históricos não são convertidos automaticamente.
+- A inicialização modular utiliza atualmente **`inicializar_banco_uma_vez(schema_v=13)`** em `app.py`/`faeg_app/bootstrap.py`. Alterar essa chave de cache não substitui migrações formais nem realiza recuperação de dados.
+- O diagnóstico `python -m database.diagnostico_ciclos` consulta o banco separadamente, para evidenciar ciclos duplicados e conciliações pendentes; não é rotina de migração.
+- A string de conexão vem de `DATABASE_URL` (variável de ambiente ou `.env` não versionado). Existem restrições de unicidade em campos como placa e código da viagem e FKs descritas nos diagramas.
 
 ### Recomendações
 
-1. **Antes de copiar este código para um ambiente conectado ao banco oficial**, realizar backup restaurável e testar em uma cópia do banco. A criação da tabela pela inicialização é uma alteração de esquema.
+1. **Antes de qualquer mudança conectada ao banco oficial**, garantir backup restaurável e testar em uma cópia do banco. O mecanismo de sincronização pode realizar alterações de esquema.
 2. Introduzir migrações versionadas e revisáveis, por exemplo com Alembic, após planejamento técnico.
 3. Criar chaves únicas específicas de frete e ciclo, índices nas chaves estrangeiras e validações para despesas e pagamentos.
 4. Separar permissões de leitura e escrita; restringir acesso a dados pessoais e comerciais.
@@ -192,4 +188,4 @@ O Ajuste 27 acrescentou **três tabelas sem excluir as 15 anteriores**. A funç�
 
 **Limitações operacionais desta versão:** não há movimentação de estoques de diesel nem alocação automática do combustível consumido a um ciclo; despesas históricas não são realocadas; sobreposição de odômetros entre ciclos distintos ainda deve ser conferida manualmente; não existe ainda vínculo automático entre cada frete e os trechos físicos onde foi transportado.
 
-**Nota de arquitetura:** o projeto não possui uma API REST independente. O acesso é feito por `app.py` e módulos Python a sessões do SQLAlchemy. A sincronização automática na inicialização não é um sistema de migrações versionadas; adotar procedimento revisável antes de evoluções estruturais.
+**Nota de arquitetura:** o projeto não possui uma API REST independente. O acesso é feito por `faeg_app/pages/`, `faeg_app/core.py` e módulos Python a sessões do SQLAlchemy. A sincronização automática na inicialização não é um sistema de migrações versionadas; adotar procedimento revisável antes de evoluções estruturais.

@@ -35,17 +35,17 @@ tests/                          # Testes SQLite e verificações de modularizaç
 
 ```mermaid
 flowchart TD
-    A[app.py] --> B[set_page_config]
-    B --> C[bootstrap: sincronização de esquema]
-    C --> D[theme: identidade visual]
-    D --> E[core: carrega cadastros e estado da viagem]
-    E --> F[layout: sidebar e contexto]
-    F --> G{Etapa selecionada}
-    G --> H[faeg_app/pages/etapa_01..11]
-    H --> I[core: callbacks e consultas]
-    H --> J[reporting: Excel e PDF]
-    I --> K[database: SQLAlchemy]
-    K --> L[(Neon PostgreSQL)]
+    A["app.py"] --> B["Configuração Streamlit"]
+    B --> C["bootstrap - sincronização existente"]
+    C --> D["theme - identidade visual"]
+    D --> E["core - cadastros e viagem ativa"]
+    E --> F["layout - menu e contexto"]
+    F --> G{"Etapa selecionada"}
+    G --> H["faeg_app/pages - 11 etapas"]
+    H --> I["core - callbacks e consultas"]
+    H --> J["reporting - PDF e Excel"]
+    I --> K["database - SQLAlchemy"]
+    K --> L[("Neon - PostgreSQL")]
 ```
 
 ## Cuidados de compatibilidade

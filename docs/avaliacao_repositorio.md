@@ -1,48 +1,38 @@
-# Avaliação técnica do repositório — 24/11/2026
+# Avaliação técnica — repositório modularizado (24/11/2026)
 
-**Base auditada:** arquivo ZIP `faeg-logistica-app-main (1).zip` fornecido para revisão. **Método:** leitura estática dos fontes e documentação, conferência de estrutura, contagem dos modelos ORM e execução dos testes existentes em SQLite. Não foram acessados logs privados do GitHub, segredos, banco Neon nem o ambiente de produção nesta auditoria documental.
+**Fonte examinada:** `faeg-logistica-app-main (1)(1).zip`, enviado em 24/11/2026, após a modularização. Esta avaliação substitui como referência atual o diagnóstico anterior, que descrevia o `app.py` pré-refatoração.
 
-## Inventário confirmado
+## Inventário verificado
 
-| Item | Observação |
+| Aspecto | Situação identificada |
 | --- | --- |
-| Linguagem e interface | Python + Streamlit (`app.py`, 7.253 linhas na cópia recebida) |
-| Banco de dados | PostgreSQL/Neon via SQLAlchemy; `database/models.py` com 18 entidades |
-| Domínio | Fretes, ciclos, saídas, trechos, despesas, abastecimentos, recebimentos |
-| Estrutura de navegação | 11 etapas no `app.py` |
-| Testes existentes | 6 testes Pytest de saídas operacionais, usando SQLite em memória |
-| Documentação recebida | README, requisitos, regras, arquitetura, resumo, 3 reuniões e protótipo HTML |
-| Licença na cópia auditada | MIT; novo aviso para contribuições posteriores, com histórico MIT preservado em `licenses/` |
+| Interface | Python/Streamlit, `app.py` como ponto de entrada (74 linhas) |
+| Organização | `faeg_app/pages/` com 11 módulos; `core.py`, `reporting.py`, `theme.py`, `layout.py` e `bootstrap.py` |
+| Banco | SQLAlchemy com 18 tabelas ORM; PostgreSQL/Neon é o ambiente de produção |
+| Regras operacionais | Fretes, ciclos, saídas, trechos, despesas, abastecimentos e recebimentos |
+| Testes | Testes de saídas, estrutura modular, imports, relatório e simulação de renderização; sem ensaio completo no Neon |
+| Documentação | README, requisitos, regras, rastreabilidade, decisões, reuniões e protótipo histórico |
+| Licenciamento | Aviso atual para novas contribuições; texto MIT das versões anteriores preservado no histórico |
 
-## Pontos corrigidos neste pacote documental
+## Pontos revisados para apresentação
 
-1. README reduzido e estruturado para apresentação, instalação, arquitetura e documentação.
-2. Contagem e inventário das tabelas atualizados de 15 para **18**; DER complementado com saídas/trechos/consumo.
-3. Critérios de quilometragem atualizados para distinguir **modo legado** e prioridade do KM de saídas da versão atual.
-4. Adicionados UML de classes e sequência, mais diagramas de componentes, DER, atividades, implantação, estados e casos de uso.
-5. Adicionados glossário, guia de execução, plano de testes, segurança, ADRs, CONTRIBUTING, SECURITY, CHANGELOG e `.editorconfig`.
-6. Adicionada CI básica para sintaxe e testes existentes, **sem credenciais de banco**.
+- Diagramas Mermaid conferidos e simplificados para representação da **arquitetura modular real**; ER separado em visões legíveis com as 18 entidades.
+- Arquivos de requisitos, rastreabilidade, instalação e README alinhados com os módulos atuais.
+- Navegação do GitHub e links relativos conferidos por testes automatizados; roteiro de leitura para a banca adicionado ao README.
+- História acadêmica preservada, sem atribuir ao protótipo de 9 telas recursos posteriores do MVP de 11 etapas.
 
-## Recomendações de engenharia (não implementadas neste pacote)
+## Riscos técnicos que permanecem
 
-| Prioridade | Assunto | Justificativa / próximo passo |
+| Prioridade | Tema | Estado / recomendação |
 | --- | --- | --- |
-| **P0** | Autenticação e autorização | Não identificado controle próprio de usuário/perfil no código; proteger dados pessoais, financeiros e operações de escrita. |
-| **P0** | Backups e restauração | Verificar branch/backup do Neon e ensaiar restauração antes de mudanças no esquema ou nos dados. |
-| **P1** | Migrações versionadas | `sincronizar_colunas_banco()` combina criação de tabelas e DDL na inicialização; avaliar Alembic em fluxo separado. |
-| **P1** | Testes PostgreSQL de integração | SQLite não detecta diferenças de DDL, transações, tipos e constraints da produção. |
-| **P1** | Cobertura financeira | Adicionar cenários automatizados de receitas, recebimentos, gastos compartilhados, atribuições/estornos e relatórios. |
-| **P1** | Refatoração incremental | `app.py` concentra interface e regras; dividir por páginas/serviços somente com testes de regressão. |
-| **P2** | Dependências reprodutíveis | `requirements.txt` sem versões fixas; definir estratégia de atualização e lock quando o ambiente estiver estabilizado. |
-| **P2** | Auditoria abrangente | Histórico de cancelamentos/atribuições existe, mas alterações gerais e acesso não são totalmente auditados. |
-| **P2** | Homologação documentada | Executar matriz de aceite com dados fictícios, evidências e assinatura dos responsáveis. |
+| Alta | Autenticação e autorização | Não há controle próprio de usuários/perfis identificado no repositório; restringir acesso e evitar divulgar dados reais em demonstração pública |
+| Alta | Backup e recuperação | Confirmar backup/branch do Neon e testar restauração antes de mudanças em esquema ou dados |
+| Alta | Homologação integrada | Testes locais não certificam todas as telas e transações em PostgreSQL/Neon |
+| Média | Atualização de esquema | Sincronização de tabelas/colunas na inicialização; introduzir migrações versionadas após a entrega acadêmica |
+| Média | Dependências | `requirements.txt` não fixa versões; elaborar política de versões e atualização posteriormente |
+| Média | Testes de financeiro | Cobrir com testes automatizados os recebimentos, cancelamentos, despesas de ciclo e duplicidades em operações reais |
+| Média | Organização de código | `core.py` permanece grande; extrair serviços somente mediante testes integrados |
 
-## Limites desta entrega
+**Não foram alterados nesta auditoria:** `app.py`, `faeg_app/`, `database/`, `views/`, os modelos de dados, as regras financeiras e a integração Neon. Não foram acessados segredos, registros privados do banco nem logs do Streamlit.
 
-**Não foram alterados:** `app.py`, `database/`, `views/`, `tests/`, `requirements.txt`, identidade visual ou qualquer registro no Neon. Foram atualizados a documentação, a política de licença para novas contribuições e a CI. A licença MIT original foi mantida integralmente no histórico `licenses/`. A CI terá execução inicial após ser enviada ao GitHub.
-
-A [matriz de rastreabilidade](rastreabilidade.md) relaciona requisitos e módulos; o [plano de testes](plano_testes.md) descreve as evidências ainda necessárias.
-
-## Atualização posterior — modularização conservadora (24/11/2026)
-
-O inventário acima é um registro histórico da revisão anterior, quando o `app.py` tinha mais de 7 mil linhas. Na nova entrega, o ponto de entrada possui **74 linhas** e as 11 etapas foram movidas para `faeg_app/pages/`. As funções compartilhadas foram isoladas em `faeg_app/core.py`, relatórios em `faeg_app/reporting.py`, aparência em `faeg_app/theme.py`, contexto visual em `faeg_app/layout.py`. A restrição sobre alterações automáticas de esquema e a ausência de testes integrados PostgreSQL **permanecem**. Consulte [arquitetura da aplicação](arquitetura_aplicacao.md).
+Detalhamento de verificações e resultados: [auditoria final](auditoria_final_2026-11-24.md).

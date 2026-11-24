@@ -35,11 +35,11 @@ python -m streamlit run app.py
 
 ```powershell
 python -m pip install pytest
-python -m compileall -q app.py database views tests
-python -m pytest -q tests/test_saidas_operacionais.py
+python -m compileall -q app.py faeg_app database views tests
+python -m pytest -q tests
 ```
 
-A suíte usa SQLite em memória, definida no arquivo de teste. **Não representa um teste de compatibilidade com PostgreSQL.**
+A suíte inclui testes de saídas, importação dos módulos, relatórios, simulação das 11 etapas e verificações estáticas dos documentos, usando SQLite em memória nos testes de banco. **Não representa um teste de compatibilidade com PostgreSQL.**
 
 ## Antes de publicar no Streamlit/Neon
 

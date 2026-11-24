@@ -7,7 +7,7 @@ Este projeto combina desenvolvimento acadêmico e utilização operacional real.
 1. Criar issue descrevendo problema, requisito e cenário esperado.
 2. Criar branch específica, por exemplo `docs/diagramas` ou `fix/fechamento-ciclo`.
 3. Evitar editar diretamente dados reais como forma de testar cálculos; usar PostgreSQL isolado ou SQLite em memória para os testes existentes.
-4. Rodar `python -m compileall -q app.py database views tests` e `python -m pytest -q tests/test_saidas_operacionais.py`.
+4. Rodar `python -m compileall -q app.py faeg_app database views tests` e `python -m pytest -q tests`.
 5. Conferir `git diff --check` e realizar revisão de alterações em `database/models.py` e `sincronizar_colunas_banco()`.
 6. Abrir pull request indicando mudanças, riscos, plano de teste e impacto no Neon.
 

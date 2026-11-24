@@ -1,35 +1,33 @@
-# Casos de uso do Sistema FAEG
+# Casos de uso — visão funcional do sistema FAEG
 
-**Tipo:** visão funcional de casos de uso, em fluxograma Mermaid. Para um diagrama UML formal de casos de uso seria necessário um renderizador específico; aqui foi priorizada a leitura diretamente pelo GitHub.
+O Mermaid usa aqui uma **aproximação por fluxograma**, e não a notação gráfica UML de casos de uso com elipses e atores padronizados. Isso permite exibição no GitHub sem imagem externa.
 
 ```mermaid
 flowchart LR
-    O([Operador FAEG])
-    G([Gestor / responsável pela operação])
-    T([Equipe de desenvolvimento])
-    subgraph SYS["Sistema Web FAEG"]
-        UC1([Manter cadastros])
-        UC2([Cadastrar frete])
-        UC3([Agrupar fretes em ciclo])
-        UC4([Registrar negociação e recebimentos])
-        UC5([Registrar coleta e entrega])
-        UC6([Lançar despesas e abastecimentos])
-        UC7([Registrar saídas e trechos])
-        UC8([Consultar fechamento e indicadores])
-        UC9([Exportar relatórios])
-        UC10([Analisar dados e testar alterações])
+    OP["Operador FAEG"]
+    GP["Gestor operacional"]
+    DV["Desenvolvedor"]
+    subgraph SYS["Sistema Web FAEG - MVP"]
+        C1(["Manter cadastros"])
+        C2(["Cadastrar e consultar fretes"])
+        C3(["Organizar ciclos operacionais"])
+        C4(["Negociar e registrar recebimentos"])
+        C5(["Registrar coletas e entregas"])
+        C6(["Registrar despesas e abastecimentos"])
+        C7(["Registrar saídas e trechos"])
+        C8(["Consultar fechamento gerencial"])
+        C9(["Exportar PDF e Excel"])
     end
-    O --> UC1
-    O --> UC2
-    O --> UC3
-    O --> UC4
-    O --> UC5
-    O --> UC6
-    O --> UC7
-    G --> UC8
-    G --> UC9
-    G --> UC3
-    T --> UC10
+    OP --> C1
+    OP --> C2
+    OP --> C3
+    OP --> C4
+    OP --> C5
+    OP --> C6
+    OP --> C7
+    GP --> C8
+    GP --> C9
+    DV -.-> C9
 ```
 
-**Limite do escopo:** não estão modelados autenticação por perfil, conciliação bancária automatizada, emissão fiscal automática ou rastreamento de carga, porque tais funcionalidades não foram comprovadas no código inspecionado.
+A equipe de desenvolvimento mantém o código e executa testes **fora do fluxo de negócio**. Autenticação, emissão fiscal automática e importação persistente de planilha não foram comprovadas no MVP.

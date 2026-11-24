@@ -1,6 +1,6 @@
 # Diagramas de modelagem — FAEG
 
-Os diagramas abaixo foram preparados com base no **código do Ajuste 27 (24/11/2026)** e suas regras documentadas. Usam sintaxe [Mermaid](https://mermaid.js.org/) para visualização direta no GitHub. São modelos de arquitetura e comportamento, não evidências de teste integrado.
+Os diagramas abaixo foram revisados com base no **Ajuste 27 e na modularização de 24/11/2026** e suas regras documentadas. Usam sintaxe [Mermaid](https://mermaid.js.org/) para visualização direta no GitHub. São modelos de arquitetura e comportamento, não evidências de teste integrado.
 
 | Diagrama | Finalidade | Notação |
 | --- | --- | --- |
@@ -14,3 +14,7 @@ Os diagramas abaixo foram preparados com base no **código do Ajuste 27 (24/11/2
 | [Implantação](implantacao.md) | Navegador, Streamlit e PostgreSQL/Neon | Visão conceitual de implantação |
 
 **Cuidados de leitura:** os estados marcados como propostos não devem ser interpretados como transições automáticas já implementadas; não existe API REST própria no repositório. As associações opcionais são mostradas conforme o ORM, sem prometer restrições adicionais do banco físico.
+
+## Conferência de renderização
+
+Os blocos usam notações Mermaid convencionais e foram revisados para evitar rótulos multilinha ambíguos e erros de separação de chaves no DER. O repositório possui uma **verificação estática automatizada** da documentação (`tests/test_documentacao.py`), mas ela **não substitui** uma renderização real pelo GitHub. Após publicar, abrir cada um dos oito links acima e confirmar a exibição dos gráficos.

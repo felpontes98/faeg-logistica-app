@@ -1,25 +1,24 @@
-# Visão de implantação — execução e dependências
+# Diagrama de implantação — desenvolvimento e execução
 
 ```mermaid
 flowchart TB
-    subgraph DEV["Estação do desenvolvedor"]
-        VSC[VSCode / PowerShell]
-        GIT[Git local]
+    subgraph DEV["Estação de desenvolvimento"]
+        IDE["VSCode e ambiente Python"]
+        GIT["Git local"]
     end
-    subgraph NUVEM["Serviços externos"]
-        GITHUB[GitHub - repositório]
-        HOST[Hospedagem Streamlit - Python]
-        NEON[(Neon - PostgreSQL)]
+    subgraph CLOUD["Serviços externos"]
+        GH["GitHub - repositório"]
+        ST["Hospedagem Streamlit"]
+        DB[("Neon - PostgreSQL")]
     end
-    OP[Navegador do operador]
-    VSC --> GIT
-    GIT -->|git push| GITHUB
-    GITHUB -->|Implantação configurada| HOST
-    OP <-->|Interface web / HTTPS| HOST
-    HOST <-->|Conexão PostgreSQL por DATABASE_URL| NEON
+    USER["Navegador do operador"]
+    IDE --> GIT
+    GIT -->|"git push"| GH
+    GH -->|"Publicação configurada"| ST
+    USER <-->|"HTTPS"| ST
+    ST <-->|"Conexão SQLAlchemy"| DB
 ```
 
-- O armazenamento de dados está no PostgreSQL; a aplicação Streamlit executa o código Python, sem API REST própria.
-- Credenciais devem ser configuradas **no ambiente de hospedagem** e nunca versionadas.
-- `git push` atualiza o repositório; a disponibilização e saúde do serviço dependem da implantação configurada e do início correto do aplicativo.
-- A infraestrutura exata, controles de autenticação e regras de rede do provedor não foram auditados no pacote recebido.
+- O GitHub armazena o código. O provedor Streamlit executa a aplicação e utiliza a `DATABASE_URL` configurada fora do repositório.
+- O `git push` **não garante** que o aplicativo iniciou ou que houve sucesso no banco. A sincronização do esquema executada na abertura também exige cautela.
+- Autenticação por perfil dentro do aplicativo, configuração exata da hospedagem e controles de rede **não foram auditados** no ZIP recebido.

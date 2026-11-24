@@ -39,18 +39,29 @@ Aplicação web para cadastrar fretes, agrupar serviços em ciclos operacionais,
 
 ```mermaid
 flowchart LR
-    U[Usuário operacional] --> UI[Interface Streamlit]
-    UI --> PAG[Etapas em faeg_app/pages]
-    PAG --> CORE[faeg_app/core: formulários e callbacks]
-    CORE --> DOM[Serviços em database]
-    DOM --> ORM[SQLAlchemy ORM]
-    ORM --> DB[(PostgreSQL / Neon)]
-    PAG --> REL[faeg_app/reporting: PDF e Excel]
+    U["Usuário operacional"] --> UI["Interface Streamlit"]
+    UI --> PAG["11 etapas em faeg_app/pages"]
+    PAG --> CORE["faeg_app/core - regras compartilhadas"]
+    CORE --> DOM["Serviços em database"]
+    DOM --> ORM["SQLAlchemy ORM"]
+    ORM --> DB[("PostgreSQL - Neon")]
+    PAG --> REL["reporting - PDF e Excel"]
 ```
 
 O `app.py` é somente o ponto de entrada (74 linhas na refatoração de 24/11/2026). As 11 etapas estão em `faeg_app/pages/`, as consultas/callbacks compartilhadas em `faeg_app/core.py`, a identidade visual em `faeg_app/theme.py` e os relatórios em `faeg_app/reporting.py`. Detalhes: [estrutura de módulos](docs/arquitetura_aplicacao.md).
 
 O projeto **não implementa uma API REST independente**: a interface chama diretamente funções Python e sessões SQLAlchemy. O modelo atual possui **18 tabelas ORM**. Consulte os [diagramas técnicos](docs/diagramas/README.md) e o [inventário do banco](docs/arquitetura_banco.md).
+
+## Orientações para avaliação acadêmica
+
+Para conhecer o MVP e as evidências documentadas, sugerimos o seguinte percurso de leitura:
+
+1. [Guia de avaliação da banca](docs/guia_avaliacao_banca.md), [resumo do problema](docs/resumo_faeg.md) e [requisitos funcionais](docs/requisitos.md).
+2. [Protótipo inicial](docs/prototipo/prototipo_inicial.html) e [registro de reuniões](docs/reunioes/).
+3. [Diagramas de classes, sequência, DER e arquitetura](docs/diagramas/README.md).
+4. [Organização do código modular](docs/arquitetura_aplicacao.md), [testes](docs/plano_testes.md) e [auditoria final do repositório](docs/auditoria_final_2026-11-24.md).
+
+O endereço e as credenciais de acesso a uma demonstração operacional, caso sejam necessários, devem ser fornecidos **separadamente e por canal autorizado**, evitando exposição de clientes, placas, contatos ou valores reais em um ambiente público.
 
 ## Executar localmente
 
@@ -62,7 +73,8 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
-# Edite .env e configure DATABASE_URL para um banco DE TESTES.
+# Edite .env e configure DATABASE_URL com o driver postgresql+psycopg
+# para um banco DE TESTES, nunca para o Neon de produção.
 python -m streamlit run app.py
 ```
 

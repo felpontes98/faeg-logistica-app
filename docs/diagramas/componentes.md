@@ -1,53 +1,36 @@
-# Diagrama de componentes — arquitetura implementada
+# Diagrama de componentes — arquitetura modular implementada
+
+O projeto é um **monólito Streamlit modularizado**. `app.py` apenas inicializa e seleciona a etapa; os módulos Python compartilham a mesma aplicação e acessam o banco por SQLAlchemy. **Não existe API REST própria**, microsserviço ou autenticação por perfis implementada no código revisado.
 
 ```mermaid
 flowchart LR
-    Pessoa[Operador ou gestor]
-    subgraph APP["Processo Python - Streamlit"]
-        UI["app.py - 11 etapas"]
-        V["views/saidas_operacionais.py"]
-        B["database/
-Regras de negócio e consultas"]
-        M["database/models.py
-18 modelos ORM"]
-        C["database/connection.py
-SessionLocal"]
+    P["Operador FAEG"]
+    subgraph APP["Aplicação Streamlit - Python"]
+        ENTRY["app.py - ponto de entrada"]
+        BOOT["faeg_app/bootstrap.py"]
+        LAYOUT["layout.py e theme.py"]
+        PAGES["faeg_app/pages - 11 etapas"]
+        CORE["faeg_app/core.py - lógica compartilhada"]
+        REPORT["faeg_app/reporting.py - PDF e Excel"]
+        VIEWS["views/saidas_operacionais.py"]
+        SERVICES["database - serviços operacionais"]
+        ORM["database/models.py e connection.py"]
     end
-    NEON[(PostgreSQL / Neon)]
-    SAIDA[PDF e planilhas Excel]
-    FILE[Planilha Excel de entrada]
-    Pessoa --> UI
-    UI --> V
-    UI --> B
-    V --> B
-    B --> M
-    UI --> M
-    M --> C
-    C --> NEON
-    UI --> SAIDA
-    FILE --> UI
-    UI -->|Prévia e auditoria; escrita bloqueada| B
+    DB[("PostgreSQL - Neon")]
+    P --> ENTRY
+    ENTRY --> BOOT
+    ENTRY --> LAYOUT
+    ENTRY --> PAGES
+    PAGES --> CORE
+    PAGES --> REPORT
+    PAGES --> VIEWS
+    CORE --> SERVICES
+    VIEWS --> SERVICES
+    REPORT --> SERVICES
+    SERVICES --> ORM
+    ORM --> DB
 ```
 
-**Características reais:** o aplicativo opera como processo Streamlit com acesso ao banco via SQLAlchemy; não há camada HTTP REST independente entre `app.py` e a persistência. A geração de relatórios ocorre na aplicação. A sincronização de tabelas/colunas é chamada no início de `app.py`.
+O diretório `assets/` fornece o logotipo e o estilo visual. O importador em `database/importador_planilha.py` permite **prévia e auditoria**, não importação persistente liberada. O serviço inicializa a sincronização de esquema já existente; ela não é equivalente a um controle de migrações versionadas.
 
-**Nota histórica:** na revisão documental anterior, `app.py` ainda tinha mais de 7 mil linhas. A modularização conservadora foi realizada posteriormente; consulte o complemento abaixo e a [arquitetura da aplicação](../arquitetura_aplicacao.md).
-
-## Complemento — módulos após refatoração
-
-```mermaid
-flowchart TB
-    A[app.py] --> B[faeg_app/layout.py]
-    A --> C[faeg_app/pages — 11 etapas]
-    A --> D[faeg_app/bootstrap.py]
-    A --> E[faeg_app/theme.py]
-    C --> F[faeg_app/core.py]
-    C --> G[faeg_app/reporting.py]
-    F --> H[database/ — ORM e regras]
-    G --> H
-    H --> I[(PostgreSQL / Neon)]
-    C --> J[views/saidas_operacionais.py]
-    E --> K[assets/faeg_styles.html]
-```
-
-A modularização é interna ao mesmo processo Streamlit; **não cria API REST nem novos microserviços**.
+Referência de implementação: [arquitetura da aplicação](../arquitetura_aplicacao.md).

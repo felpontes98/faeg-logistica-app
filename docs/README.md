@@ -16,7 +16,8 @@
 | Documento | Conteúdo |
 | --- | --- |
 | [Arquitetura do banco](arquitetura_banco.md) | 18 entidades, relacionamentos, integridade e transição de esquema |
-| [Avaliação do repositório](avaliacao_repositorio.md) | Inventário, lacunas e prioridades de engenharia |
+| [Auditoria final do repositório](auditoria_final_2026-11-24.md) | Verificações realizadas, correções e pontos pendentes para a banca |
+| [Avaliação técnica](avaliacao_repositorio.md) | Inventário atual e prioridades de engenharia |
 | [Matriz de rastreabilidade](rastreabilidade.md) | Relação entre RFs, módulos e testes |
 | [Diagramas de modelagem](diagramas/README.md) | Classes, sequência, DER, componentes, atividades, estados, casos de uso e implantação |
 | [Guia de execução](guia_execucao.md) | Instalação local, banco isolado, testes e implantação |
@@ -25,7 +26,11 @@
 | [Licenciamento e histórico](licenciamento.md) | Regra atual, preservação da MIT e direitos das versões anteriores |
 | [Decisões de arquitetura](decisoes/README.md) | Histórico de justificativas técnicas (ADRs) |
 
-## 3. Histórico acadêmico do desenvolvimento
+## 3. Preparação para a avaliação acadêmica
+
+- [Guia de avaliação da banca](guia_avaliacao_banca.md) — apresentação do MVP, evidências e reprodução dos testes.
+
+## 4. Histórico acadêmico do desenvolvimento
 
 - [Reunião 01 — Kickoff](reunioes/reuniao_01_kickoff.md)
 - [Reunião 02 — Protótipo visual](reunioes/reuniao_02_prototipo_visual.md)
