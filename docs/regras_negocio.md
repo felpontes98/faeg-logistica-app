@@ -146,3 +146,19 @@ Campos ausentes não devem ser substituídos por datas atuais ou valores zero se
 - [ ] A equipe aprova a nomenclatura final das situações operacional e financeira.
 - [ ] São preparados cenários reais anonimizados para teste individual e por ciclo.
 - [ ] Todas as alterações preservam histórico já cadastrado após teste de migração.
+## RN-16 — Saídas operacionais, trechos e custo de combustível (nova implantação)
+
+**Regra prioritária quando existem saídas cadastradas no mesmo ID interno da operação** (individual ou ciclo):
+
+1. **Operação/Ciclo:** representa o planejamento físico de saída e retorno à base, podendo englobar dias e várias saídas preparatórias. **Frete:** representa cada contrato comercial, com cliente, negociação, recebimentos e documentos independentes. O mesmo ciclo pode ter fretes simultâneos ou sequenciais, inclusive de retorno.
+2. **Saída operacional:** representa um deslocamento físico identificável da van, com veículo, motorista opcional, data inicial/final, KM planejado e odômetros inicial/final. São admitidas diversas saídas no mesmo ciclo, mesmo com retorno intermediário à base.
+3. **Trechos:** permitem detalhar uma saída em deslocamentos entre base, coletas, entregas e retorno. Se houver trechos detalhados, o KM planejado físico da saída é a **soma dos trechos**; o KM manual da saída não se soma novamente. Sem trechos, usa-se o KM manual da saída.
+4. **KM operacional planejado:** soma os KM das saídas vinculadas ao ID interno do ciclo, uma vez cada. Não soma automaticamente os KM comerciais dos fretes quando existem saídas registradas. Esses KM por frete permanecem preservados para consulta/comparação.
+5. **KM real:** diferença entre os odômetros de cada saída, somada no ciclo **apenas se todas as saídas tiverem leituras válidas** e não houver sobreposição de intervalos no mesmo veículo. Sem esse requisito, o consolidado é **pendente**, não zero.
+6. **Despesas:** gastos comuns pertencem ao ciclo. Custos comprovadamente exclusivos podem pertencer a um frete. O relatório por frete de um ciclo **não representa lucro individual** e não recebe rateio artificial.
+7. **Abastecimento versus consumo:** cada compra de Diesel/ARLA mantém data, litros, odômetro, veículo e valor efetivamente pago no lançamento único original. Para estimar Diesel consumido na operação, usa-se **KM real por veículo ÷ consumo médio em km/L × preço de referência por litro**. Trata-se de **simulação gerencial**, não de um segundo lançamento financeiro.
+8. **Transição financeira:** a DRE existente continua apresentando as despesas efetivamente vinculadas a fretes/ciclos. O valor **estimado** de consumo não é somado nem subtraído novamente. Uma futura mudança para regime de combustível consumido deve antes reconciliar estoque inicial/final e compras existentes, com migração revisada.
+9. **Compatibilidade:** não migrar automaticamente KM, odômetros ou despesas do primeiro frete do Ciclo 001 (ou qualquer registro anterior). As novas saídas são cadastradas separadamente; até a criação da primeira saída o fechamento utiliza o cálculo anterior por frete.
+10. **Conversão individual → ciclo:** continua dependendo das validações e dos vínculos já existentes; não há conversão automática de históricos/recebimentos/despesas nesta implementação.
+
+**Cuidado:** a tela de controle de consumo é estimativa operacional; não é apuração de estoque contábil, fiscal ou de custo de combustível efetivo por tanque. As compras continuam no histórico real. As diferenças exigem conferência posterior antes de adotar novos resultados contábeis.

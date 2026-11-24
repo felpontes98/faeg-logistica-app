@@ -20,6 +20,8 @@ from database.conferencia_duplicidades import (
 from database.controle_abastecimentos import calcular_indicadores_abastecimentos
 from database.fechamento_ciclos import consolidar_ciclos, reconciliar_resultado_gerencial
 from database.importador_planilha import preparar_previa_importacao_faeg
+from database.saidas_operacionais import consultar_todas_saidas, resumo_saidas
+from views.saidas_operacionais import render_saidas_operacionais
 from database.models import (
     Abastecimento,
     CicloOperacional,
@@ -50,13 +52,13 @@ st.set_page_config(
 
 
 @st.cache_resource(show_spinner=False)
-def inicializar_banco_uma_vez(schema_v=12):
+def inicializar_banco_uma_vez(schema_v=13):
     """Garante que todas as tabelas e colunas novas existam no Neon sem alterar dados."""
     sincronizar_colunas_banco()
     return True
 
 
-inicializar_banco_uma_vez(schema_v=12)
+inicializar_banco_uma_vez(schema_v=13)
 
 # ==============================================================================
 # LISTAS PADRONIZADAS DO SISTEMA
@@ -1774,6 +1776,13 @@ def registrar_abastecimento_do_lancamento(session, dados, campo_origem, id_orige
 def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None, recebimentos=None, despesas_ciclo=None, despesas_veiculo=None, atribuicoes_veiculo=None, alertas_despesas=None):
     """Gera arquivo Excel (.xlsx) completo com todas as viagens, despesas e cadastros do sistema."""
     buf = io.BytesIO()
+    # Única leitura por exportação; os trechos são eager-loaded para uso após fechar a sessão.
+    with SessionLocal() as db:
+        registros_saida = consultar_todas_saidas(db)
+        por_ciclo_export = {}
+        for saida in registros_saida:
+            por_ciclo_export.setdefault(saida.id_ciclo, []).append(saida)
+        resumos_export = {cid: resumo_saidas(lista) for cid, lista in por_ciclo_export.items()}
 
     df_viagens = pd.DataFrame(
         [
@@ -1816,7 +1825,8 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
                 "Resultado Operacional Parcial (R$)": v["resultado_liquido"],
                 "Margem (%)": (
                     round(v["margem_pct"], 2)
-                    if v["receita_base"] > 0 and not v["financeiro_legado_ambiguo"] else None
+                    if v["receita_base"] > 0 and v["tipo_viagem"] != "Ciclo"
+                    and not v["financeiro_legado_ambiguo"] else None
                 ),
                 "KM Individual / Ciclo": v["km_rota_planejado"],
                 "KM Saída / Entre Coletas (ciclo)": v["km_saida_entre_coletas"],
@@ -1890,7 +1900,15 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
             "KM Saída / Entre Coletas": f["km_saida_entre_coletas"],
             "KM Retorno Operacional": f["km_retorno_operacional"],
             "KM Deslocamentos": f["km_deslocamentos_operacionais"],
-            "KM Total Planejado": f["km_total_planejado"],
+            "KM Total Planejado": (
+                resumos_export[f["id_ciclo"]]["km_planejado"]
+                if f["id_ciclo"] in resumos_export else f["km_total_planejado"]
+            ),
+            "KM Real Operacional": (
+                resumos_export[f["id_ciclo"]]["km_real"]
+                if f["id_ciclo"] in resumos_export else None
+            ),
+            "Fonte de KM": "Saídas operacionais" if f["id_ciclo"] in resumos_export else "Legado por fretes",
             "Fretes com Financeiro Legado Ambíguo": f["qtd_financeiros_legados_ambiguos"],
         }
         for f in (fechamentos_ciclos if fechamentos_ciclos is not None else consolidar_ciclos(todas_viagens))
@@ -1903,7 +1921,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         "Despesas Financeiras (R$)", "Resultado Operacional Parcial (R$)",
         "KM Fretes Planejados", "KM Saída / Entre Coletas",
         "KM Retorno Operacional", "KM Deslocamentos", "KM Total Planejado",
-        "Fretes com Financeiro Legado Ambíguo",
+        "KM Real Operacional", "Fonte de KM", "Fretes com Financeiro Legado Ambíguo",
     ])
     df_recebimentos = pd.DataFrame([
         {
@@ -2086,6 +2104,34 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         df_despesas_ciclo.to_excel(writer, sheet_name="Despesas_Ciclo", index=False)
         df_despesas_veiculo.to_excel(writer, sheet_name="Despesas_Veiculo", index=False)
         df_atribuicoes.to_excel(writer, sheet_name="Atribuicoes_Despesas", index=False)
+        # Exportação da operação física sem rateio de quilômetros por ID Frete.
+        dados_saidas = []
+        dados_trechos = []
+        por_ciclo = {}
+        for saida in registros_saida:
+            por_ciclo.setdefault(saida.id_ciclo, []).append(saida)
+            dados_saidas.append({
+                "ID Saída": saida.id_saida, "ID Ciclo": saida.id_ciclo,
+                "ID Veículo": saida.id_veiculo, "ID Motorista": saida.id_motorista,
+                "Descrição": saida.descricao, "Início": saida.data_inicio,
+                "Fim": saida.data_fim, "KM Manual de Referência": saida.km_planejado_manual,
+                "Odômetro Inicial": saida.odometro_inicial, "Odômetro Final": saida.odometro_final,
+                "Observações": saida.observacoes,
+            })
+            for trecho in saida.trechos:
+                dados_trechos.append({
+                    "ID Trecho": trecho.id_trecho, "ID Saída": trecho.id_saida,
+                    "Tipo": trecho.tipo_trecho, "Origem": trecho.origem,
+                    "Destino": trecho.destino, "KM Planejado": trecho.km_planejado,
+                    "Observações": trecho.observacoes,
+                })
+        dados_resumo = [{"ID Ciclo": cid, **{
+            k: v for k, v in resumo_saidas(saidas).items()
+            if k in {"qtd_saidas", "qtd_trechos", "km_planejado", "km_real", "completo"}
+        }} for cid, saidas in por_ciclo.items()]
+        pd.DataFrame(dados_saidas).to_excel(writer, sheet_name="Saidas_Operacionais", index=False)
+        pd.DataFrame(dados_trechos).to_excel(writer, sheet_name="Trechos_Operacionais", index=False)
+        pd.DataFrame(dados_resumo).to_excel(writer, sheet_name="KM_Operacional_Ciclos", index=False)
 
     return buf.getvalue()
 
@@ -3588,16 +3634,17 @@ with st.container(border=True):
             )
         st.markdown('<div class="sec-subtitle">KM X ROTA PLANEJADO</div>', unsafe_allow_html=True)
         st.caption(
-            "Preencha os trechos manualmente. Em um ciclo, os deslocamentos de saída/entre "
-            "coletas e de retorno são compartilhados e entram uma única vez na Etapa 8. "
-            "Não inclua nesses campos o trecho já lançado no KM Individual / Ciclo."
+            "O KM deste frete é uma referência comercial. Para operações com várias saídas, "
+            "registre o percurso físico e seus odômetros na Etapa 8 — Saídas Operacionais. "
+            "Quando houver saídas cadastradas, o sistema NÃO somará KM de diferentes fretes. "
+            "Os campos antigos de saída e retorno são preservados para conferência."
         )
         km1, km2, km3 = st.columns(3)
         with km1:
             st.number_input(
                 "KM DE SAÍDA E DESLOCAMENTO ENTRE COLETAS",
                 min_value=0.0,
-                step=10.0,
+                step=1.0,
                 format="%.2f",
                 value=to_float(get_campo("km_saida_entre_coletas", 0.0)),
                 key="w_km_saida_entre_coletas",
@@ -3609,7 +3656,7 @@ with st.container(border=True):
             st.number_input(
                 "KM INDIVIDUAL / CICLO",
                 min_value=0.0,
-                step=10.0,
+                step=1.0,
                 format="%.2f",
                 help=(
                     "Campo manual: informe o KM previsto deste ID Frete. "
@@ -3625,7 +3672,7 @@ with st.container(border=True):
             st.number_input(
                 "KM OPERACIONAL DE RETORNO",
                 min_value=0.0,
-                step=10.0,
+                step=1.0,
                 format="%.2f",
                 value=to_float(get_campo("km_retorno_operacional", 0.0)),
                 key="w_km_retorno_operacional",
@@ -3651,7 +3698,7 @@ with st.container(border=True):
             st.number_input(
                 "KM ODÔMETRO INICIAL",
                 min_value=0,
-                step=10,
+                step=1,
                 value=to_int(get_campo("odo_ini", 0)),
                 key="w_odo_ini",
                 on_change=sync_campo,
@@ -3661,7 +3708,7 @@ with st.container(border=True):
             st.number_input(
                 "KM ODÔMETRO FINAL",
                 min_value=0,
-                step=10,
+                step=1,
                 value=to_int(get_campo("odo_fin", 0)),
                 key="w_odo_fin",
                 on_change=sync_campo,
@@ -4322,14 +4369,32 @@ with st.container(border=True):
         if veiculos_destino:
             opcoes_destino.append("Veículo (sem frete/ciclo definido)")
         st.markdown("**Vínculo financeiro**")
+        # O destino habitual de gastos comuns é o ciclo (se o frete já estiver salvo).
+        # O usuário pode selecionar explicitamente o frete para custos exclusivos.
+        destino_padrao = (
+            "Ciclo inteiro (ID Ciclo)"
+            if viagem_sel_id and get_campo("tipo_viagem", "Individual") == "Ciclo"
+            and "Ciclo inteiro (ID Ciclo)" in opcoes_destino
+            else "Frete atual (ID Frete)"
+        )
+        if st.session_state.get("desp_destino_viagem_anterior") != viagem_sel_id:
+            st.session_state["desp_destino_lancamento"] = destino_padrao
+            st.session_state["desp_destino_viagem_anterior"] = viagem_sel_id
         destino_desp = st.selectbox(
             "VINCULAR ESTA DESPESA A *", opcoes_destino,
+            index=opcoes_destino.index(destino_padrao),
             key="desp_destino_lancamento",
-            help="O frete atual é o padrão. Uma despesa compartilhada não é copiada para cada frete.",
+            help="No ciclo, gastos comuns pertencem à operação. Use o ID Frete somente para custos comprovadamente exclusivos.",
         )
         ciclo_desp_id = None
         veiculo_desp_id = None
         if destino_desp.startswith("Ciclo inteiro"):
+            if viagem_sel_id and st.session_state.get("desp_ciclo_viagem_anterior") != viagem_sel_id:
+                with SessionLocal() as db:
+                    vi_atual = db.get(Viagem, viagem_sel_id)
+                    if vi_atual is not None and vi_atual.id_ciclo in ciclos_destino:
+                        st.session_state["desp_ciclo_destino_unico"] = vi_atual.id_ciclo
+                st.session_state["desp_ciclo_viagem_anterior"] = viagem_sel_id
             ciclo_desp_id = st.selectbox(
                 "ID CICLO QUE RECEBERÁ ESTE CUSTO *", options=list(ciclos_destino),
                 format_func=lambda x: f"{ciclos_destino[x]} (ID interno {x})",
@@ -5066,15 +5131,33 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
+        # Saídas são a fonte operacional de KM quando cadastradas. Cada frete
+        # permanece com sua receita própria, mas não recebe KM compartilhados.
+        resumo_saidas_atual = None
+        if viagem_sel_id:
+            with SessionLocal() as db:
+                viagem_operacional = db.get(Viagem, viagem_sel_id)
+                ciclo_atual_id = viagem_operacional.id_ciclo if viagem_operacional is not None else None
+            if ciclo_atual_id is not None:
+                resumo_saidas_atual = render_saidas_operacionais(
+                    ciclo_atual_id, veiculos_db, motoristas_db
+                )
+        else:
+            st.info("Para cadastrar saídas operacionais, primeiro salve o frete na Etapa 1. "
+                    "Na sequência, registre as saídas no fechamento; os demais fretes do ciclo usarão os mesmos percursos.")
         st.markdown('<div class="sec-subtitle">Leituras e situação da operação</div>', unsafe_allow_html=True)
+        if resumo_saidas_atual:
+            st.caption("Leituras históricas por frete, mantidas para consulta. "
+                       "Com saídas cadastradas, os indicadores de KM usam exclusivamente os odômetros das saídas abaixo, "
+                       "sem somar o mesmo percurso dos fretes.")
         f1, f2, f3, f4 = st.columns([1.1, 1.1, 1.1, 1.7])
         odo_ini_v = to_int(get_campo("odo_ini", 0))
         odo_fin_v = to_int(get_campo("odo_fin", 0))
         with f1:
             odo_ini_v = st.number_input(
-                "ODÔMETRO INICIAL",
+                "ODÔMETRO INICIAL (HISTÓRICO DO FRETE)" if resumo_saidas_atual else "ODÔMETRO INICIAL",
                 min_value=0,
-                step=10,
+                step=1,
                 value=odo_ini_v,
                 key="w_odo_ini",
                 on_change=sync_campo,
@@ -5082,9 +5165,9 @@ with st.container(border=True):
             )
         with f2:
             odo_fin_v = st.number_input(
-                "ODÔMETRO FINAL",
+                "ODÔMETRO FINAL (HISTÓRICO DO FRETE)" if resumo_saidas_atual else "ODÔMETRO FINAL",
                 min_value=0,
-                step=10,
+                step=1,
                 value=odo_fin_v,
                 key="w_odo_fin",
                 on_change=sync_campo,
@@ -5120,10 +5203,22 @@ with st.container(border=True):
             "O odômetro de cada abastecimento permanece independente na Etapa 7."
         )
 
-        km_planejado_op = calcular_km_planejado_operacao(viagem_sel_id)
-        km_deslocamentos_op = calcular_km_deslocamentos_formulario()
-        km_total_previsto_op = round(km_planejado_op + km_deslocamentos_op, 2)
-        km_total_real_op = calcular_km_total_real_operacao(viagem_sel_id, odo_ini_v, odo_fin_v)
+        modo_saidas = resumo_saidas_atual is not None
+        if modo_saidas:
+            # Fonte física única: não chamar cálculos legados que podem gerar
+            # alertas indevidos para odômetros por frete de uma mesma rota.
+            km_planejado_op = resumo_saidas_atual["km_planejado"]
+            km_deslocamentos_op = 0.0
+            km_total_previsto_op = km_planejado_op
+            km_total_real_op = resumo_saidas_atual["km_real"]
+            st.info("**KM da operação por saídas operacionais.** Os campos de KM dos fretes "
+                    "e os deslocamentos antigos não entram nessa soma. "
+                    "Não transfira valores históricos sem conferência.")
+        else:
+            km_planejado_op = calcular_km_planejado_operacao(viagem_sel_id)
+            km_deslocamentos_op = calcular_km_deslocamentos_formulario()
+            km_total_previsto_op = round(km_planejado_op + km_deslocamentos_op, 2)
+            km_total_real_op = calcular_km_total_real_operacao(viagem_sel_id, odo_ini_v, odo_fin_v)
 
         if km_total_real_op is not None:
             diferenca_km = km_total_real_op - km_total_previsto_op
@@ -5148,6 +5243,8 @@ with st.container(border=True):
             nota_diferenca = "Aguardando odômetros válidos."
 
         descricao_real = (
+            "Soma das saídas físicas, sem intervalos sobrepostos."
+            if modo_saidas else
             "Soma dos intervalos válidos dos fretes do ciclo."
             if get_campo("tipo_viagem", "Individual") == "Ciclo"
             else "Diferença entre os dois odômetros da operação."
@@ -5156,6 +5253,10 @@ with st.container(border=True):
             "Ciclo operacional" if get_campo("tipo_viagem", "Individual") == "Ciclo"
             else "Frete individual"
         )
+        rotulo_km_planejado = "KM planejado das saídas" if modo_saidas else "KM planejado dos fretes"
+        nota_km_planejado = "Trechos físicos, sem duplicar fretes." if modo_saidas else "Trechos informados na Etapa 2."
+        nota_km_deslocamentos = "Incluído nas saídas físicas." if modo_saidas else "Saída / entre coletas + retorno."
+        nota_km_total = "Saídas físicas, sem duplicações." if modo_saidas else "Fretes + deslocamentos, sem repetição."
         st.markdown(
             f"""
             <section class="faeg-km-dashboard" aria-label="Resumo da quilometragem da operação">
@@ -5169,19 +5270,19 @@ with st.container(border=True):
                 <div class="faeg-km-group-label">Planejado</div>
                 <div class="faeg-km-grid">
                     <article class="faeg-km-card">
-                        <div class="faeg-km-card-label">KM planejado dos fretes</div>
+                        <div class="faeg-km-card-label">{rotulo_km_planejado}</div>
                         <div class="faeg-km-card-value">{fmt_km(km_planejado_op)}</div>
-                        <div class="faeg-km-card-note">Trechos informados na Etapa 2.</div>
+                        <div class="faeg-km-card-note">{nota_km_planejado}</div>
                     </article>
                     <article class="faeg-km-card">
                         <div class="faeg-km-card-label">KM deslocamentos operacionais</div>
                         <div class="faeg-km-card-value">{fmt_km(km_deslocamentos_op)}</div>
-                        <div class="faeg-km-card-note">Saída / entre coletas + retorno.</div>
+                        <div class="faeg-km-card-note">{nota_km_deslocamentos}</div>
                     </article>
                     <article class="faeg-km-card is-primary">
                         <div class="faeg-km-card-label">KM total planejado</div>
                         <div class="faeg-km-card-value">{fmt_km(km_total_previsto_op)}</div>
-                        <div class="faeg-km-card-note">Fretes + deslocamentos, sem repetição.</div>
+                        <div class="faeg-km-card-note">{nota_km_total}</div>
                     </article>
                 </div>
                 <div class="faeg-km-formula">
@@ -5211,7 +5312,7 @@ with st.container(border=True):
             unsafe_allow_html=True,
         )
 
-        if to_float(get_campo("km_rota", 0.0)) <= 0:
+        if not modo_saidas and to_float(get_campo("km_rota", 0.0)) <= 0:
             st.warning(
                 "O campo KM INDIVIDUAL / CICLO do frete atual ainda está zerado "
                 "na Etapa 2. Confira se o trecho foi realmente planejado antes "
@@ -5219,8 +5320,11 @@ with st.container(border=True):
             )
 
         with st.expander("Ver detalhes dos cálculos de KM", expanded=False):
+            if modo_saidas:
+                st.info("Para a operação atual, os quilômetros são calculados pelas saídas/trechos "
+                        "cadastrados acima. Os textos abaixo descrevem somente o método legado dos fretes.")
             st.markdown(
-                "**KM planejado:** no frete individual, usa o KM manual da Etapa 2; "
+                "**KM planejado (modo legado):** no frete individual, usa o KM manual da Etapa 2; "
                 "no ciclo, soma os fretes vinculados ao mesmo ID interno."
             )
             if get_campo("km_componentes_discriminados", True):
@@ -5242,8 +5346,10 @@ with st.container(border=True):
             )
         if km_total_real_op is None:
             st.info(
-                "O KM real consolidado e seu desvio ficam indisponíveis até haver "
-                "odômetros válidos para os fretes envolvidos, sem intervalos sobrepostos."
+                "O KM real consolidado fica indisponível até haver odômetros válidos "
+                + ("para TODAS as saídas, sem intervalos sobrepostos."
+                   if modo_saidas else
+                   "para os fretes envolvidos, sem intervalos sobrepostos.")
             )
 
         v_neg_dre = to_float(get_campo("valor_negociado", 0.0))
@@ -5256,12 +5362,17 @@ with st.container(border=True):
             custos_dre = sum(to_float(d["valor_total"]) for d in carregar_despesas_viagem(viagem_sel_id))
 
         resultado_dre = receita_dre - custos_dre
+        eh_frete_em_ciclo = get_campo("tipo_viagem", "Individual") == "Ciclo"
+        titulo_resultado_frete = (
+            "Saldo comercial do frete antes dos custos compartilhados" if eh_frete_em_ciclo
+            else "Resultado operacional parcial da viagem"
+        )
         cor_res = "#4ADE80" if resultado_dre >= 0 else "#F87171"
 
         st.markdown(
             f"""
             <div class="dre-box">
-                <div class="dre-header">Resultado Operacional Parcial da Viagem (DRE — FAEG)</div>
+                <div class="dre-header">{titulo_resultado_frete} (FAEG)</div>
                 <div class="dre-row">
                     <span style="color:#ABCEE1;">Receita Prevista (Frete Negociado)</span>
                     <span style="font-weight:800; font-size:1.15rem;">{fmt_brl(receita_dre)}</span>
@@ -5271,14 +5382,22 @@ with st.container(border=True):
                     <span style="font-weight:800; font-size:1.15rem; color:#F34D25;">- {fmt_brl(custos_dre)}</span>
                 </div>
                 <div class="dre-total-row">
-                    <span style="font-weight:800; text-transform:uppercase; letter-spacing:0.04em;">Resultado Operacional Parcial</span>
+                    <span style="font-weight:800; text-transform:uppercase; letter-spacing:0.04em;">{titulo_resultado_frete}</span>
                     <span style="font-weight:900; font-size:1.85rem; color:{cor_res};">{fmt_brl(resultado_dre)}</span>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.caption("Custos do histórico de abastecimentos por veículo não são somados aqui; apenas despesas financeiras vinculadas a esta viagem entram no resultado.")
+        st.caption(
+            "Este painel inclui apenas despesas lançadas diretamente no frete. "
+            "Em ciclos, NÃO representa lucro por frete: despesas comuns e combustível "
+            "da operação são consolidados no fechamento do ciclo. "
+            "O custo estimado por consumo é uma simulação independente e NÃO é somado à DRE."
+            if eh_frete_em_ciclo else
+            "Custos do histórico de abastecimentos por veículo não são somados aqui; "
+            "apenas despesas financeiras vinculadas à viagem entram no resultado."
+        )
 
         st.markdown('<div class="sec-subtitle">Situação dos Recebimentos Efetivos do Frete</div>', unsafe_allow_html=True)
         reais_recebidos = sum(
@@ -5455,13 +5574,20 @@ with st.container(border=True):
                 else None
             )
             custo_km_r = (custos_r / km_r) if km_r else None
-            margem_r = ((resultado_r / receita_r) * 100.0) if receita_r > 0 else None
+            frete_ativo_em_ciclo = get_campo("tipo_viagem", "Individual") == "Ciclo"
+            if frete_ativo_em_ciclo:
+                st.info("Esta é a visão COMERCIAL do frete: os custos compartilhados do ciclo "
+                        "não são distribuídos artificialmente. Não interprete o saldo exibido "
+                        "como lucro individual. Consulte o Fechamento por Ciclo.")
+                # KM e margem por frete isolado são distorcidos em percursos compartilhados.
+                custo_km_r = None
+            margem_r = ((resultado_r / receita_r) * 100.0) if receita_r > 0 and not frete_ativo_em_ciclo else None
 
             exibir_indicadores(
                 [
                     ("Receita Negociada", fmt_brl(receita_r)),
                     ("Custos Totais", fmt_brl(custos_r)),
-                    ("Resultado Operacional Parcial", fmt_brl(resultado_r), "destaque"),
+                    ("Saldo antes dos custos comuns" if frete_ativo_em_ciclo else "Resultado Operacional Parcial", fmt_brl(resultado_r), "destaque"),
                     ("Custo por KM", fmt_brl(custo_km_r) if custo_km_r is not None else "Não informado"),
                     ("Margem Operacional", f"{margem_r:.1f}%" if margem_r is not None else "Não calculável"),
                 ],
@@ -5594,15 +5720,22 @@ with st.container(border=True):
                 recebimentos_global = round(sum(v["total_recebido"] for v in vg_bi_filtradas), 2)
                 saldo_global_confiavel = all(v["saldo_a_receber"] is not None for v in vg_bi_filtradas)
                 saldo_global = round(sum(v["saldo_a_receber"] or 0 for v in vg_bi_filtradas), 2)
+                mistura_ciclos_bi = any(v["tipo_viagem"] == "Ciclo" for v in vg_bi_filtradas)
                 margem_global = (
                     (res_global / rec_global) * 100.0
-                    if rec_global > 0 and not any(v["financeiro_legado_ambiguo"] for v in vg_bi_filtradas)
+                    if rec_global > 0 and not mistura_ciclos_bi
+                    and not any(v["financeiro_legado_ambiguo"] for v in vg_bi_filtradas)
                     else None
                 )
+                if mistura_ciclos_bi:
+                    st.caption("O BI por frete não atribui despesas nem KM comuns aos serviços. "
+                               "A margem e o custo por KM do conjunto filtrado devem ser consultados "
+                               "no fechamento por ciclo, não por frete.")
                 km_global = sum(v["km_rodado"] or 0 for v in vg_bi_filtradas)
                 quantos_com_odometro = sum(v["km_rodado"] is not None for v in vg_bi_filtradas)
                 km_completo = quantos_com_odometro == len(vg_bi_filtradas) and bool(vg_bi_filtradas)
-                custo_km_global = (desp_global / km_global) if km_global > 0 and km_completo else None
+                custo_km_global = ((desp_global / km_global)
+                                    if km_global > 0 and km_completo and not mistura_ciclos_bi else None)
                 km_global_fmt = (
                     f"{km_global:,} km".replace(",", ".") + (" (parcial)" if not km_completo else "")
                     if quantos_com_odometro else "Não informado"
@@ -5785,6 +5918,14 @@ with st.container(border=True):
         # ----------------------------------------------------------------------
         with tab_rel_ciclos:
             fechamentos_salvos = consolidar_ciclos(todas_vg_exp, carregar_todas_despesas_ciclo())
+            with SessionLocal() as db:
+                saidas_todas = consultar_todas_saidas(db)
+                saidas_por_ciclo = {}
+                for saida in saidas_todas:
+                    saidas_por_ciclo.setdefault(saida.id_ciclo, []).append(saida)
+                resumos_por_ciclo = {
+                    cid: resumo_saidas(lista) for cid, lista in saidas_por_ciclo.items()
+                }
             st.caption(
                 "Cada despesa por ID Frete é somada uma vez e cada despesa compartilhada "
                 "por ID Ciclo entra uma vez, sem rateio. O BI por frete não inclui os gastos "
@@ -5814,7 +5955,13 @@ with st.container(border=True):
                             "Despesas Compartilhadas": fmt_brl(f["despesas_compartilhadas_total"]),
                             "Despesas Totais": fmt_brl(f["despesas_total"]),
                             "Resultado Parcial": fmt_brl(f["resultado_operacional_parcial"]),
-                            "KM Total Planejado": fmt_km(f["km_total_planejado"]),
+                            "KM Total Planejado": fmt_km(resumos_por_ciclo[f["id_ciclo"]]["km_planejado"])
+                            if f["id_ciclo"] in resumos_por_ciclo else fmt_km(f["km_total_planejado"]),
+                            "KM Real Operacional": (
+                                fmt_km(resumos_por_ciclo[f["id_ciclo"]]["km_real"])
+                                if f["id_ciclo"] in resumos_por_ciclo and resumos_por_ciclo[f["id_ciclo"]]["km_real"] is not None
+                                else "Pendente" if f["id_ciclo"] in resumos_por_ciclo else "Legado"
+                            ),
                             "Conferência Financeira": "Pendente" if f["qtd_financeiros_legados_ambiguos"] else "Por frete",
                         }
                         for f in fechamentos_salvos
@@ -5830,6 +5977,12 @@ with st.container(border=True):
                     key="rel_ciclo_detalhe",
                 )
                 ciclo_aberto = opcoes_ciclos[ciclo_abrir_id]
+                if ciclo_abrir_id in resumos_por_ciclo:
+                    rz = resumos_por_ciclo[ciclo_abrir_id]
+                    st.info(f"KM operacional por {rz['qtd_saidas']} saída(s) e {rz['qtd_trechos']} trecho(s): "
+                            f"{rz['km_planejado']:.2f} km planejados; "
+                            + (f"{rz['km_real']:.0f} km realizados." if rz['km_real'] is not None
+                               else "KM real pendente de odômetros completos."))
                 st.caption(
                     f"Ciclo {ciclo_aberto['ciclo']}: despesas dos fretes "
                     f"{fmt_brl(ciclo_aberto['despesas_fretes_total'])} + despesas compartilhadas "
@@ -6018,6 +6171,7 @@ with st.container(border=True):
         tot_rec_f = sum(v["receita_base"] for v in filtradas)
         tot_desp_f = sum(v["total_despesas"] for v in filtradas)
         tot_res_f = sum(v["resultado_liquido"] for v in filtradas)
+        possui_fretes_ciclo = any(v["tipo_viagem"] == "Ciclo" for v in filtradas)
         tot_recebido_f = sum(v["total_recebido"] for v in filtradas)
         saldos_consulta_validos = all(v["saldo_a_receber"] is not None for v in filtradas)
         tot_saldo_f = sum(v["saldo_a_receber"] or 0 for v in filtradas)
@@ -6027,7 +6181,8 @@ with st.container(border=True):
                 ("Viagens Filtradas", len(filtradas)),
                 ("Receita Consolidada", fmt_brl(tot_rec_f)),
                 ("Despesas dos Fretes", fmt_brl(tot_desp_f)),
-                ("Resultado Operacional Parcial", fmt_brl(tot_res_f), "destaque"),
+                ("Saldo antes dos custos compartilhados" if possui_fretes_ciclo
+                 else "Resultado Operacional Parcial", fmt_brl(tot_res_f), "destaque"),
             ],
             colunas=4,
         )
@@ -6061,7 +6216,7 @@ with st.container(border=True):
                         "Recebido de Fato": fmt_brl(v["total_recebido"]),
                         "Saldo a Receber": fmt_brl(v["saldo_a_receber"]) if v["saldo_a_receber"] is not None else "Conferir legado",
                         "Despesas": fmt_brl(v["total_despesas"]),
-                        "Resultado": fmt_brl(v["resultado_liquido"]),
+                        "Saldo parcial (sem custos comuns)": fmt_brl(v["resultado_liquido"]),
                     }
                     for v in filtradas
                 ]
@@ -6349,7 +6504,7 @@ with st.container(border=True):
                         placeholder="ABC1D23",
                         value=vei_edit_obj["placa"] if vei_edit_obj else "",
                     )
-                    tipos_v = ["Van", "HR", "Carreta", "Bitrem", "Rodotrem", "Truck", "Toco", "3/4", "VUC", "Utilitário"]
+                    tipos_v = ["Carreta", "Bitrem", "Rodotrem", "Truck", "Toco", "3/4", "VUC", "Utilitário"]
                     idx_tv = (
                         tipos_v.index(vei_edit_obj["tipo_veiculo"])
                         if vei_edit_obj and vei_edit_obj.get("tipo_veiculo") in tipos_v

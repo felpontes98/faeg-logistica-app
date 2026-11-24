@@ -173,3 +173,18 @@ Os códigos de negócio devem ser gerados e validados no banco de forma segura p
 - [ ] Simular migração e restauração em banco de teste antes de alterar dados reais.
 
 Para as decisões operacionais que motivam esse redesenho, consultar [Regras de negócio](regras_negocio.md). Os requisitos, critérios de aceite e validações estão em [Requisitos](requisitos.md); a equipe deve acompanhar as alterações de código em Issues do GitHub.
+## Evolução operacional — Novas tabelas (Ajuste 27)
+
+A implementação acrescenta **três tabelas sem alterar nem remover dados das 15 existentes**. A função `sincronizar_colunas_banco()` as cria com `Base.metadata.create_all()` quando a aplicação atualizada inicia conectada ao PostgreSQL. **Fazer backup antes da implantação**, pois é uma mudança de esquema.
+
+| Tabela | Chave | Relacionamento / finalidade |
+| --- | --- | --- |
+| `saidas_operacionais` | `id_saida` | FK `id_ciclo` para `ciclos_operacionais`, `id_veiculo` para `veiculos` e `id_motorista` opcional; datas, KM planejado e odômetros da saída |
+| `trechos_operacionais` | `id_trecho` | FK `id_saida` para `saidas_operacionais`; tipo, origem, destino, KM planejado da etapa física |
+| `parametros_consumo_veiculo` | `id_veiculo` | FK para `veiculos`; km/L e R$/L referenciais para estimativas independentes dos abastecimentos reais |
+
+**Prioridade do cálculo:** quando uma operação tem uma ou mais saídas, o KM físico no fechamento usa as saídas e seus trechos; os campos antigos dos fretes continuam preservados no banco. Não há rateio de KM ou de despesas. Abastecimentos permanecem na tabela `abastecimentos` com vínculo ao lançamento original e não são repetidos.
+
+**Exportação:** `Saidas_Operacionais`, `Trechos_Operacionais` e `KM_Operacional_Ciclos` são acrescentadas à base Excel. O indicador de consumo estimado é somente consultivo e não altera a DRE.
+
+**Limitações operacionais desta versão:** não há movimentação de estoques de diesel nem alocação automática do combustível consumido a um ciclo; despesas históricas não são realocadas; sobreposição de odômetros entre ciclos distintos ainda deve ser conferida manualmente; não existe ainda vínculo automático entre cada frete e os trechos físicos onde foi transportado.

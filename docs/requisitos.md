@@ -143,3 +143,18 @@ Este documento descreve comportamentos esperados, não uma certificação de que
 ## Escopo explicitamente não encerrado
 
 Não presumir que a aplicação esteja pronta para produção por existir código. Faltam ao menos: homologação integrada, fechamento **formal** dos ciclos (status/confirmação), regra de rateio, conciliação bancária e automatização de situações de pagamento, segurança de acesso e importação com gravação autorizada. A consolidação **gerencial parcial** por ciclo, o lançamento único de combustível/despesas, a atribuição/estorno de gastos de veículo e o registro manual de recebimentos já estão propostos.
+## Novos cenários de homologação — Saídas operacionais
+
+- [ ] Fazer backup do PostgreSQL antes de publicar código que cria `saidas_operacionais`, `trechos_operacionais` e `parametros_consumo_veiculo`.
+- [ ] Abrir Ciclo 001 com seus fretes preexistentes: conferir que negociação, recebimentos e despesas anteriores **não foram modificados**.
+- [ ] Cadastrar três saídas operacionais no mesmo ciclo (duas coletas preparatórias e uma etapa de entregas/retorno); conferir soma de KM planejado e real sem duplicação.
+- [ ] Cadastrar dois trechos em uma saída: verificar que a soma dos trechos substitui (não acresce) o KM planejado manual daquela saída.
+- [ ] Editar uma saída e um trecho: conferir atualizações no fechamento e exportações.
+- [ ] Registrar odômetro final ausente em uma saída: KM real total deve ficar **pendente**, nunca 0 nem parcial sem aviso.
+- [ ] Registrar intervalos de odômetro sobrepostos no mesmo veículo: fechamento deve alertar e não consolidar KM real.
+- [ ] Abrir dois fretes do mesmo ciclo: ambos devem usar o mesmo total operacional das saídas; o saldo por frete não deve ser apresentado como lucro individual.
+- [ ] Registrar despesa compartilhada na Etapa 7 com destino do ciclo; conferir total somado uma única vez. Não copiar o lançamento já existente do primeiro frete.
+- [ ] Configurar km/L e R$/L de referência por veículo; conferir que consumo estimado não cria nova despesa e não altera a DRE.
+- [ ] Exportar Excel e confirmar as abas `Saidas_Operacionais`, `Trechos_Operacionais` e `KM_Operacional_Ciclos` com valores compatíveis com a Etapa 8.
+- [ ] Conferir um frete individual sem saídas: deve manter o comportamento legado até registrar saídas.
+- [ ] Depois dos testes, revisar diferenças entre compras de diesel e consumo estimado antes de considerar qualquer migração financeira.

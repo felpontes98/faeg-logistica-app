@@ -132,6 +132,7 @@ class CicloOperacional(Base):
         cascade="all, delete-orphan",
     )
     despesas_compartilhadas = relationship("CicloDespesa", back_populates="ciclo")
+    saidas_operacionais = relationship("SaidaOperacional", back_populates="ciclo")
 
 
 class CicloFinanceiro(Base):
@@ -379,6 +380,56 @@ class Abastecimento(Base):
 
     veiculo = relationship("Veiculo", back_populates="abastecimentos")
     fornecedor = relationship("Fornecedor", back_populates="abastecimentos")
+
+
+class SaidaOperacional(Base):
+    """Deslocamento físico da van, pertencente a um ciclo (inclusive individual)."""
+    __tablename__ = "saidas_operacionais"
+
+    id_saida = Column(Integer, primary_key=True, autoincrement=True)
+    id_ciclo = Column(Integer, ForeignKey("ciclos_operacionais.id_ciclo"), nullable=False, index=True)
+    id_veiculo = Column(Integer, ForeignKey("veiculos.id_veiculo"), nullable=False, index=True)
+    id_motorista = Column(Integer, ForeignKey("motoristas.id_motorista"), nullable=True)
+    descricao = Column(String(180), nullable=False)
+    data_inicio = Column(Date, nullable=True)
+    data_fim = Column(Date, nullable=True)
+    km_planejado_manual = Column(Numeric(12, 2), nullable=True)
+    odometro_inicial = Column(Integer, nullable=True)
+    odometro_final = Column(Integer, nullable=True)
+    observacoes = Column(String(600), nullable=True)
+
+    ciclo = relationship("CicloOperacional", back_populates="saidas_operacionais")
+    veiculo = relationship("Veiculo")
+    motorista = relationship("Motorista")
+    trechos = relationship("TrechoOperacional", back_populates="saida", cascade="all, delete-orphan",
+                          order_by="TrechoOperacional.id_trecho")
+
+
+class TrechoOperacional(Base):
+    """Paradas e deslocamentos distintos: um trecho físico só é contado uma vez."""
+    __tablename__ = "trechos_operacionais"
+
+    id_trecho = Column(Integer, primary_key=True, autoincrement=True)
+    id_saida = Column(Integer, ForeignKey("saidas_operacionais.id_saida"), nullable=False, index=True)
+    tipo_trecho = Column(String(40), nullable=False)
+    origem = Column(String(150), nullable=False)
+    destino = Column(String(150), nullable=False)
+    km_planejado = Column(Numeric(12, 2), nullable=False, default=0)
+    observacoes = Column(String(350))
+
+    saida = relationship("SaidaOperacional", back_populates="trechos")
+
+
+class ParametroConsumoVeiculo(Base):
+    """Parâmetros gerenciais para estimativa, independentes das compras de diesel."""
+    __tablename__ = "parametros_consumo_veiculo"
+
+    id_veiculo = Column(Integer, ForeignKey("veiculos.id_veiculo"), primary_key=True)
+    km_por_litro = Column(Numeric(10, 3), nullable=False)
+    preco_litro_referencia = Column(Numeric(12, 4), nullable=False)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    veiculo = relationship("Veiculo")
 
 
 def sincronizar_colunas_banco():
