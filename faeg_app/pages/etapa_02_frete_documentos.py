@@ -1,4 +1,4 @@
-"""Etapa 2 da interface FAEG (corpo original, sem reescrever regras)."""
+"""Etapa 2 — Fretes, carga, documentos e saídas operacionais do Sistema Web FAEG."""
 import streamlit as st
 
 from faeg_app.core import (

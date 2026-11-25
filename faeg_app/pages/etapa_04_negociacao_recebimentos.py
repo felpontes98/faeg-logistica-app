@@ -1,4 +1,4 @@
-"""Etapa 4 da interface FAEG (corpo original, sem reescrever regras)."""
+"""Etapa 4 — Negociação, parcelas e recebimentos do frete do Sistema Web FAEG."""
 import pandas as pd
 import streamlit as st
 

@@ -17,7 +17,7 @@ O sistema possui **11 etapas**. O registro da operação é feito em sequência.
 | **9 e 10** | Consultar relatórios, histórico e indicadores. |
 | **11 — Cadastros** | Manter clientes, veículos, motoristas, locais e parâmetros de referência de consumo dos veículos. |
 
-## Saídas operacionais
+## Saídas operacionais — Etapa 2
 
 Cada saída é o **deslocamento físico entre a saída da base e o retorno à base**. O mesmo formulário serve tanto para uma operação individual quanto para um ciclo com vários fretes.
 
@@ -33,7 +33,7 @@ O ciclo pode ter uma, duas ou várias saídas. Os fretes comerciais que comparti
 
 Na barra lateral, clique em **Salvar rascunho / continuar depois** para guardar as informações parciais, inclusive saídas e despesas ainda provisórias. Use **Retomar rascunho** ao voltar. O rascunho não entra na DRE. Ao completar motorista, veículo, cliente, local de coleta e local de entrega, use **Salvar Viagem**. O sistema converte o rascunho em registro definitivo com os vínculos corretos.
 
-## Abastecimento e custos
+## Abastecimento e custos — Etapa 7; conferência na Etapa 8
 
 No abastecimento, o odômetro da Etapa 7 representa **a leitura no posto**, e não uma nova distância percorrida. Ele não substitui o odômetro inicial/final da saída e **não é somado ao KM real**. Uma compra de combustível é registrada uma vez; sua estimativa de consumo é um indicador gerencial à parte.
 

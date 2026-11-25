@@ -1,43 +1,39 @@
 # Documentação — Sistema Web FAEG
 
-**Referência técnica e acadêmica** do MVP, baseada no código da versão de 24/11/2026 (Ajuste 27). A distinção entre funcionalidades implementadas e itens pendentes é intencional: a existência de código não constitui prova de homologação.
+Este diretório reúne os documentos técnicos e acadêmicos elaborados durante o desenvolvimento do **MVP do Startup Challenge UMC 2026**, atualizado com o fluxo operacional do **Ajuste 29 (25/11/2026)**.
 
-## 1. Produto e requisitos
+## Produto e operação
 
 | Documento | Conteúdo |
 | --- | --- |
-| [Resumo do projeto](resumo_faeg.md) | Problema, objetivo, escopo e evolução |
+| [Resumo do projeto](resumo_faeg.md) | Problema, objetivos, solução e equipe |
+| [Guia de preenchimento](guia_preenchimento_operacional.md) | Sequência das 11 etapas, saídas, despesas e fechamento |
 | [Requisitos](requisitos.md) | Requisitos funcionais e critérios de aceite |
-| [Regras de negócio](regras_negocio.md) | IDs, negociações, ciclos, despesas, KM e abastecimento |
-| [Glossário](glossario.md) | Linguagem padronizada para operação, TI e banca |
+| [Regras de negócio](regras_negocio.md) | Fretes, ciclos, negociações, despesas e quilômetros |
+| [Glossário](glossario.md) | Termos operacionais e técnicos |
 
-## 2. Projeto técnico
+## Arquitetura e qualidade
 
 | Documento | Conteúdo |
 | --- | --- |
-| [Arquitetura do banco](arquitetura_banco.md) | 18 entidades, relacionamentos, integridade e transição de esquema |
-| [Avaliação do repositório](avaliacao_repositorio.md) | Inventário, lacunas e prioridades de engenharia |
-| [Matriz de rastreabilidade](rastreabilidade.md) | Relação entre RFs, módulos e testes |
-| [Diagramas de modelagem](diagramas/README.md) | Classes, sequência, DER, componentes, atividades, estados, casos de uso e implantação |
-| [Guia de execução](guia_execucao.md) | Instalação local, banco isolado, testes e implantação |
-| [Plano de testes](plano_testes.md) | Matriz de testes e homologação |
-| [Segurança e privacidade](seguranca_privacidade.md) | Controles identificados, limitações e recomendações |
-| [Licenciamento e histórico](licenciamento.md) | Regra atual, preservação da MIT e direitos das versões anteriores |
-| [Decisões de arquitetura](decisoes/README.md) | Histórico de justificativas técnicas (ADRs) |
+| [Arquitetura da aplicação](arquitetura_aplicacao.md) | Módulos Streamlit, serviços e organização do código |
+| [Modelo de dados](arquitetura_banco.md) | Relacionamentos, integridade e **19 tabelas ORM** |
+| [Diagramas técnicos](diagramas/README.md) | Classes, sequência, ER, componentes, atividades, estados, casos de uso e implantação |
+| [Matriz de rastreabilidade](rastreabilidade.md) | Correspondência entre requisitos, implementação e verificações |
+| [Plano de testes](plano_testes.md) | Casos automatizados e roteiro de conferência |
+| [Guia de execução](guia_execucao.md) | Instalação, ambiente, testes e publicação |
+| [Segurança e privacidade](seguranca_privacidade.md) | Tratamento de dados e controles da versão atual |
+| [Planejamento técnico](planejamento_tecnico.md) | Próximas evoluções priorizadas pela equipe |
+| [Licenciamento](licenciamento.md) | Direitos reservados para novas contribuições e histórico MIT |
+| [Decisões de arquitetura](decisoes/README.md) | ADRs do desenvolvimento |
 
-## 3. Histórico acadêmico do desenvolvimento
+## Registros acadêmicos
 
+- [Guia para apresentação à banca](guia_avaliacao_banca.md)
 - [Reunião 01 — Kickoff](reunioes/reuniao_01_kickoff.md)
 - [Reunião 02 — Protótipo visual](reunioes/reuniao_02_prototipo_visual.md)
 - [Reunião 03 — Demonstração do MVP](reunioes/reuniao_03_demonstracao_mvp.md)
-- [Protótipo HTML original](prototipo/prototipo_inicial.html)
-- [Histórico das alterações](../CHANGELOG.md)
+- [Protótipo HTML inicial](prototipo/prototipo_inicial.html)
+- [Histórico de alterações](../CHANGELOG.md)
 
-**Nota:** documentos históricos de reuniões registram o conhecimento existente na respectiva data. Não foram reescritos para simular funcionalidades posteriores.
-
-## Organização da aplicação após modularização
-
-- [Arquitetura dos módulos Python e sequência de execução](arquitetura_aplicacao.md)
-- [ADR-004 — Refatoração incremental do Streamlit](decisoes/ADR-004-refatoracao-streamlit.md)
-
-- [Guia de preenchimento operacional — Individual e Ciclo](guia_preenchimento_operacional.md)
+As atas registram as decisões tomadas em cada fase. A documentação técnica atual descreve o fluxo vigente nas 11 etapas.

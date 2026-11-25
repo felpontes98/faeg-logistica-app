@@ -1,6 +1,6 @@
 # Resumo do Projeto — FAEG Logística
 
-**Projeto acadêmico aplicado:** Startup Challenge UMC 2026 · **Produto:** Sistema Web FAEG · **Revisão documental:** 24/11/2026 (Ajuste 27).
+**Projeto acadêmico aplicado:** Startup Challenge UMC 2026 · **Produto:** Sistema Web FAEG · **Versão do MVP:** Ajuste 29 (25/11/2026).
 
 ## Problema e objetivo
 
@@ -32,18 +32,18 @@ O código ORM contém **19 tabelas**, conforme o [inventário técnico](arquitet
 
 Um **ciclo** pode iniciar com um frete principal, agregar novos contratos ao longo da rota ou em dias distintos e conter várias saídas da base. As receitas pertencem aos fretes; os custos compartilhados e o KM físico pertencem à operação. Não é permitido inventar rateio por frete. A despesa é registrada uma única vez; a estimativa de combustível não substitui o gasto contabilizado.
 
-## Avaliação do estágio de maturidade
+## Escopo implementado e evolução técnica
 
-| Área | Situação documentada |
+| Área | Situação do MVP |
 | --- | --- |
-| Protótipo e requisitos | Documentados em reuniões e regras de negócio |
-| Código com 11 etapas | Presente no ZIP revisado |
-| PostgreSQL/Neon e 19 modelos | Código e implantação das novas tabelas confirmados |
-| Testes de saídas | Seis cenários unitários existentes em SQLite |
-| Testes integrados completos | Pendentes de evidência de homologação |
-| Autenticação e autorização | Não identificadas no código revisado |
-| Migrações versionadas | Pendentes; o app atualmente sincroniza o esquema ao iniciar |
-| Conciliação bancária e rateio financeiro | Não implementados/homologados como fechamento definitivo |
+| Interface | 11 etapas em módulos Streamlit, com cadastro e consulta de operações |
+| Banco de dados | PostgreSQL/Neon com **19 tabelas ORM** declaradas |
+| Fretes e ciclos | Negociações por frete; receitas e custos consolidados por ciclo |
+| KM e odômetros | Saídas registradas na Etapa 2; fechamento consolidado na Etapa 8 |
+| Salvamento | Rascunhos recuperáveis e salvamento definitivo com vínculos operacionais |
+| Testes automatizados | Suíte Pytest para regras de saída, rascunhos, modularização e documentação |
+| Segurança | Autenticação própria por usuário e perfis prevista para a evolução do produto |
+| Gestão do banco | Migrações versionadas previstas para substituir a sincronização atual |
 
 ## Equipe e registros acadêmicos
 
@@ -53,8 +53,8 @@ Um **ciclo** pode iniciar com um frete principal, agregar novos contratos ao lon
 
 O [histórico de reuniões](reunioes/) documenta o kickoff, o protótipo inicial e a evolução até o MVP. Para evidências de validação, consulte o [plano de testes](plano_testes.md).
 
-## Histórico de importação e conciliação
+## Importação e conciliação da planilha original
 
-Em análise anterior da planilha de referência, foram apontadas divergências em linhas de fechamento e associação de ciclos. Essas observações são **registros de auditoria histórica, não correções efetuadas no Neon**. O importador mantém a prévia e a auditoria; a gravação em lote continua bloqueada.
+O importador oferece prévia e conferência das informações da planilha de referência. A gravação automática em lote não integra o fluxo atual de produção. Os registros operacionais são cadastrados e mantidos no sistema conforme as regras de cada etapa.
 
-A visão atual do projeto é descrita pelo [README principal](../README.md) e pelo [índice documental](README.md).
+A visão atual do projeto está no [README principal](../README.md) e no [índice documental](README.md).

@@ -1,4 +1,4 @@
-"""Etapa 6 da interface FAEG (corpo original, sem reescrever regras)."""
+"""Etapa 6 — Dados e horários de entrega do Sistema Web FAEG."""
 import streamlit as st
 
 from datetime import date

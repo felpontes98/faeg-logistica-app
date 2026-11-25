@@ -1,4 +1,4 @@
-"""Geração de Excel e PDF; funções extraídas do app original."""
+"""Geração de relatórios e exportações gerenciais em Excel e PDF."""
 
 import base64
 import io

@@ -9,7 +9,7 @@ O controle anterior era realizado em planilhas. O MVP organiza fretes, ciclos, c
 ## 2. Implementação apresentada
 
 - **Front-end e interação:** Python/Streamlit, com 11 etapas em módulos próprios.
-- **Persistência:** SQLAlchemy e PostgreSQL (Neon), com 18 modelos ORM.
+- **Persistência:** SQLAlchemy e PostgreSQL (Neon), com **19 tabelas ORM**, incluindo rascunhos.
 - **Regra central:** contratos comerciais são fretes; a operação pode agrupar fretes em ciclos e saídas físicas. Custos compartilhados não recebem rateio automático nem são somados duas vezes.
 - **Abastecimentos:** uma compra financeira e um histórico operacional associado; consumo por KM é somente estimativa gerencial.
 - **Consultas e relatórios:** dados operacionais, indicadores e exportações Excel/PDF.

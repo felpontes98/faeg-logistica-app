@@ -1,6 +1,7 @@
-"""Painel de saídas operacionais da Etapa 8, sem mudar o fluxo de fretes.
+"""Componente histórico de saídas operacionais.
 
-Somente salva se o usuário acionar o botão. Nenhuma migração de histórico.
+O cadastro principal de saídas do MVP ocorre na Etapa 2, em
+``views/percurso_etapa2.py``. Este módulo é mantido para compatibilidade.
 """
 from datetime import date
 
@@ -22,8 +23,7 @@ def _valor(val, default=0.0):
 def render_saidas_operacionais(id_ciclo, veiculos, motoristas, *, exibir_formulario=True):
     """Retorna resumo válido ou None quando não há saídas no ciclo.
 
-    A navegação segue dentro da Etapa 8; cada saída é compartilhada pelos fretes
-    do mesmo ID interno. Usar odômetro de abastecimento para consumo histórico,
+    Cada saída é compartilhada pelos fretes do mesmo ID interno do ciclo. Usar odômetro de abastecimento para consumo histórico,
     nunca como início/fim automáticos de uma saída.
     """
     with SessionLocal() as db:

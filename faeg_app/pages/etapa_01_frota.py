@@ -1,4 +1,4 @@
-"""Etapa 1 da interface FAEG (corpo original, sem reescrever regras)."""
+"""Etapa 1 — Cadastro da frota e identificação da operação do Sistema Web FAEG."""
 import streamlit as st
 
 from database.importador_planilha import preparar_previa_importacao_faeg

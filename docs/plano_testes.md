@@ -20,6 +20,14 @@ python -m pip install pytest
 python -m pytest -q tests/test_saidas_operacionais.py
 ```
 
+## Testes de estrutura, rascunhos e fluxo unificado
+
+A suíte `tests/` também inclui verificações da modularização, importação das 11 etapas, geração de relatórios, links e diagramas, salvamento e retomada de rascunhos e persistência de saídas e despesa única por ciclo.
+
+```powershell
+python -m pytest -q tests
+```
+
 ## Matriz de integração e critérios de aceite
 
 | Código | Requisitos | Cenário / resultado esperado | Evidência a registrar |
@@ -29,7 +37,7 @@ python -m pytest -q tests/test_saidas_operacionais.py
 | TI-03 | RF-14, RF-22–28 | Lançar despesa compartilhada e despesa exclusiva; não duplicar custo | Demonstrativo e consulta SQL |
 | TI-04 | RF-08–10 | Abastecer Diesel/ARLA uma vez; visualizar histórico sem novo custo na DRE | Histórico e resultado |
 | TI-05 | RF-25–26 | Atribuir e estornar despesa provisória com trilha; custo ativo em um único destino | Eventos de auditoria |
-| TI-06 | RF-42–45 | Cadastrar saídas preparatórias, entregas e retorno no mesmo ciclo | Tela 8 e tabelas novas |
+| TI-06 | RF-42–45 | Cadastrar saídas preparatórias, entregas e retorno no mesmo ciclo | Etapa 2 e tabelas de saídas |
 | TI-07 | RF-43–44 | Somar trechos uma vez; rejeitar intervalos sobrepostos ou incompletos | Comparação com odômetros |
 | TI-08 | RF-46 | Estimar consumo sem alterar custo contabilizado | Painel de consumo e DRE |
 | TI-09 | RF-11, RF-29, RF-47 | Exportar relatórios do ciclo, saídas e trechos; conferir totais com banco | Arquivos de teste |

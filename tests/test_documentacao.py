@@ -81,3 +81,15 @@ def test_estrutura_modular_e_pontos_de_entrada_documentados():
     assert len(list((ROOT / "faeg_app/pages").glob("etapa_*.py"))) == 11
     for doc in ("README.md", "docs/README.md", "docs/diagramas/README.md", "docs/planejamento_tecnico.md"):
         assert (ROOT / doc).exists(), doc
+
+
+def test_documentacao_descreve_fluxo_atual_e_modelo_de_dados():
+    """O índice e os guias acompanham a estrutura vigente do MVP."""
+    indice = (ROOT / "docs/README.md").read_text(encoding="utf-8")
+    guia = (ROOT / "docs/guia_preenchimento_operacional.md").read_text(encoding="utf-8")
+    requisitos = (ROOT / "docs/requisitos.md").read_text(encoding="utf-8")
+    assert "19 tabelas ORM" in indice
+    assert "Etapa 2" in guia and "Etapa 8" in guia
+    assert "RF-51" in requisitos and "rascunhos" in requisitos.lower()
+    assert not (ROOT / "docs/auditoria_final_2026-11-24.md").exists()
+    assert not (ROOT / "docs/avaliacao_repositorio.md").exists()

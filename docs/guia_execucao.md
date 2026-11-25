@@ -1,6 +1,6 @@
 # Guia de execução e implantação
 
-**Versão:** configuração da aplicação modular e do Ajuste 27 (24/11/2026).
+**Versão:** aplicação modular com fluxo operacional unificado (Ajuste 29, 25/11/2026).
 
 ## Requisitos
 

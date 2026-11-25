@@ -1,45 +1,38 @@
-## 25/11/2026 — Organização do preenchimento operacional
-
-- Etapa 2 concentra frete, carga, documentos, saídas, KM planejados e odômetros por saída (individual e ciclo).
-- Etapa 7 mantém despesas e abastecimentos em lançamento único; o vínculo com o ciclo é selecionado pela identificação comercial.
-- Etapa 8 apresenta apenas indicadores e fechamento; parâmetros de consumo foram transferidos para o cadastro de veículos (Etapa 11).
-- Rascunho recuperável sem exigir todas as informações do frete; consolidação de custos e saídas ao salvar definitivamente.
-- Preservação dos lançamentos históricos e atualização dos testes automatizados.
-
 # Histórico de alterações — FAEG
 
-Registro resumido de marcos conhecidos. **Não substitui o histórico do Git**, que permanece a fonte detalhada de commits e diferenças.
+Este documento reúne os principais marcos do Sistema Web FAEG. As alterações detalhadas e as respectivas autorias são registradas no histórico de commits do Git.
 
-## Não publicado — atualização documental (24/11/2026)
+## 2026-11-25 — Ajuste 29: fluxo de preenchimento unificado
 
-- README reorganizado como ponto de entrada do projeto.
-- Inventário do banco atualizado para 18 entidades ORM.
-- Diagramas de classes, sequência, dados, componentes, processos, casos de uso, estados e implantação.
-- Guia de instalação, plano de testes, glossário, segurança e ADRs.
-- Fluxo de CI com verificação de sintaxe e testes existentes, sem conexão ao Neon.
-- Política para novas contribuições com direitos reservados; licença MIT anterior arquivada e direitos históricos preservados.
-- **Nenhuma alteração em `app.py` ou nos modelos de banco nesta atualização documental.**
+- Manutenção das 11 etapas, com as saídas operacionais, KM planejados e odômetros concentrados na **Etapa 2**.
+- Registro de KM de saída/coletas, rota principal e retorno à base por saída, com cálculo automático dos totais.
+- **Etapa 7:** lançamento único das despesas, inclusive Diesel/ARLA com odômetro do abastecimento e vínculo ao frete, ciclo ou veículo.
+- **Etapa 8:** conferência e fechamento, sem repetir o cadastro das saídas ou dos odômetros.
+- Parâmetros de consumo de referência concentrados nos cadastros dos veículos (Etapa 11).
+- Salvamento e retomada de rascunhos, com persistência independente dos fretes definitivos.
+- Ampliação dos testes para rascunhos, saídas, integridade financeira e documentação.
+- Atualização da modelagem para **19 tabelas ORM**, incluindo `rascunhos_viagens`.
 
-## 2026-11-24 — Ajuste 27 (commit `01a675f`)
+## 2026-11-24 — Organização modular e documentação acadêmica
 
-- Cadastro de saídas e trechos operacionais com controle próprio de KM e odômetros.
-- Adição das tabelas `saidas_operacionais`, `trechos_operacionais` e `parametros_consumo_veiculo`.
-- Indicador gerencial de consumo estimado sem novo lançamento financeiro.
-- Compatibilidade com registros legados, sem migração automática do Ciclo 001.
+- Divisão das 11 etapas em `faeg_app/pages/`, com `app.py` como ponto de entrada.
+- Separação de layout, tema, relatórios e componentes operacionais reutilizáveis.
+- Inclusão dos diagramas Mermaid (classes, sequência, ER, componentes, atividades, estados, casos de uso e implantação).
+- Organização dos requisitos, regras de negócio, guias, reuniões, testes, decisões arquiteturais e integração contínua.
+- Registro da política de direitos reservados para novas contribuições, preservando as condições MIT das versões anteriores.
 
-## Evolução anterior — 2026
+## 2026-11-24 — Ajuste 27: saídas e trechos operacionais
 
-- MVP com onze etapas de cadastro e consulta, controle de fretes e ciclos, negociação e recebimentos.
-- Lançamento único de despesas/abastecimentos e segregação de gastos de frete, ciclo e veículo.
-- Exportações gerenciais, conferência financeira e auditoria de vínculos/custos.
-- Histórico de reuniões e protótipo visual anterior ao Streamlit.
+- Introdução de saídas e trechos vinculados às operações, com KM planejado e odômetros.
+- Inclusão de `saidas_operacionais`, `trechos_operacionais` e `parametros_consumo_veiculo`.
+- Consumo estimado de combustível como indicador separado do lançamento financeiro.
+- Compatibilidade de leitura com dados de fretes anteriores à reorganização.
 
-Para requisitos funcionais detalhados, consultar [`docs/requisitos.md`](docs/requisitos.md). A sequência histórica exata dos ajustes anteriores pode ser levantada pelos commits do GitHub.
+## Evolução inicial — 2026
 
-## 2026-11-24 — Organização modular do aplicativo (após Ajuste 27)
+- Evolução da planilha de viagens para MVP web em Streamlit e PostgreSQL/Neon.
+- Cadastro de fretes e ciclos, clientes, veículos, motoristas, coletas e entregas.
+- Negociações e recebimentos por frete; despesas separadas por frete, ciclo e veículo.
+- Consultas, indicadores gerenciais, exportações Excel/PDF e registro histórico de reuniões.
 
-- Separação das 11 etapas em `faeg_app/pages/` mantendo o conteúdo e as regras existentes.
-- Extração de CSS, layout, consultas/callbacks e geradores Excel/PDF.
-- Correção do caminho de assets após extração do carregador de logo.
-- Inclusão de testes estruturais, de exportação e de simulação de abertura das 11 telas, sem acesso ao Neon.
-- Nenhuma alteração em modelos SQLAlchemy, tabelas, dados ou licenciamento.
+Consulte [requisitos](docs/requisitos.md), [regras de negócio](docs/regras_negocio.md) e [decisões arquiteturais](docs/decisoes/README.md) para o detalhamento técnico.

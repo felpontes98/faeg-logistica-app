@@ -1,4 +1,4 @@
-"""Etapa 7 da interface FAEG (corpo original, sem reescrever regras)."""
+"""Etapa 7 — Despesas e histórico de abastecimentos do Sistema Web FAEG."""
 import pandas as pd
 import streamlit as st
 import zlib

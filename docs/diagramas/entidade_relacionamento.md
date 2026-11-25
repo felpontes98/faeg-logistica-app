@@ -1,6 +1,6 @@
 # Modelo entidade-relacionamento — 19 tabelas
 
-O diagrama deriva das classes em [`database/models.py`](../../database/models.py) (Ajuste 27), com as FKs principais. Inclui todas as 19 tabelas, embora nem todos os atributos e FKs opcionais estejam desenhados para preservar a legibilidade.
+O diagrama deriva das classes em [`database/models.py`](../../database/models.py) (Ajuste 29), com as chaves e os relacionamentos principais. Inclui todas as 19 tabelas, embora nem todos os atributos e FKs opcionais estejam desenhados para preservar a legibilidade.
 
 ```mermaid
 erDiagram
@@ -57,7 +57,7 @@ erDiagram
         string nome_operacao
     }
     CICLOS_FINANCEIRO {
-        int id_ciclo PK, FK
+        int id_ciclo PK
         decimal valor_negociado_total
     }
     VIAGENS {
@@ -66,7 +66,7 @@ erDiagram
         string codigo_viagem UK
     }
     FRETES_FINANCEIRO {
-        int id_viagem PK, FK
+        int id_viagem PK
         int id_cliente FK
         decimal valor_negociado_total
     }
@@ -115,11 +115,13 @@ erDiagram
         string conteudo_json
     }
     PARAMETROS_CONSUMO_VEICULO {
-        int id_veiculo PK, FK
+        int id_veiculo PK
         decimal km_por_litro
     }
 ```
 
 **Vínculos não desenhados:** `viagens` referencia `locais` duas vezes (coleta e entrega); os campos de origem de `abastecimentos` são FKs opcionais e alternativas; `veiculos_despesas` mantém possíveis FKs para despesas de destino após atribuição. Verificar restrições efetivas no PostgreSQL antes de afirmar exclusividade transacional completa.
+
+As chaves primárias de `CICLOS_FINANCEIRO`, `FRETES_FINANCEIRO` e `PARAMETROS_CONSUMO_VEICULO` também participam de relacionamentos por chave estrangeira.
 
 `RASCUNHOS_VIAGENS` é independente dos registros definitivos: um rascunho ainda não representa um frete fechado ou lançamento financeiro.

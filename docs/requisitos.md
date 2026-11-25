@@ -1,7 +1,7 @@
 # Requisitos do Sistema Web FAEG
 
 **Escopo:** operação de fretes individuais, ciclos, despesas, abastecimentos, consulta e exportação.  
-**Versão:** requisitos do MVP, incluindo saídas operacionais e trechos (Ajuste 27, 24/11/2026).
+**Versão:** requisitos do MVP, com saídas na Etapa 2 e rascunhos (Ajuste 29, 25/11/2026).  
 **Origem das regras:** planilha de controle operacional da FAEG e definições registradas nas reuniões com o representante da empresa.
 
 Os requisitos documentam o escopo funcional do MVP. Fórmulas e critérios de apuração estão detalhados em [regras de negócio](regras_negocio.md); a persistência, em [arquitetura do banco](arquitetura_banco.md).
@@ -14,9 +14,9 @@ Os requisitos documentam o escopo funcional do MVP. Fórmulas e critérios de ap
 | RF-02 | Cadastrar frete com ID próprio, rota, documentos, cliente, motorista e veículo | Implementado no MVP |
 | RF-03 | Agrupar vários fretes por ID de ciclo sem duplicar fretes de fechamento | Em evolução |
 | RF-04 | Conservar negociação, adiantamento e saldo por frete, mesmo em ciclos com clientes diferentes | Implementado no MVP |
-| RF-05 | Registrar KM Individual/Ciclo manual por frete na Etapa 2 | Implementado no MVP |
+| RF-05 | Registrar os três componentes do KM planejado por saída operacional na Etapa 2 | Implementado no MVP |
 | RF-06 | Sem saídas cadastradas, calcular KM legado dos fretes do ciclo e deslocamentos informados uma só vez na Etapa 2 | Implementado no MVP |
-| RF-07 | Registrar odômetros inicial/final opcionais da operação na Etapa 2 ou 8, usando os mesmos valores salvos, sem confundir com abastecimento | Implementado no MVP |
+| RF-07 | Registrar odômetros da saída e da chegada à base na Etapa 2, separados do odômetro do abastecimento na Etapa 7 | Implementado no MVP |
 | RF-08 | Registrar Diesel ou ARLA no formulário único da Etapa 7, inclusive sem viagem (destino provisório Veículo) | Implementado no MVP |
 | RF-09 | Exibir distância e KM/L/custo por KM indicativos entre abastecimentos consecutivos de Diesel do mesmo veículo | Implementado no MVP |
 | RF-10 | Associar a despesa de combustível a um único destino e gerar simultaneamente seu histórico operacional, sem duplicar no DRE | Implementado no MVP |
@@ -43,31 +43,35 @@ Os requisitos documentam o escopo funcional do MVP. Fórmulas e critérios de ap
 | RF-31 | Sinalizar despesas semelhantes entre frete e ciclo do mesmo ID e solicitar confirmação explícita quando forem comprovantes distintos | Implementado no MVP |
 | RF-32 | Consultar indícios de repetição já cadastrados, sem alterar histórico, e exportar `Possiveis_Duplicidades` | Implementado no MVP |
 | RF-33 | Verificar repetição cruzada também durante atribuição de despesa provisória e impedir repetição imediata de gasto comum idêntico no mesmo frete | Implementado no MVP |
-| RF-34 | Na Etapa 8, somar KM planejado por ID interno do ciclo (não pelo nome), preservar o valor manual da Etapa 2 e sinalizar falta de KM no frete atual | Implementado no MVP |
+| RF-34 | Consolidar na Etapa 8 o KM das saídas da operação por ID interno do ciclo; apresentar campos antigos somente para compatibilidade histórica | Implementado no MVP |
 | RF-35 | Impedir salvar dois fretes distintos com o mesmo ID Frete e bloquear vínculo novo a nome de ciclo que identifique mais de um ID legado | Implementado no MVP |
 | RF-36 | Proteger vínculo histórico quando o último frete sair de um ciclo com despesa comum ativa ou quando a placa mudar com abastecimento já registrado | Implementado no MVP |
-| RF-37 | Acrescentar na Tela 2 os campos manuais de KM saída/entre coletas e KM retorno operacional, preservando o KM individual do frete e seu título de seção | Implementado no MVP |
-| RF-38 | Calcular KM Deslocamentos Operacionais somente na Tela 8 pela soma dos componentes da Tela 2, sem duplicar por frete do mesmo ciclo | Implementado no MVP |
-| RF-39 | Preservar o total de deslocamentos legado até discriminação manual e exportar componentes e leituras operacionais sem misturar odômetro de combustível | Implementado no MVP |
-| RF-40 | Exibir a Tela 8 em dois grupos visuais de KM (planejado e realizado), com totais destacados, fórmula resumida e explicações expansíveis, preservando os cálculos | Implementado no MVP |
-| RF-41 | Manter na Tela 8 DRE e situação dos recebimentos visíveis; agrupar detalhes de parcelas/fretes do ciclo e indicadores de consumo do veículo em áreas expansíveis | Implementado no MVP |
-| RF-42 | Permitir várias saídas operacionais em um mesmo ciclo, com datas, veículo, motorista opcional e descrição | Implementado — Ajuste 27 |
-| RF-43 | Permitir trechos físicos por saída; a soma dos trechos substitui o KM manual, sem dupla contagem | Implementado — Ajuste 27 |
-| RF-44 | Consolidar KM real das saídas somente com odômetros completos e intervalos sem sobreposição no mesmo veículo | Implementado — Ajuste 27 |
-| RF-45 | Priorizar KM das saídas sobre o modelo de KM comercial/legado quando existir ao menos uma saída cadastrada | Implementado — Ajuste 27 |
-| RF-46 | Estimar Diesel por veículo com km/L e preço de referência, sem lançar nova despesa na DRE | Implementado — Ajuste 27 |
-| RF-47 | Exportar saídas, trechos e KM operacional de ciclos em abas específicas de Excel | Implementado — Ajuste 27 |
+| RF-37 | Organizar KM de saída/coletas, rota principal e retorno à base no formulário de cada saída da Etapa 2 | Implementado no MVP |
+| RF-38 | Calcular automaticamente o KM planejado de cada saída e consolidá-lo no fechamento sem multiplicar o percurso pelos fretes do ciclo | Implementado no MVP |
+| RF-39 | Manter a leitura histórica dos campos antigos sem exigir seu preenchimento nas novas saídas, separando odômetro de combustível | Implementado no MVP |
+| RF-40 | Exibir na Etapa 8 os KM planejado e real consolidados, as diferenças e os indicadores, sem editar os odômetros novamente | Implementado no MVP |
+| RF-41 | Manter na Etapa 8 DRE, situação dos recebimentos e prévia financeira do ciclo para conferência | Implementado no MVP |
+| RF-42 | Permitir várias saídas operacionais de um ciclo, com cadastro na Etapa 2 | Implementado no MVP |
+| RF-43 | Permitir trechos físicos por saída; a soma dos trechos substitui o KM manual, sem dupla contagem | Implementado no MVP |
+| RF-44 | Consolidar KM real das saídas somente com odômetros completos e intervalos sem sobreposição no mesmo veículo | Implementado no MVP |
+| RF-45 | Priorizar KM das saídas sobre o modelo de KM comercial/legado quando existir ao menos uma saída cadastrada | Implementado no MVP |
+| RF-46 | Estimar Diesel por veículo com km/L e preço de referência, sem lançar nova despesa na DRE | Implementado no MVP |
+| RF-47 | Exportar saídas, trechos e KM operacional de ciclos em abas específicas de Excel | Implementado no MVP |
+| RF-48 | Salvar e retomar rascunhos incompletos, sem incluí-los na DRE antes do salvamento definitivo | Implementado no MVP |
+| RF-49 | Permitir uma ou várias saídas por operação individual ou ciclo, com os mesmos campos e totais calculados na Etapa 2 | Implementado no MVP |
+| RF-50 | Manter os parâmetros de consumo referencial por veículo no cadastro (Etapa 11), sem lançamento financeiro automático | Implementado no MVP |
+| RF-51 | Reservar a Etapa 8 para situação operacional, indicadores e fechamento, sem recadastrar saídas ou odômetros | Implementado no MVP |
 
 ## Critérios de aceite dos cálculos
 
-> **Atenção (Ajuste 27):** os critérios 1 a 6 descrevem a **compatibilidade legada**, válida enquanto o ciclo/individual não possui saídas operacionais. Quando existem saídas, os critérios de precedência física RF-42 a RF-45 e RN-11 substituem a soma comercial antiga.
+A fonte principal de KM físico da operação são as **saídas cadastradas na Etapa 2**. Registros anteriores sem saídas continuam consultáveis pela regra histórica, sem exigir duplicação de lançamentos.
 
-1. **Frete individual:** `KM Planejado` recebe `KM Individual / Ciclo` do próprio frete.
-2. **Ciclo:** `KM Planejado` é a soma de `KM Individual / Ciclo` de todos os fretes do mesmo **ID interno do ciclo**, incluindo o valor ainda não salvo do frete em edição, sem contá-lo duas vezes. Ciclos com nome igual e IDs internos diferentes não são somados em conjunto.
-3. **Deslocamentos:** `KM Deslocamentos Operacionais = KM de Saída e Deslocamento Entre Coletas + KM Operacional de Retorno`, digitados na **Etapa 2**. Os componentes são guardados uma só vez por ID de ciclo. Para registros históricos ainda sem componentes, mostrar o total antigo até discriminação manual.
-4. **Total:** `KM Total Planejado = KM Planejado + KM Deslocamentos Operacionais`.
-5. **Real:** odômetros de início/fim podem ser digitados na Etapa 2 ou 8, compartilhando a mesma dupla de valores por frete. O KM real do frete é `odômetro final − odômetro inicial`, quando ambos são válidos. Para **KM Total Real do ciclo**, somar os intervalos reais de seus fretes apenas quando todos têm leituras válidas e os intervalos não se sobrepõem no mesmo veículo. Na ausência ou sobreposição, mostrar “Não calculável” e aviso; não comparar planejado do ciclo com real de um único frete.
-6. **Desvio:** quando o KM real estiver disponível, `Diferença = KM Real − KM Total Planejado`; exibir desvio percentual somente com planejado maior que zero.
+1. **Frete individual:** a operação pode ter uma ou mais saídas vinculadas ao seu ciclo interno; a quilometragem física é registrada uma única vez por saída.
+2. **Ciclo operacional:** reúne os fretes negociados individualmente e as saídas compartilhadas. O fechamento não multiplica o mesmo percurso pela quantidade de fretes.
+3. **KM planejado:** cada saída recebe KM de saída/entre coletas, KM da rota principal e KM de retorno à base. O total planejado é a soma desses três componentes; se houver trechos detalhados antigos, prevalece a soma dos trechos.
+4. **Odômetros:** o odômetro inicial é registrado na saída da base e o final na chegada à base, ambos na Etapa 2. O KM real da saída é a diferença entre leituras válidas. Enquanto houver leitura final ausente ou inconsistência, o total real da operação fica pendente.
+5. **Retorno e novas saídas:** o retorno integra a saída correspondente; quando o veículo sai novamente da base para a mesma operação, cria-se outra saída, sem replicar KM nos demais fretes.
+6. **Fechamento e desvio:** na Etapa 8, são exibidos os KM planejados e reais consolidados; o desvio depende de leitura real válida e de KM planejado positivo. Não existem campos para recadastrar odômetros nessa etapa.
 7. **Abastecimento:** é cadastrado **uma vez no formulário de despesas**, atribuído ao frete, ciclo ou provisoriamente ao veículo. O reflexo operacional por `id_veiculo` não exige que haja fretes no banco e não altera os odômetros iniciais/finais da operação.
 8. **Consumo:** apenas dois abastecimentos *consecutivos de Diesel* do mesmo veículo com odômetros crescentes permitem `KM entre abastecimentos`; `KM/L = distância / litros do abastecimento atual` e `R$/KM = valor atual / distância`. Informar que essa média é indicativa e pressupõe tanque cheio; ARLA é monitorado separadamente.
 9. **DRE:** o lançamento único cria a despesa financeira e, se Diesel/ARLA, seu reflexo em `abastecimentos`; **não somar os dois registros**. O resultado de um frete inclui apenas suas despesas financeiras e o resultado por ciclo inclui também os gastos comuns ativos daquele ID Ciclo. Custos provisórios só do veículo ficam excluídos. Rateio continua pendente; o BI filtrado por frete/cliente não inclui custos compartilhados.
@@ -86,8 +90,8 @@ Os requisitos documentam o escopo funcional do MVP. Fórmulas e critérios de ap
 22. **Exportação coerente:** a opção **Base Completa** da Etapa 10 exporta fretes, despesas, fechamentos e conferência da base inteira, mesmo que a tabela de consultas esteja filtrada. A aba `Conferencia_Financeira` discrimina o tratamento de cada parcela e recebido de fato não é somado à receita negociada.
 23. **Possíveis duplicidades:** comparar despesas de frete e despesas compartilhadas do ciclo correspondente por data, categoria, quantidade, valor, descrição, fornecedor e, quando possível, veículo/odômetro. Uma coincidência deve gerar aviso e exigir confirmação explícita de que os comprovantes são diferentes, sem alterar os registros automaticamente. A atribuição de despesa provisória também aplica a conferência e conserva sua justificativa. A etapa de relatórios deve listar as coincidências conhecidas e exportá-las em `Possiveis_Duplicidades`; a ausência de alertas não certifica que todos os custos sejam únicos.
 24. **Identificadores e histórico:** ID Frete preenchido não pode ser reutilizado por outro frete (independentemente de caixa/espaços); ciclos legados com mesmo nome e IDs diferentes não são escolhidos automaticamente para novo vínculo. Ao editar um frete existente, preservar a identidade do ciclo atual se o nome não mudou. O último frete de ciclo com despesas compartilhadas ativas não pode sair/renomear o ciclo sem tratamento explícito dessas despesas. A troca de placa é bloqueada se houver abastecimento ativo associado ao veículo anterior. O salvamento de frete novo também rejeita abastecimento temporário que pertença à outra placa.
-25. **Tela 2 e Tela 8:** `KM X ROTA PLANEJADO` é só título; a Tela 2 contém entradas manuais de KM saída/entre coletas, KM individual do frete, KM retorno e odômetros operacionais inicial/final. A Tela 8 calcula os agregados, o KM total real e o desvio, mas **mantém** os dois odômetros operacionais editáveis, sincronizados com a Tela 2 sobre os mesmos campos do banco. O odômetro no abastecimento continua na Tela 7 e não preenche automaticamente os odômetros do frete, pois pode corresponder a um momento intermediário. KM individual zerado deve ser sinalizado.
-26. **Migração dos deslocamentos legados:** quando os dois novos componentes de ciclo estão nulos no banco, preservar o valor antigo agregado, com aviso visual. Somente substituir por nova composição após edição explícita do formulário. Uma atualização de outro frete do ciclo não pode zerar silenciosamente o total anterior.
+25. **Etapas 2, 7 e 8:** o cadastro de saídas, KM planejados e odômetros inicial/final ocorre na Etapa 2. O odômetro do abastecimento é lançado independentemente na Etapa 7. A Etapa 8 apresenta os valores consolidados e o fechamento, sem solicitar novamente os mesmos dados.
+26. **Compatibilidade com lançamentos anteriores:** o histórico de KM e odômetros antigos permanece acessível. Os novos percursos utilizam as saídas e seus componentes, sem copiar automaticamente os valores antigos nem zerar registros históricos.
 
 ## Requisitos de integridade e implantação
 
@@ -98,55 +102,23 @@ Os requisitos documentam o escopo funcional do MVP. Fórmulas e critérios de ap
 - **RI-05:** não usar `0` como leitura medida quando o campo foi deixado em branco; manter ausência de medição distinta de zero real.
 - **RI-06:** documentar o comportamento de segurança do app antes do uso com dados pessoais reais. Autenticação e autorização ainda precisam de projeto.
 
-## Roteiro de verificação funcional
+## Roteiro de verificação funcional do MVP
 
-- [ ] Abrir app e cadastrar um veículo sem viagem.
-- [ ] Registrar dois abastecimentos de Diesel com odômetros crescentes; conferir KM de intervalo, KM/L e R$/KM.
-- [ ] Registrar ARLA no meio dos Diesel; confirmar que não muda o cálculo de consumo.
-- [ ] Registrar abastecimento sem leitura e uma leitura regressiva; confirmar indicador indisponível/aviso e nenhuma distância negativa.
-- [ ] Registrar Diesel no **formulário único de despesas** com destino Frete: verificar uma despesa financeira e uma linha operacional derivada, com custo somado **uma só vez** ao DRE.
-- [ ] Registrar Diesel com destino Veículo sem frete: conferir custo pendente fora do DRE e histórico de consumo criado automaticamente.
-- [ ] Conferir visualmente que o odômetro do abastecimento é campo numérico direto (sem checkbox), registrar `0` como ausência e uma leitura real como número.
-- [ ] Cadastrar dois fretes no mesmo ciclo e conferir soma de KM e deslocamentos informados uma vez.
-- [ ] Cadastrar três fretes de um ciclo, com receitas e despesas diferentes; conferir prévia na Etapa 8, relatório na Etapa 9 e planilha `Fechamento_Ciclos`.
-- [ ] Registrar uma despesa compartilhada em ciclo salvo e conferir que entra uma única vez no fechamento, sem aparecer no BI por frete/cliente.
-- [ ] Cancelar despesa compartilhada com motivo; conferir saída do cálculo e manutenção do histórico cancelado em `Despesas_Ciclo`.
-- [ ] Conferir impedimento de lançamento idêntico no mesmo ciclo e verificar manualmente que o custo não foi também lançado a um frete.
-- [ ] Confirmar que não existe uma segunda área de cadastro de abastecimento, somente histórico para consulta e controle de cancelamentos.
-- [ ] Cancelar despesa provisória ou compartilhada de combustível; verificar que o histórico é mantido como cancelado e não influencia KM/L.
-- [ ] Atribuir provisória ao frete do mesmo veículo; conferir total do frete, do ciclo e ausência de segundo registro em `Abastecimentos_Veiculos`.
-- [ ] Atribuir provisória a custo compartilhado do ciclo; confirmar que o BI filtrado por frete não ganhou custo alocado indevidamente.
-- [ ] Estornar os dois destinos e conferir retorno a pendente, saída do DRE e permanência do histórico em `Atribuicoes_Despesas`.
-- [ ] Verificar bloqueios de veículo divergente, atribuição duplicada e exclusão direta de custo já atribuído.
-- [ ] Conferir os quatro blocos da Conferência Financeira Geral da Etapa 9 (fretes, compartilhadas, pendentes e já atribuídas) e a identidade receita − custos contabilizados = resultado parcial.
-- [ ] Gerar Excel e confirmar correspondência com `Conferencia_Financeira`, inclusive com zero fretes e com despesas compartilhadas sem fretes do tipo Ciclo.
-- [ ] Filtrar um cliente na Etapa 10, exportar **Base Completa** e confirmar que a planilha não mistura a lista filtrada com despesas de toda a base.
-- [ ] Conferir margem “Não calculável” para receita zero ou legado ambíguo, inclusive nos gráficos e PDF do BI.
-- [ ] Lançar custo semelhante em frete e ciclo do mesmo ID e comprovar o aviso, confirmação obrigatória e ausência de alteração automática do histórico.
-- [ ] Repetir no sentido inverso e verificar IDs na aba `Possiveis_Duplicidades`, inclusive com dados vazios.
-- [ ] Conferir Tela 2: título KM X ROTA PLANEJADO não digitável; saída/entre coletas, KM individual, retorno e dois odômetros são manuais; Tela 8: planejado por ID, saída + retorno única por ciclo, total planejado, total real e diferença calculados.
-- [ ] Abrir ciclo legado com deslocamento total mas sem os dois novos campos; garantir preservação ao salvar outro frete, aviso para discriminar e total atualizado só após edição dos componentes.
-- [ ] Conferir no Excel `Viagens_e_Ciclos` e `Fechamento_Ciclos` os campos discriminados, inclusive vazios em registros legados sem detalhamento.
-- [ ] Simular dois IDs internos com mesmo nome de ciclo e evitar soma por nome ou novo vínculo automático; preservar o ID original ao editar frete salvo.
-- [ ] Conferir alerta quando o KM manual na Etapa 2 ainda for zero e memória de cálculo na Etapa 8.
-- [ ] Tentar duplicar ID Frete, trocar placa com Diesel registrado, ou retirar último frete de ciclo com despesa ativa; conferir bloqueios sem alteração do histórico.
-- [ ] Tentar salvar novo frete com Diesel temporário de outro veículo e trocar Ciclo→Individual com deslocamentos; conferir proteção da placa e dos KM.
-- [ ] Cadastrar dois abastecimentos legítimos com mesmo valor, mas leituras de odômetro diferentes, sem falso bloqueio de duplicidade cruzada.
-- [ ] Atribuir despesa provisória semelhante a custo existente em outro destino; conferir exigência de confirmação e justificativa.
-- [ ] Tentar lançar duas vezes a mesma despesa não combustível em frete salvo e em frete ainda temporário; verificar prevenção de repetição imediata.
-- [ ] Tentar trocar o veículo de um frete que recebeu uma despesa provisória; confirmar bloqueio até que a atribuição seja estornada.
-- [ ] Simular dois fretes legados com um único financeiro de ciclo; conferir aviso e receita não duplicada.
-- [ ] Registrar adiantamento recebido real, saldo recebido e um pagamento parcial adicional; conferir valores por frete/ciclo.
-- [ ] Cancelar pagamento com motivo e conferir exclusão dos totais, sem apagar o histórico na Etapa 4 ou na aba `Recebimentos_Fretes`.
-- [ ] Simular reenvio do mesmo comprovante, lançamento acima do negociado e frete ainda não salvo; conferir as proteções.
-- [ ] Conferir ausência de valor negociado, adiantamento/saldo previstos e ausência de odômetros sem contabilizar valores fictícios.
-- [ ] Salvar operação sem odômetros, com odômetros válidos e com odômetro final inferior ao inicial.
-- [ ] Em ciclo com dois fretes, verificar KM Real Rodado individual (topo da Tela 8) e KM Total Real consolidado, incluindo caso de odômetros ausentes e intervalos sobrepostos no mesmo veículo.
-- [ ] Conferir no desktop e no celular que o painel da Tela 8 não corta valores/legendas, que as seis métricas estão legíveis e que as seções expansíveis preservam todas as informações existentes.
-- [ ] Confirmar que os alertas de KM ausente, intervalos sobrepostos e financeiro legado continuam visíveis mesmo com os detalhes fechados.
-- [ ] Conferir cenário de fechamento e exportação sem viagens e com viagens.
-- [ ] Conciliar amostra com a planilha, inspecionar as divergências já relatadas e verificar que nada foi importado sem autorização.
-- [ ] Realizar backup e ensaio de migração em banco de testes; somente depois avaliar o deploy no banco oficial.
+- [ ] Criar um frete individual, preencher dados de carga, documentos, cliente, negociação, coleta e entrega e salvar.
+- [ ] Iniciar um cadastro incompleto, salvar como rascunho, reabrir e concluir sem perder os campos já registrados.
+- [ ] Cadastrar na Etapa 2 uma saída com KM planejado, odômetro inicial e chegada à base; conferir o KM real automático.
+- [ ] Cadastrar uma segunda saída no mesmo ciclo e verificar a soma dos KM no fechamento, sem duplicação pelos demais fretes.
+- [ ] Registrar uma saída ainda sem retorno: o KM real consolidado deve permanecer pendente.
+- [ ] Verificar prevenção de odômetros invertidos e intervalos sobrepostos no mesmo veículo.
+- [ ] Cadastrar dois fretes vinculados ao mesmo ciclo e conferir que os valores negociados permanecem individuais.
+- [ ] Registrar despesa compartilhada na Etapa 7; o custo deve entrar uma única vez no resultado do ciclo.
+- [ ] Registrar despesa exclusiva do frete e despesa provisória do veículo; conferir a separação dos destinos.
+- [ ] Registrar Diesel com litros, valor, data e odômetro de abastecimento; conferir o histórico sem duplicar a DRE.
+- [ ] Registrar adiantamento e saldo previsto; lançar e cancelar recebimentos efetivos com motivo, verificando os saldos.
+- [ ] Conferir a Etapa 8 sem campos de cadastro de saídas nem recadastro de odômetros; verificar receitas, despesas e situação da operação.
+- [ ] Configurar consumo referencial no cadastro do veículo (Etapa 11); verificar que o consumo estimado não cria uma segunda despesa.
+- [ ] Exportar os relatórios Excel/PDF e conferir os valores consolidados do ciclo, saídas, recebimentos e despesas.
+- [ ] Consultar registros históricos e preservar sua leitura, sem importar automaticamente dados da planilha anterior.
 
 ## Funcionalidades previstas para evolução
 

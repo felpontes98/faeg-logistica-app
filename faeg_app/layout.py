@@ -1,4 +1,4 @@
-"""Barra lateral e cabeçalho institucional: renderização original isolada."""
+"""Barra lateral, navegação e cabeçalho institucional do Sistema Web FAEG."""
 from html import escape
 
 import streamlit as st

@@ -1,4 +1,4 @@
-"""Etapa 10 da interface FAEG (corpo original, sem reescrever regras)."""
+"""Etapa 10 — Consulta de fretes e ciclos do Sistema Web FAEG."""
 import pandas as pd
 import streamlit as st
 

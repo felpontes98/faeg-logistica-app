@@ -1,4 +1,4 @@
-"""Aplica o tema institucional da FAEG sem alterar o CSS original."""
+"""Configuração do tema e carregamento dos estilos institucionais da FAEG."""
 from pathlib import Path
 
 import streamlit as st

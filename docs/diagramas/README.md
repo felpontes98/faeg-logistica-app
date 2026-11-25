@@ -1,6 +1,6 @@
 # Diagramas de modelagem — FAEG
 
-Os diagramas representam os componentes, as entidades e os fluxos do Sistema Web FAEG, incluindo o Ajuste 27 e a organização modular de 24/11/2026. Foram elaborados em [Mermaid](https://mermaid.js.org/) para visualização diretamente no GitHub.
+Os diagramas representam os componentes, as entidades e os fluxos do Sistema Web FAEG, atualizados para as 11 etapas e o fluxo operacional do Ajuste 29. Foram elaborados em [Mermaid](https://mermaid.js.org/) para visualização diretamente no GitHub.
 
 | Diagrama | Finalidade | Notação |
 | --- | --- | --- |

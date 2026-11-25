@@ -1,4 +1,4 @@
-"""Etapa 9 da interface FAEG (corpo original, sem reescrever regras)."""
+"""Etapa 9 — Indicadores, relatórios e exportações do Sistema Web FAEG."""
 import pandas as pd
 import streamlit as st
 

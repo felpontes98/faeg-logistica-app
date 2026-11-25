@@ -1,4 +1,4 @@
-"""Etapa 8 da interface FAEG (corpo original, sem reescrever regras)."""
+"""Etapa 8 — Conferência e fechamento da operação do Sistema Web FAEG."""
 import pandas as pd
 import streamlit as st
 

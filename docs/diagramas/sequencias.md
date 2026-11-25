@@ -60,7 +60,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor Operador
-    participant UI as Etapa 8 / views
+    participant UI as Etapa 2 / views/percurso_etapa2
     participant S as database/saidas_operacionais.py
     participant DB as SQLAlchemy / PostgreSQL
     Operador->>UI: Informa saída, datas, veículo, KM e odômetros
@@ -77,7 +77,7 @@ sequenceDiagram
     end
     UI->>S: consultar_saidas() e resumo_saidas()
     S-->>UI: KM planejado e KM real (ou pendente)
-    UI-->>Operador: Fechamento físico do ciclo
+    UI-->>Operador: Resumo físico da operação para a Etapa 8
 ```
 
 **Regra:** se há trechos, eles prevalecem sobre o KM manual da saída; odômetro parcial impede total real definitivo.

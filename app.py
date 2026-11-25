@@ -31,11 +31,11 @@ from faeg_app.pages.etapa_09_relatorios import render as render_etapa_09
 from faeg_app.pages.etapa_10_consultas import render as render_etapa_10
 from faeg_app.pages.etapa_11_cadastros import render as render_etapa_11
 
-# Inalterado: a aplicação existente sincroniza o esquema no primeiro carregamento.
+# Inicialização do esquema declarativo, após a configuração do Streamlit.
 inicializar_banco_uma_vez(schema_v=14)
 aplicar_tema()
 
-# Snapshot dos cadastros e seleção da viagem: ordem idêntica ao app anterior.
+# Dados de referência compartilhados pelas 11 etapas da interface.
 motoristas_db, veiculos_db, clientes_db, locais_db, fornecedores_db, viagens_db = carregar_listas_base()
 if "viagem_ativa_id" not in st.session_state:
     st.session_state["viagem_ativa_id"] = 0
@@ -54,7 +54,7 @@ ctx = PageContext(
 aba_ativa, ctx.prox_cod_sidebar, ctx.menu_itens = render_sidebar(ctx)
 render_top_context(ctx)
 
-# Não muda os rótulos nem a numeração das etapas.
+# Roteamento das 11 etapas na ordem do processo operacional.
 RENDERERS = {
     '1. Frota FAEG': render_etapa_01,
     '2. Frete e Docs': render_etapa_02,

@@ -4,7 +4,7 @@
 
 Aplicação web para cadastrar fretes, agrupar serviços em ciclos operacionais, controlar receitas e despesas, acompanhar deslocamentos e emitir consultas e relatórios gerenciais. O projeto evoluiu de uma planilha de controle de viagens para um MVP em **Python/Streamlit**, com persistência em **PostgreSQL (Neon)**.
 
-> **MVP operacional:** interface Streamlit com fretes individuais e ciclos, consultas, despesas, saídas e fechamento. O preenchimento de KM/odômetros ocorre na Etapa 2; o fechamento da Etapa 8 utiliza esses dados sem digitá-los novamente. Os rascunhos permitem retomar registros incompletos.
+> **MVP em execução:** interface Streamlit com fretes individuais e ciclos, consultas, despesas, saídas e fechamento. O preenchimento de KM/odômetros ocorre na Etapa 2; o fechamento da Etapa 8 utiliza esses dados sem digitá-los novamente. Os rascunhos permitem retomar registros incompletos.
 
 ## Visão geral
 
@@ -48,9 +48,11 @@ flowchart LR
     PAG --> REL[faeg_app/reporting: PDF e Excel]
 ```
 
-O `app.py` é somente o ponto de entrada (74 linhas na refatoração de 24/11/2026). As 11 etapas estão em `faeg_app/pages/`, as consultas/callbacks compartilhadas em `faeg_app/core.py`, a identidade visual em `faeg_app/theme.py` e os relatórios em `faeg_app/reporting.py`. Detalhes: [estrutura de módulos](docs/arquitetura_aplicacao.md).
+O `app.py` é o ponto de entrada da aplicação. As 11 etapas estão em `faeg_app/pages/`, as consultas/callbacks compartilhadas em `faeg_app/core.py`, a identidade visual em `faeg_app/theme.py` e os relatórios em `faeg_app/reporting.py`. Detalhes: [estrutura de módulos](docs/arquitetura_aplicacao.md).
 
-O projeto **não implementa uma API REST independente**: a interface chama diretamente funções Python e sessões SQLAlchemy. O modelo atual possui **19 tabelas ORM**, incluindo rascunhos de preenchimento. Consulte os [diagramas técnicos](docs/diagramas/README.md) e o [inventário do banco](docs/arquitetura_banco.md).
+A arquitetura do MVP **não utiliza API REST independente**: a interface chama diretamente funções Python e sessões SQLAlchemy. O modelo atual possui **19 tabelas ORM**, incluindo rascunhos de preenchimento. Consulte os [diagramas técnicos](docs/diagramas/README.md) e o [inventário do banco](docs/arquitetura_banco.md).
+
+**MVP:** [Sistema Web FAEG](https://testefaeg.streamlit.app/) (acesso conforme a configuração da implantação).
 
 ## Executar localmente
 
@@ -86,7 +88,7 @@ O [índice da documentação](docs/README.md) organiza os materiais técnicos e 
 
 - [Requisitos funcionais e critérios de aceite](docs/requisitos.md) · [Regras de negócio](docs/regras_negocio.md)
 - [Arquitetura da aplicação](docs/arquitetura_aplicacao.md) · [Arquitetura e modelo de dados](docs/arquitetura_banco.md) · [Diagramas UML e de arquitetura](docs/diagramas/README.md)
-- [Plano de testes](docs/plano_testes.md) · [Matriz de rastreabilidade](docs/rastreabilidade.md) · [Avaliação técnica](docs/avaliacao_repositorio.md)
+- [Plano de testes](docs/plano_testes.md) · [Matriz de rastreabilidade](docs/rastreabilidade.md) · [Planejamento técnico](docs/planejamento_tecnico.md)
 - [Histórico das reuniões](docs/reunioes/) · [Protótipo inicial](docs/prototipo/prototipo_inicial.html)
 - [Registro de decisões técnicas](docs/decisoes/README.md) · [Histórico de versões](CHANGELOG.md)
 
@@ -97,7 +99,7 @@ O [índice da documentação](docs/README.md) organiza os materiais técnicos e 
 - Não há rateio aprovado de custos compartilhados; **saldo comercial por frete de um ciclo não representa lucro individual**.
 - O consumo de Diesel por KM é estimativo e **não substitui** a conciliação do combustível comprado e consumido.
 - Importação Excel: existem prévia e auditoria; a gravação automática permanece bloqueada.
-- Faltam testes end-to-end, verificação de restauração de backup e homologação abrangente com base isolada.
+- O planejamento técnico inclui ampliação dos testes integrados, validação da restauração de backups e migrações versionadas.
 
 ## Equipe e licença
 

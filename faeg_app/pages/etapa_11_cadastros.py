@@ -1,4 +1,4 @@
-"""Etapa 11 da interface FAEG (corpo original, sem reescrever regras)."""
+"""Etapa 11 — Cadastros gerais e parâmetros de veículos do Sistema Web FAEG."""
 import streamlit as st
 
 from database.connection import SessionLocal
