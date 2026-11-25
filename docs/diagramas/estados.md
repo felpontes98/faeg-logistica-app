@@ -1,6 +1,6 @@
 # Diagramas de estados — operação e financeiro
 
-O modelo apresenta **estados de negócio** e ajuda a documentar transições desejadas. **Não é uma máquina de estados automática implementada integralmente em `app.py`**; as opções atuais da interface incluem rótulos como “Aguardando Adiantamento”, “Adiantamento Recebido”, “Em Transporte”, “Entregue / Aguardando Saldo”, “Quitada / Concluída” e “Cancelada”.
+Os diagramas representam o fluxo de estados do negócio. As opções disponíveis na interface incluem “Aguardando Adiantamento”, “Adiantamento Recebido”, “Em Transporte”, “Entregue / Aguardando Saldo”, “Quitada / Concluída” e “Cancelada”.
 
 ## 1. Estado operacional conceitual
 
@@ -33,4 +33,4 @@ stateDiagram-v2
     Quitado --> [*]
 ```
 
-**Cuidado:** o código controla recebimentos e saldos efetivos, mas a implantação do controle financeiro de estados, com todas essas transições e permissões, depende de validação. Uma entrega pode estar concluída mesmo com cobrança pendente.
+O estado operacional e o acompanhamento financeiro são independentes: uma entrega pode estar concluída com recebimentos ainda pendentes. Os diagramas representam transições de negócio e não uma máquina de estados integralmente automatizada.

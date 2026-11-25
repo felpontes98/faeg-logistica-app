@@ -143,4 +143,4 @@ classDiagram
     Fornecedor "0..1" --> "0..*" CicloDespesa : opcional
 ```
 
-**Observação:** `Abastecimento` guarda referência a **uma** despesa de origem de frete, ciclo ou veículo. Esta associação polimórfica por FKs opcionais está detalhada no [DER](entidade_relacionamento.md). Não significa um novo custo financeiro.
+**Vínculo financeiro:** `Abastecimento` guarda referência a **uma** despesa de origem de frete, ciclo ou veículo. Esta associação polimórfica por FKs opcionais está detalhada no [DER](entidade_relacionamento.md). Não significa um novo custo financeiro.

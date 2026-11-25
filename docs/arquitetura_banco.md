@@ -47,8 +47,8 @@ A receita do ciclo é a soma das negociações individuais dos fretes vinculados
 
 ## Criação e evolução do esquema
 
-Na inicialização, `sincronizar_colunas_banco()` pode criar tabelas ausentes e executar comandos de ajuste de colunas e índices. **Essa rotina não substitui migrações versionadas.** Mudanças de estrutura devem ser aplicadas somente após backup e ensaio em PostgreSQL isolado. Não executar scripts de diagnóstico, importação ou atualização contra a produção sem autorização e validação dos dados.
+Na inicialização, `sincronizar_colunas_banco()` cria estruturas ausentes e realiza ajustes de colunas e índices. A evolução do esquema utiliza atualmente essa sincronização; migrações versionadas integram o planejamento técnico. Alterações estruturais seguem o procedimento de backup e execução em PostgreSQL isolado.
 
-Diagnóstico de ciclos: `python -m database.diagnostico_ciclos`, apontando `DATABASE_URL` para banco de teste. A importação de planilha disponibiliza prévia/conferência; a gravação automática no banco não integra o fluxo regular do MVP.
+O comando `python -m database.diagnostico_ciclos` executa o diagnóstico de ciclos com a conexão definida em `DATABASE_URL`. A importação de planilha disponibiliza prévia e conferência; a gravação automática não integra o fluxo regular do MVP.
 
 Os cenários de integridade, conciliação financeira e regressão estão organizados no [plano de testes](plano_testes.md). As regras detalhadas estão em [regras de negócio](regras_negocio.md), e o procedimento de publicação em [guia de execução](guia_execucao.md).

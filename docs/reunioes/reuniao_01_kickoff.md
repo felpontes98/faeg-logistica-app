@@ -3,7 +3,7 @@
 **Data / Versão:** 30/10/2026 - v1.0
 **Autores / Responsáveis:** Felipe Pontes, Eduardo Pontes e Larissa do Espírito Santo
 
-> **Registro do kickoff:** decisões e objetivos estabelecidos no início do projeto. A evolução do produto está documentada no [Resumo do projeto](../resumo_faeg.md) e nos [Requisitos](../requisitos.md).
+> **Registro do kickoff:** decisões e objetivos estabelecidos no início do projeto. A evolução do produto está documentada no [README](../../README.md) e nos [Requisitos](../requisitos.md).
 
 ---
 

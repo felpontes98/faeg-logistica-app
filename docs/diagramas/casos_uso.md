@@ -1,6 +1,6 @@
 # Casos de uso — visão funcional do sistema FAEG
 
-O Mermaid usa aqui uma **aproximação por fluxograma**, e não a notação gráfica UML de casos de uso com elipses e atores padronizados. Isso permite exibição no GitHub sem imagem externa.
+Notação: fluxograma funcional equivalente a casos de uso, elaborado em Mermaid para visualização no GitHub. Não utiliza os símbolos gráficos tradicionais da UML para atores e casos de uso.
 
 ```mermaid
 flowchart LR

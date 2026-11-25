@@ -1,7 +1,7 @@
 # Requisitos do Sistema Web FAEG
 
-**Escopo:** operação de fretes individuais, ciclos, despesas, abastecimentos, consulta e exportação.  
-**Versão funcional:** fluxo com saídas na Etapa 2 e rascunhos recuperáveis.  
+**Escopo:** operação de fretes individuais, ciclos, despesas, abastecimentos, consulta e exportação.
+**Fluxo operacional:** saídas na Etapa 2 e rascunhos recuperáveis.  
 **Origem das regras:** planilha de controle operacional da FAEG e definições registradas nas reuniões com o representante da empresa.
 
 Os requisitos documentam o escopo funcional do MVP. Fórmulas e critérios de apuração estão detalhados em [regras de negócio](regras_negocio.md); a persistência, em [arquitetura do banco](arquitetura_banco.md).
@@ -96,11 +96,11 @@ A fonte principal de KM físico da operação são as **saídas cadastradas na E
 ## Requisitos de integridade e implantação
 
 - **RI-01:** não reescrever automaticamente fretes, despesas, códigos de ciclo ou fechamentos históricos por aproximação de linhas da planilha.
-- **RI-02:** não importar Excel para o banco antes de resolver divergências apontadas na auditoria e autorizar explicitamente a gravação.
+- **RI-02:** a importação de Excel mantém prévia e conferência; a gravação de dados importados depende de execução autorizada e tratamento de inconsistências.
 - **RI-03:** conservar compatibilidade com tabelas/colunas já publicadas; novas estruturas devem ser ensaiadas em cópia do PostgreSQL antes da produção.
 - **RI-04:** validar a identidade do veículo em cada abastecimento; não misturar leituras de veículos distintos nem intervalos de ARLA com Diesel.
 - **RI-05:** não usar `0` como leitura medida quando o campo foi deixado em branco; manter ausência de medição distinta de zero real.
-- **RI-06:** documentar o comportamento de segurança do app antes do uso com dados pessoais reais. Autenticação e autorização ainda precisam de projeto.
+- **RI-06:** o MVP não implementa autenticação individual; os dados operacionais ficam em ambiente de acesso restrito e as demonstrações utilizam dados fictícios ou anonimizados.
 
 ## Validação dos requisitos
 

@@ -1,15 +1,27 @@
-# Política de segurança
+# Segurança da aplicação
 
-A aplicação gerencia dados operacionais e comerciais. Credenciais, informações pessoais, documentos de clientes e dados de infraestrutura não devem ser publicados no repositório, em issues ou em capturas de tela.
+O Sistema Web FAEG armazena dados operacionais, comerciais e cadastrais. O controle de acesso ao ambiente, a proteção das credenciais e a integridade das informações fazem parte da administração da aplicação.
 
-## Reportar uma questão de segurança
+## Controles atuais
 
-Informações sobre possíveis vulnerabilidades devem ser encaminhadas de modo privado aos responsáveis pelo desenvolvimento. Não publique credenciais, dados reais ou detalhes exploráveis em issues públicas.
+| Componente | Implementação |
+| --- | --- |
+| Conexão com o banco | SQLAlchemy e `DATABASE_URL` configurada no ambiente de execução |
+| Segredos | Variáveis de ambiente e configuração privada do Streamlit, fora do versionamento |
+| Persistência | PostgreSQL, com validações de integridade e relacionamentos definidos no ORM |
+| Histórico financeiro | Registros de recebimentos, cancelamentos e atribuições de despesas, conforme as regras de negócio |
+| Autenticação de usuários | Não implementada nesta versão do MVP |
 
-## Proteção de ambientes
+## Ambientes e publicação
 
-O MVP não possui autenticação individual. Uma implantação pública deve utilizar **banco de demonstração isolado e dados fictícios/anonimizados**, sem conexão à base operacional. Tornar o repositório privado não restringe o acesso a um aplicativo Streamlit que permaneça público.
+**Política de ambientes:** dados operacionais permanecem em implantação de acesso restrito. Demonstrações com acesso público são destinadas a registros fictícios ou anonimizados, em banco independente da base operacional.
 
-As configurações sensíveis são mantidas fora do versionamento. Antes de alterações de esquema ou publicação de novas funcionalidades, utilizar backup e validar em ambiente separado.
+As credenciais e os backups são mantidos fora do repositório. Mudanças estruturais no banco são precedidas de cópia de segurança e executadas em ambiente controlado. Exportações com dados comerciais ou pessoais permanecem sob responsabilidade dos usuários autorizados.
 
-Consulte [Segurança e privacidade](docs/seguranca_privacidade.md) para as diretrizes de implantação e tratamento de dados.
+## Comunicação de vulnerabilidades
+
+Ocorrências de segurança são comunicadas privadamente aos responsáveis pelo projeto. Relatos contendo credenciais, documentos pessoais ou dados operacionais não são tratados em issues públicas.
+
+## Evolução
+
+Autenticação individual, perfis de acesso e migrações versionadas integram a evolução da plataforma. Os procedimentos de instalação e publicação estão documentados no [guia de execução](docs/guia_execucao.md).

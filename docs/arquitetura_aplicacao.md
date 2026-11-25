@@ -1,70 +1,53 @@
-# Arquitetura de módulos — FAEG
+# Arquitetura da aplicação
 
-A organização modular separa interface, regras, persistência e relatórios, preservando o fluxo das 11 etapas.
+A aplicação possui interface Streamlit modularizada, funções de domínio em Python e persistência SQLAlchemy/PostgreSQL. O ponto de entrada é `app.py`.
 
-## Organização
+## Organização dos componentes
 
 ```text
-app.py                         # Entrada Streamlit e roteamento das 11 etapas
+app.py                           Entrada e roteamento das 11 etapas
 faeg_app/
-  bootstrap.py                 # Sincronização de esquema
-  context.py                   # Contexto de apresentação das etapas
-  core.py                      # Consultas, callbacks, estado e salvamento
-  layout.py                    # Menu lateral e barra de contexto
-  reporting.py                 # Exportação Excel e geração PDF
-  theme.py                     # Carregamento do CSS/HTML institucional
-  pages/
-    etapa_01_frota.py
-    etapa_02_frete_documentos.py
-    etapa_03_cliente.py
-    etapa_04_negociacao_recebimentos.py
-    etapa_05_coleta.py
-    etapa_06_entrega.py
-    etapa_07_despesas.py
-    etapa_08_fechamento.py
-    etapa_09_relatorios.py
-    etapa_10_consultas.py
-    etapa_11_cadastros.py
-assets/faeg_styles.html         # Estilos institucionais e componentes visuais
-database/                       # ORM, transações, cálculos e serviços de domínio existentes
-views/                          # Componentes operacionais reutilizáveis
-tests/                          # Testes SQLite e verificações de modularização
+  bootstrap.py                   Preparação do banco e recursos de execução
+  context.py                     Contexto de dados compartilhado entre telas
+  core.py                        Operações, consultas e estado da aplicação
+  layout.py                      Navegação e cabeçalho
+  reporting.py                   Relatórios PDF e Excel
+  theme.py                       Identidade visual
+  erros.py                       Tratamento de erros de interface
+  rascunhos_ui.py                Salvamento e retomada de rascunhos
+  pages/                         Interface das 11 etapas
+database/                         Modelos, regras transacionais e persistência
+views/                            Componentes de percurso e consumo
+assets/                           Estilos e logotipo
+tests/                            Testes automatizados
 ```
 
 ## Fluxo de execução
 
 ```mermaid
 flowchart TD
-    A["app.py"] --> B["Configuração Streamlit"]
-    B --> C["bootstrap - sincronização existente"]
-    C --> D["theme - identidade visual"]
-    D --> E["core - cadastros e viagem ativa"]
-    E --> F["layout - menu e contexto"]
-    F --> G{"Etapa selecionada"}
-    G --> H["faeg_app/pages - 11 etapas"]
-    H --> I["core - callbacks e consultas"]
-    H --> J["reporting - PDF e Excel"]
-    I --> K["database - SQLAlchemy"]
-    K --> L[("Neon - PostgreSQL")]
+    A["app.py"] --> B["Configuração do Streamlit"]
+    B --> C["bootstrap.py"]
+    C --> D["layout.py e theme.py"]
+    D --> E{"Etapa selecionada"}
+    E --> F["faeg_app/pages"]
+    F --> G["core.py e views/"]
+    F --> H["reporting.py"]
+    G --> I["database/"]
+    H --> I
+    I --> J[("PostgreSQL - Neon")]
 ```
 
-## Cuidados de compatibilidade
+O Streamlit processa as interações da interface e acessa o banco por sessões SQLAlchemy. Não existe API REST intermediária.
 
-1. O arquivo `app.py` **deve continuar na raiz** para que o comando `streamlit run app.py` permaneça válido.
-2. A pasta inteira `faeg_app/` e `assets/faeg_styles.html` são necessárias. Publicar apenas `app.py` causará erro de importação.
-3. `PageContext` transporta as listas de cadastro e os rótulos da barra de contexto para a etapa ativa; os campos editáveis e validações originais continuam usando `st.session_state`.
-4. `faeg_app/core.py` reúne consultas e funções compartilhadas pelas etapas. Sua divisão adicional por serviços deverá ser incremental e coberta por testes de integração no PostgreSQL.
-5. `faeg_app/reporting.py` mantém os geradores de PDF e Excel. O caminho do logotipo foi ajustado para continuar encontrando a imagem na raiz do projeto (`assets/logo_faeg.png`).
-6. `bootstrap.py` chama a mesma rotina `sincronizar_colunas_banco()` com a chave de cache atual (`schema_v=14`). A rotina ainda pode executar comandos DDL ao iniciar; ela não representa um sistema de migrações versionadas.
-7. Os módulos de banco, a visualização de saídas e as configurações do Streamlit permanecem em suas pastas específicas.
+## Persistência e estado
 
-## Qualidade e manutenção
+`faeg_app/core.py` concentra consultas, callbacks, validações e funções de salvamento compartilhadas pelas etapas. `PageContext` organiza dados de apresentação; os formulários utilizam o estado de sessão do Streamlit.
 
-A suíte de testes automatizados contempla regras de quilometragem, estrutura dos módulos, imports, relatórios e fluxos simulados de interface. A integração contínua executa os testes a cada atualização do código. O desenvolvimento utiliza ambientes isolados para alterações estruturais e cenários de escrita.
+A rotina `sincronizar_colunas_banco()` é executada na preparação da aplicação e mantém a compatibilidade com as estruturas existentes. O controle do esquema ainda utiliza sincronização na inicialização, sem migrações versionadas.
 
-## Evolução da arquitetura
+## Manutenção
 
-- Separar gradualmente `core.py` em repositórios e serviços com interfaces estáveis.
-- Adicionar testes de integração PostgreSQL e testes de interface com `streamlit.testing`.
-- Implementar autenticação e perfis de acesso; adicionar migrações versionadas.
-- Configurar validação automatizada de estilo/typing após estabilização das dependências.
+A interface permanece organizada em 11 módulos, um por etapa. Os serviços de percurso, abastecimentos, despesas, recebimentos e relatórios possuem arquivos específicos. A suíte em `tests/` cobre comportamentos operacionais e a integridade da estrutura modular.
+
+Os relacionamentos entre entidades estão documentados em [modelo de dados](arquitetura_banco.md) e [diagramas](diagramas/README.md).

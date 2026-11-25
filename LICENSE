@@ -2,51 +2,35 @@ FAEG — SISTEMA WEB DE GESTÃO LOGÍSTICA
 AVISO DE DIREITOS AUTORAIS E LICENCIAMENTO
 
 Copyright (c) 2026 Felipe Pontes.
-Todos os direitos reservados, ressalvados os direitos anteriormente concedidos
-sob outras licenças e os direitos de eventuais outros titulares.
+Todos os direitos reservados às contribuições originais não licenciadas
+expressamente sob outras condições, respeitados os direitos de seus titulares.
 
-1. REGRA PARA NOVAS CONTRIBUIÇÕES
+1. CONTRIBUIÇÕES ATUAIS E FUTURAS
 
-A partir do commit que incorporar este aviso ao repositório, novas contribuições
-originais e materiais inéditos inseridos por seus titulares de direitos não
-recebem, por este arquivo, autorização pública para cópia, modificação,
-distribuição, sublicenciamento ou exploração comercial.
+As contribuições originais disponibilizadas sob este aviso não recebem
+licença pública de reprodução, modificação, distribuição, sublicenciamento
+ou exploração comercial. Sua utilização depende das permissões previstas
+em lei ou de autorização dos respectivos titulares dos direitos.
 
-Qualquer utilização desses novos materiais fora dos limites permitidos por lei
-ou por autorização previamente existente exige autorização expressa do(s)
-respectivo(s) titular(es) de direitos.
+2. HISTÓRICO DE LICENCIAMENTO MIT
 
-2. VERSÕES ANTERIORES SOB LICENÇA MIT
+As versões e os materiais anteriormente disponibilizados sob a licença MIT
+permanecem sujeitos àquela licença. A alteração desta política não revoga
+permissões concedidas às versões anteriores.
 
-O código e os materiais efetivamente disponibilizados antes desta mudança sob
-a licença MIT continuam sujeitos aos direitos e condições daquela licença.
-Esta declaração NÃO revoga retroativamente permissões já concedidas e NÃO
-transforma automaticamente material anteriormente licenciado sob MIT em
-material proprietário.
-
-O texto integral da licença MIT anteriormente publicada está preservado em:
+O texto da licença MIT anteriormente utilizada encontra-se em:
 licenses/MIT-VERSOES-ANTERIORES.txt
 
-O histórico de commits do Git identifica as versões anteriores. Quem utilizar
-material licenciado sob MIT deve cumprir as condições da respectiva licença,
-inclusive a preservação dos avisos de direitos autorais e da licença.
+Os commits do Git registram o histórico das versões do projeto.
 
-3. CONTRIBUIDORES, MARCA E DEPENDÊNCIAS
+3. TITULARIDADE, MARCA E DEPENDÊNCIAS
 
-O nome de Felipe Pontes é reproduzido conforme o aviso de direitos autorais da
-licença MIT originalmente presente no repositório. Esta declaração não
-constitui cessão de direitos autorais à FAEG Ltda nem afasta eventuais direitos
-de outros contribuidores. A titularidade e as autorizações para novas
-contribuições devem ser confirmadas entre as partes envolvidas.
+A identificação de Felipe Pontes corresponde ao aviso de direitos autorais
+da licença MIT originalmente publicada. Os direitos de outros autores e
+titulares de contribuições permanecem preservados.
 
-A marca FAEG, logotipos, dados institucionais e informações de clientes não
-são licenciados sob MIT por este aviso.
+A marca FAEG, seus elementos visuais e os dados operacionais da empresa não
+integram a licença MIT histórica. Bibliotecas e demais componentes de
+terceiros seguem suas próprias licenças.
 
-Bibliotecas, frameworks e componentes de terceiros mantêm as próprias
-licenças. Este arquivo não restringe direitos válidos concedidos por elas.
-
-4. INFORMAÇÕES
-
-Este documento é um aviso de licenciamento do repositório e não constitui
-contrato de cessão de direitos patrimoniais. Para orientações sobre versões,
-permissões e histórico, consultar docs/licenciamento.md.
+Informações complementares: docs/licenciamento.md

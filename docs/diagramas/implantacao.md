@@ -20,5 +20,5 @@ flowchart TB
 ```
 
 - O GitHub armazena o código. O provedor Streamlit executa a aplicação e utiliza a `DATABASE_URL` configurada fora do repositório.
-- O `git push` **não garante** que o aplicativo iniciou ou que houve sucesso no banco. A sincronização do esquema executada na abertura também exige cautela.
-- Autenticação por perfil é uma evolução prevista. A configuração da hospedagem e os controles de infraestrutura são administrados fora do código-fonte publicado.
+- A publicação do código, a inicialização da aplicação e a sincronização do banco constituem etapas distintas do ciclo de implantação.
+- A hospedagem e os controles de infraestrutura são configurados no ambiente de execução. A autenticação por perfil integra o planejamento técnico.

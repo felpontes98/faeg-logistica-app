@@ -1,24 +1,30 @@
-# Contribuição e revisão de mudanças
+# Diretrizes de desenvolvimento
 
-Este projeto combina desenvolvimento acadêmico e utilização operacional real. As mudanças devem preservar fretes, ciclos, despesas, recebimentos e histórico do banco.
+O desenvolvimento utiliza Git para versionamento, issues para registro de demandas e testes automatizados para apoiar a manutenção das funcionalidades.
 
-## Fluxo recomendado
+## Processo de alteração
 
-1. Criar issue descrevendo problema, requisito e cenário esperado.
-2. Criar branch específica, por exemplo `docs/diagramas` ou `fix/fechamento-ciclo`.
-3. Evitar editar diretamente dados reais como forma de testar cálculos; usar PostgreSQL isolado ou SQLite em memória para os testes existentes.
-4. Rodar `python -m compileall -q app.py faeg_app database views tests` e `python -m pytest -q tests`.
-5. Conferir `git diff --check` e realizar revisão de alterações em `database/models.py` e `sincronizar_colunas_banco()`.
-6. Abrir pull request indicando mudanças, riscos, plano de teste e impacto no Neon.
+1. Registrar a demanda e os critérios de aceite.
+2. Criar uma branch com o escopo da alteração (`feature/`, `fix/` ou `docs/`).
+3. Desenvolver a mudança com testes adequados aos componentes afetados.
+4. Executar os testes e conferir o diff antes da integração.
+5. Integrar as alterações à branch principal após revisão.
 
-## Padrões mínimos
+```powershell
+python -m compileall -q app.py faeg_app database views tests
+python -m pytest -q tests
+git diff --check
+```
 
-- Código e documentação em português, com termos técnicos padronizados no [glossário](docs/glossario.md).
-- Requisitos identificados por `RF-XX` e decisões documentadas em [ADRs](docs/decisoes/README.md).
-- Nenhuma credencial, CPF, CNH, telefone real, dados financeiros reais ou screenshot com dados privados no repositório.
-- Desenvolver cenários de verificação para novas funcionalidades, especialmente quando envolvem dados financeiros e operacionais.
-- Evitar mudanças automáticas/destrutivas em dados legados sem autorização explícita e plano de recuperação.
+## Convenções
 
-## Diagrama e Markdown
+- Código Python com funções e módulos organizados por responsabilidade.
+- Nomes expressivos e comentários reservados para regras de negócio, decisões técnicas e condições não evidentes.
+- Documentação em português, com termos padronizados pelo [glossário](docs/glossario.md).
+- Requisitos identificados por `RF-XX`, regras de domínio centralizadas em [regras de negócio](docs/regras_negocio.md) e decisões arquiteturais registradas como ADRs.
+- Mudanças no banco acompanhadas de avaliação de compatibilidade, ensaio em PostgreSQL isolado e plano de recuperação.
+- Credenciais e dados pessoais ou financeiros reais fora do repositório, dos testes e das evidências públicas.
 
-Usar blocos Mermaid para diagramas exibidos diretamente no GitHub. Diagramas são **modelos de compreensão**, não uma substituição para inspeção de implementação. Atualizar os diagramas ao mudar relacionamentos ou fluxos relevantes.
+## Revisão
+
+A descrição da alteração registra seu objetivo, os módulos afetados, os testes executados e eventuais impactos em persistência ou relatórios.

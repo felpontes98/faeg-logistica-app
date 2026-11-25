@@ -79,7 +79,7 @@ def test_der_cobre_todas_as_tabelas_orm():
 def test_estrutura_modular_e_pontos_de_entrada_documentados():
     assert (ROOT / "app.py").exists()
     assert len(list((ROOT / "faeg_app/pages").glob("etapa_*.py"))) == 11
-    for doc in ("README.md", "docs/README.md", "docs/diagramas/README.md", "docs/planejamento_tecnico.md"):
+    for doc in ("README.md", "SECURITY.md", "docs/README.md", "docs/diagramas/README.md"):
         assert (ROOT / doc).exists(), doc
 
 
