@@ -9,6 +9,8 @@ from uuid import uuid4
 import pandas as pd
 import streamlit as st
 
+from faeg_app.erros import informar_falha
+
 from database.connection import SessionLocal
 from database.models import Viagem
 from database.saidas_operacionais import consultar_saidas, resumo_saidas, salvar_saida, validar_saida
@@ -201,7 +203,9 @@ def render_percurso(ctx):
                 st.session_state.pop(seletor, None)
                 st.toast("Saída registrada. Adicione outra se necessário.", icon="✅")
                 st.rerun()
-            except Exception as exc:
-                st.error(f"Não foi possível registrar a saída: {exc}")
+            except ValueError as exc:
+                st.warning(str(exc))
+            except Exception:
+                informar_falha("registrar a saída")
     if not cid and saidas:
         st.info("As saídas estão no preenchimento atual. Use **Salvar rascunho** na barra lateral para guardá-las ou **Salvar viagem** quando completar os dados obrigatórios.")

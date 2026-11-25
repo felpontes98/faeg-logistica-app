@@ -1,4 +1,6 @@
 """Etapa 11 — Cadastros gerais e parâmetros de veículos do Sistema Web FAEG."""
+from html import escape
+
 import streamlit as st
 
 from database.connection import SessionLocal
@@ -60,7 +62,7 @@ def render(ctx):
 
             if mot_edit_obj:
                 st.markdown(
-                    f"<div class='edit-banner-pill'>✏️ Editando Motorista: {mot_edit_obj['nome_completo']}</div>",
+                    f"<div class='edit-banner-pill'>✏️ Editando Motorista: {escape(str(mot_edit_obj['nome_completo']))}</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -165,7 +167,7 @@ def render(ctx):
                         mid = m["id_motorista"]
                         lm1, lm2, lm3 = st.columns([5.8, 0.7, 0.7])
                         lm1.markdown(
-                            f"**{m['nome_completo']}** <span style='color:#64748B;font-size:0.78rem;'>| CNH: {m['cnh_numero']} ({m['cnh_categoria']}) | {m.get('vinculo') or '-'}</span>",
+                            f"**{escape(str(m['nome_completo']))}** <span style='color:#64748B;font-size:0.78rem;'>| CNH: {escape(str(m['cnh_numero']))} ({escape(str(m['cnh_categoria']))}) | {escape(str(m.get('vinculo') or '-'))}</span>",
                             unsafe_allow_html=True,
                         )
                         if lm2.button("✏️", key=f"ed_m_{mid}", help="Editar"):
@@ -179,7 +181,7 @@ def render(ctx):
 
                         if st.session_state.get("confirm_ed_mot") == mid:
                             st.markdown(
-                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{m['nome_completo']}</strong>?</div>",
+                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{escape(str(m['nome_completo']))}</strong>?</div>",
                                 unsafe_allow_html=True,
                             )
                             b_ok, b_no = st.columns(2)
@@ -193,7 +195,7 @@ def render(ctx):
 
                         if st.session_state.get("confirm_dl_mot") == mid:
                             st.markdown(
-                                f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{m['nome_completo']}</strong>?</div>",
+                                f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{escape(str(m['nome_completo']))}</strong>?</div>",
                                 unsafe_allow_html=True,
                             )
                             b_ok, b_no = st.columns(2)
@@ -231,7 +233,7 @@ def render(ctx):
 
             if vei_edit_obj:
                 st.markdown(
-                    f"<div class='edit-banner-pill'>✏️ Editando Veículo: {vei_edit_obj['descricao_marca']} ({vei_edit_obj['placa']})</div>",
+                    f"<div class='edit-banner-pill'>✏️ Editando Veículo: {escape(str(vei_edit_obj['descricao_marca']))} ({escape(str(vei_edit_obj['placa']))})</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -339,7 +341,7 @@ def render(ctx):
                         vid = v["id_veiculo"]
                         lv1, lv2, lv3 = st.columns([5.8, 0.7, 0.7])
                         lv1.markdown(
-                            f"**{v['descricao_marca']}** <span style='color:#64748B;font-size:0.78rem;'>| Placa: {v['placa']} | {v.get('tipo_veiculo') or '-'}</span>",
+                            f"**{escape(str(v['descricao_marca']))}** <span style='color:#64748B;font-size:0.78rem;'>| Placa: {escape(str(v['placa']))} | {escape(str(v.get('tipo_veiculo') or '-'))}</span>",
                             unsafe_allow_html=True,
                         )
                         if lv2.button("✏️", key=f"ed_v_{vid}", help="Editar"):
@@ -353,7 +355,7 @@ def render(ctx):
 
                         if st.session_state.get("confirm_ed_vei") == vid:
                             st.markdown(
-                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{v['descricao_marca']} ({v['placa']})</strong>?</div>",
+                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{escape(str(v['descricao_marca']))} ({escape(str(v['placa']))})</strong>?</div>",
                                 unsafe_allow_html=True,
                             )
                             b_ok, b_no = st.columns(2)
@@ -367,7 +369,7 @@ def render(ctx):
 
                         if st.session_state.get("confirm_dl_vei") == vid:
                             st.markdown(
-                                f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{v['descricao_marca']} ({v['placa']})</strong>?</div>",
+                                f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{escape(str(v['descricao_marca']))} ({escape(str(v['placa']))})</strong>?</div>",
                                 unsafe_allow_html=True,
                             )
                             b_ok, b_no = st.columns(2)
@@ -408,7 +410,7 @@ def render(ctx):
 
             if cli_edit_obj:
                 st.markdown(
-                    f"<div class='edit-banner-pill'>✏️ Editando Cliente: {cli_edit_obj['razao_social']}</div>",
+                    f"<div class='edit-banner-pill'>✏️ Editando Cliente: {escape(str(cli_edit_obj['razao_social']))}</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -557,7 +559,7 @@ def render(ctx):
                         ft_txt = f" ({c['nome_fantasia']})" if c.get("nome_fantasia") else ""
                         cid_txt = f" — {c['cidade']}/{c['uf']}" if (c.get("cidade") or c.get("uf")) else ""
                         lc1.markdown(
-                            f"**{c['razao_social']}**{ft_txt} <span style='color:#64748B;font-size:0.78rem;'>| Doc: {c['cnpj_cpf']}{cid_txt}</span>",
+                            f"**{escape(str(c['razao_social']))}**{escape(str(ft_txt))} <span style='color:#64748B;font-size:0.78rem;'>| Doc: {escape(str(c['cnpj_cpf']))}{escape(str(cid_txt))}</span>",
                             unsafe_allow_html=True,
                         )
                         if lc2.button("✏️", key=f"ed_c_{cid}", help="Editar"):
@@ -571,7 +573,7 @@ def render(ctx):
 
                         if st.session_state.get("confirm_ed_cli") == cid:
                             st.markdown(
-                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{c['razao_social']}</strong>?</div>",
+                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{escape(str(c['razao_social']))}</strong>?</div>",
                                 unsafe_allow_html=True,
                             )
                             b_ok, b_no = st.columns(2)
@@ -585,7 +587,7 @@ def render(ctx):
 
                         if st.session_state.get("confirm_dl_cli") == cid:
                             st.markdown(
-                                f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{c['razao_social']}</strong>?</div>",
+                                f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{escape(str(c['razao_social']))}</strong>?</div>",
                                 unsafe_allow_html=True,
                             )
                             b_ok, b_no = st.columns(2)
@@ -623,7 +625,7 @@ def render(ctx):
 
             if loc_edit_obj:
                 st.markdown(
-                    f"<div class='edit-banner-pill'>✏️ Editando Local: {loc_edit_obj['nome_local']}</div>",
+                    f"<div class='edit-banner-pill'>✏️ Editando Local: {escape(str(loc_edit_obj['nome_local']))}</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -787,7 +789,7 @@ def render(ctx):
                         cli_l = cli_map_cad.get(l.get("id_cliente"))
                         cli_tag = f" [Cli: {cli_l['razao_social']}]" if cli_l else ""
                         ll_1.markdown(
-                            f"**{l['nome_local']}**{cid_l_txt} <span style='color:#64748B;font-size:0.78rem;'>| {l.get('restricao_horario') or 'Sem restrição'}{cli_tag}</span>",
+                            f"**{escape(str(l['nome_local']))}**{escape(str(cid_l_txt))} <span style='color:#64748B;font-size:0.78rem;'>| {escape(str(l.get('restricao_horario') or 'Sem restrição'))}{escape(str(cli_tag))}</span>",
                             unsafe_allow_html=True,
                         )
                         if ll_2.button("✏️", key=f"ed_l_{lid}", help="Editar"):
@@ -801,7 +803,7 @@ def render(ctx):
 
                         if st.session_state.get("confirm_ed_loc") == lid:
                             st.markdown(
-                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{l['nome_local']}</strong>?</div>",
+                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{escape(str(l['nome_local']))}</strong>?</div>",
                                 unsafe_allow_html=True,
                             )
                             b_ok, b_no = st.columns(2)
@@ -815,7 +817,7 @@ def render(ctx):
 
                         if st.session_state.get("confirm_dl_loc") == lid:
                             st.markdown(
-                                f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{l['nome_local']}</strong>?</div>",
+                                f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{escape(str(l['nome_local']))}</strong>?</div>",
                                 unsafe_allow_html=True,
                             )
                             b_ok, b_no = st.columns(2)
@@ -853,7 +855,7 @@ def render(ctx):
 
             if forn_edit_obj:
                 st.markdown(
-                    f"<div class='edit-banner-pill'>✏️ Editando Fornecedor: {forn_edit_obj['nome_fantasia']}</div>",
+                    f"<div class='edit-banner-pill'>✏️ Editando Fornecedor: {escape(str(forn_edit_obj['nome_fantasia']))}</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -951,7 +953,7 @@ def render(ctx):
                         lf1, lf2, lf3 = st.columns([5.8, 0.7, 0.7])
                         rz_f_txt = f" ({f['razao_social']})" if f.get("razao_social") else ""
                         lf1.markdown(
-                            f"**{f['nome_fantasia']}**{rz_f_txt} <span style='color:#64748B;font-size:0.78rem;'>| {f.get('categoria_servico') or '-'}</span>",
+                            f"**{escape(str(f['nome_fantasia']))}**{escape(str(rz_f_txt))} <span style='color:#64748B;font-size:0.78rem;'>| {escape(str(f.get('categoria_servico') or '-'))}</span>",
                             unsafe_allow_html=True,
                         )
                         if lf2.button("✏️", key=f"ed_f_{fid}", help="Editar"):
@@ -965,7 +967,7 @@ def render(ctx):
 
                         if st.session_state.get("confirm_ed_forn") == fid:
                             st.markdown(
-                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{f['nome_fantasia']}</strong>?</div>",
+                                f"<div class='confirm-box-edit'>⚠️ Confirmar edição de <strong>{escape(str(f['nome_fantasia']))}</strong>?</div>",
                                 unsafe_allow_html=True,
                             )
                             b_ok, b_no = st.columns(2)
@@ -979,7 +981,7 @@ def render(ctx):
 
                         if st.session_state.get("confirm_dl_forn") == fid:
                             st.markdown(
-                                f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{f['nome_fantasia']}</strong>?</div>",
+                                f"<div class='confirm-box-del'>🚨 Excluir permanentemente <strong>{escape(str(f['nome_fantasia']))}</strong>?</div>",
                                 unsafe_allow_html=True,
                             )
                             b_ok, b_no = st.columns(2)

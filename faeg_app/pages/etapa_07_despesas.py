@@ -1,5 +1,7 @@
 """Etapa 7 — Despesas e histórico de abastecimentos do Sistema Web FAEG."""
 import pandas as pd
+from html import escape
+
 import streamlit as st
 import zlib
 
@@ -430,7 +432,7 @@ def render(ctx):
             soma_desp += item["valor_total"]
             col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns([2.2, 2.4, 1.2, 1.3, 0.7])
             col_t1.markdown(
-                f"**{item['tipo_despesa']}**  \n<span style='font-size:0.78rem;color:#64748B;'>{item['fornecedor']}</span>",
+                f"**{escape(str(item['tipo_despesa']))}**  \n<span style='font-size:0.78rem;color:#64748B;'>{escape(str(item['fornecedor']))}</span>",
                 unsafe_allow_html=True,
             )
             col_t2.markdown(f"{item['descricao_detalhe']}")

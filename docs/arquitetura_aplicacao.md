@@ -1,15 +1,15 @@
 # Arquitetura de módulos — FAEG
 
-**Versão:** estrutura modular consolidada em 24/11/2026. A organização dos módulos preserva as tabelas, fórmulas e regras operacionais do MVP.
+A organização modular separa interface, regras, persistência e relatórios, preservando o fluxo das 11 etapas.
 
 ## Organização
 
 ```text
 app.py                         # Entrada Streamlit e roteamento das 11 etapas
 faeg_app/
-  bootstrap.py                 # Sincronização de esquema já existente
+  bootstrap.py                 # Sincronização de esquema
   context.py                   # Contexto de apresentação das etapas
-  core.py                      # Consultas, callbacks, estado e salvamento anteriores
+  core.py                      # Consultas, callbacks, estado e salvamento
   layout.py                    # Menu lateral e barra de contexto
   reporting.py                 # Exportação Excel e geração PDF
   theme.py                     # Carregamento do CSS/HTML institucional
@@ -25,9 +25,9 @@ faeg_app/
     etapa_09_relatorios.py
     etapa_10_consultas.py
     etapa_11_cadastros.py
-assets/faeg_styles.html         # Conteúdo visual idêntico ao que estava em app.py
+assets/faeg_styles.html         # Estilos institucionais e componentes visuais
 database/                       # ORM, transações, cálculos e serviços de domínio existentes
-views/                          # Componente existente das saídas operacionais
+views/                          # Componentes operacionais reutilizáveis
 tests/                          # Testes SQLite e verificações de modularização
 ```
 
@@ -53,9 +53,9 @@ flowchart TD
 1. O arquivo `app.py` **deve continuar na raiz** para que o comando `streamlit run app.py` permaneça válido.
 2. A pasta inteira `faeg_app/` e `assets/faeg_styles.html` são necessárias. Publicar apenas `app.py` causará erro de importação.
 3. `PageContext` transporta as listas de cadastro e os rótulos da barra de contexto para a etapa ativa; os campos editáveis e validações originais continuam usando `st.session_state`.
-4. `faeg_app/core.py` preserva os nomes e assinaturas das funções existentes. Sua divisão adicional por serviços deverá ser incremental e coberta por testes de integração no PostgreSQL.
+4. `faeg_app/core.py` reúne consultas e funções compartilhadas pelas etapas. Sua divisão adicional por serviços deverá ser incremental e coberta por testes de integração no PostgreSQL.
 5. `faeg_app/reporting.py` mantém os geradores de PDF e Excel. O caminho do logotipo foi ajustado para continuar encontrando a imagem na raiz do projeto (`assets/logo_faeg.png`).
-6. `bootstrap.py` chama a mesma rotina `sincronizar_colunas_banco()` com a mesma chave de cache (`schema_v=13`). **A modularização não acrescenta migrações de esquema**; a rotina antiga ainda pode executar DDL ao iniciar.
+6. `bootstrap.py` chama a mesma rotina `sincronizar_colunas_banco()` com a chave de cache atual (`schema_v=14`). A rotina ainda pode executar comandos DDL ao iniciar; ela não representa um sistema de migrações versionadas.
 7. Os módulos de banco, a visualização de saídas e as configurações do Streamlit permanecem em suas pastas específicas.
 
 ## Qualidade e manutenção

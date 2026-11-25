@@ -1,7 +1,7 @@
 # ADR-001 — Separar frete comercial da operação física
 
 - **Data:** 24/11/2026
-- **Status:** adotada no Ajuste 27
+- **Status:** adotada no modelo operacional do MVP
 
 ## Contexto
 

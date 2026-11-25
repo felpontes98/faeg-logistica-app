@@ -1,6 +1,6 @@
 # Guia de execução e implantação
 
-**Versão:** aplicação modular com fluxo operacional unificado (Ajuste 29, 25/11/2026).
+Aplicação modular com saídas na Etapa 2, despesas na Etapa 7 e fechamento na Etapa 8.
 
 ## Requisitos
 
@@ -34,7 +34,7 @@ python -m streamlit run app.py
 ## Testes automatizados
 
 ```powershell
-python -m pip install pytest
+python -m pip install -r requirements-dev.txt
 python -m compileall -q app.py faeg_app database views tests
 python -m pytest -q tests
 ```
@@ -46,11 +46,11 @@ A suíte inclui testes de saídas, organização dos módulos, relatórios, flux
 1. Verificar `git diff --check`, `git status` e o resultado da CI.
 2. Criar branch/backup do banco Neon e verificar sua estratégia de restauração.
 3. Revisar mudanças em `database/models.py` e em `sincronizar_colunas_banco()`; esta função roda na inicialização e pode alterar o esquema.
-4. Confirmar que as variáveis de ambiente estão configuradas apenas nos mecanismos de segredo da implantação, nunca em `.env` versionado.
+4. Confirmar que as variáveis de ambiente estão configuradas apenas nos mecanismos de segredo da implantação, nunca em `.env` versionado. Para acesso público temporário, apontar a aplicação para **banco de demonstração separado e com dados fictícios/anonimizados**; clonar uma branch de produção não elimina os dados originais.
 5. Conferir o carregamento das 11 etapas, especialmente edição de fretes antigos, saídas do ciclo e despesas.
 6. Depois do deploy, verificar registros de erro e contagem de tabelas antes de inserir dados definitivos.
 
-**Publicação:** o versionamento do código e a recuperação do banco são procedimentos independentes. Alterações de esquema e dados exigem plano de backup próprio.
+**Publicação:** o versionamento do código e a recuperação do banco são procedimentos independentes. Alterações de esquema e dados exigem plano de backup próprio. Sem login próprio, um endereço público permite a qualquer visitante operar as funções habilitadas na interface. Consulte as [diretrizes de segurança](seguranca_privacidade.md).
 
 ## Diagnóstico de ciclos (leitura)
 

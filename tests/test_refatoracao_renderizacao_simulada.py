@@ -1,6 +1,6 @@
 """Smoke de renderização com dublê de Streamlit e banco SQLite local.
 
-Não é teste end-to-end nem substitui a homologação no Streamlit/Neon.
+A execução simulada verifica a organização das etapas em ambiente isolado.
 """
 from pathlib import Path
 import os

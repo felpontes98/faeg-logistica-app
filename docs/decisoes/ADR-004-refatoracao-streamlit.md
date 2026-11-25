@@ -5,7 +5,7 @@
 
 ## Contexto
 
-O `app.py` do Ajuste 27 concentrava mais de 7 mil linhas de interface, consultas, callbacks, relatórios e CSS. A necessidade de manutenção profissional convive com a exigência de preservar os 11 passos, os dados existentes e as regras financeiras.
+Antes da modularização, `app.py` concentrava a interface, consultas, callbacks, relatórios e CSS em um único arquivo. A necessidade de manutenção profissional convive com a exigência de preservar os 11 passos, os dados existentes e as regras financeiras.
 
 ## Decisão
 

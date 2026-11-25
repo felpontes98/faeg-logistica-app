@@ -39,7 +39,7 @@ def render_sidebar(ctx):
             f"""
         <div class="sidebar-active-trip-card">
             <div class="sidebar-active-trip-tag">{tag_modo_sidebar}</div>
-            <div class="sidebar-active-trip-code">{cod_ativo_sidebar}</div>
+            <div class="sidebar-active-trip-code">{escape(str(cod_ativo_sidebar))}</div>
         </div>
         """,
             unsafe_allow_html=True,

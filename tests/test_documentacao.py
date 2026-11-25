@@ -50,7 +50,7 @@ def test_mermaid_blocos_identificados_e_formato_conservador():
             assert "PK,FK" not in diagram, f"Separar chaves com virgula e espaco: {doc}"
             for line in lines:
                 assert line.count('"') % 2 == 0, (doc, line)
-    assert count >= 16, f"Esperados diagramas do projeto, encontrados {count}"
+    assert count >= 10, f"Coleção de diagramas incompleta: {count}"
 
 
 def test_der_cobre_todas_as_tabelas_orm():

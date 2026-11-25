@@ -16,8 +16,8 @@
 | RF-42–45 | `database/saidas_operacionais.py`, `views/percurso_etapa2.py`, `views/saidas_operacionais.py` | TU-01, TU-02, TU-03, TU-05, TU-06 |
 | RF-46 | `database/saidas_operacionais.py` (`estimar_consumo`) | TU-04 |
 | RF-47 | `faeg_app/reporting.py`, `faeg_app/pages/etapa_09_relatorios.py` (exportação) | Roteiro TI-09 |
-| RF-48 | `database/rascunhos.py`, `faeg_app/rascunhos_ui.py`, `faeg_app/layout.py` | `tests/test_fluxo_unificado_29.py` |
-| RF-49 | `views/percurso_etapa2.py`, `database/saidas_operacionais.py` | `tests/test_fluxo_unificado_29.py` e TI-06 |
+| RF-48 | `database/rascunhos.py`, `faeg_app/rascunhos_ui.py`, `faeg_app/layout.py` | `tests/test_fluxo_operacional.py` |
+| RF-49 | `views/percurso_etapa2.py`, `database/saidas_operacionais.py` | `tests/test_fluxo_operacional.py` e TI-06 |
 | RF-50 | `views/parametros_veiculo.py`, `faeg_app/pages/etapa_11_cadastros.py` | Roteiro TI-08 |
 | RF-51 | `faeg_app/pages/etapa_08_fechamento.py`, `database/fechamento_ciclos.py` | TI-02/TI-03 |
 

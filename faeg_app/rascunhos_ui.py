@@ -1,5 +1,7 @@
 """Rascunho recuperável: formulário parcial sem criar viagem incompleta na DRE."""
 import streamlit as st
+
+from faeg_app.erros import informar_falha
 from database.connection import SessionLocal
 from database.models import RascunhoViagem
 from database.rascunhos import abrir_rascunho, salvar_rascunho
@@ -25,8 +27,8 @@ def salvar_rascunho_ativo():
             db.commit()
         st.session_state["rascunho_ativo_id"] = rid
         st.toast("Rascunho salvo. Você poderá retomá-lo depois.", icon="✅")
-    except Exception as exc:
-        st.error(f"Não foi possível salvar o rascunho: {exc}")
+    except Exception:
+        informar_falha("salvar o rascunho")
 
 
 def retomar_rascunho(id_rascunho):

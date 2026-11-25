@@ -1,4 +1,6 @@
 """Etapa 6 — Dados e horários de entrega do Sistema Web FAEG."""
+from html import escape
+
 import streamlit as st
 
 from datetime import date
@@ -65,8 +67,8 @@ def render(ctx):
         st.markdown(
             f"""
                 <div class="cliente-coleta-banner">
-                    <strong>Portaria / Contato:</strong> {ent_obj.get('contato_portaria') or '-'}
-                    &nbsp;|&nbsp; <strong>Restrição de Horário:</strong> {ent_obj.get('restricao_horario') or 'Não há restrição'}
+                    <strong>Portaria / Contato:</strong> {escape(str(ent_obj.get('contato_portaria') or '-'))}
+                    &nbsp;|&nbsp; <strong>Restrição de Horário:</strong> {escape(str(ent_obj.get('restricao_horario') or 'Não há restrição'))}
                 </div>
                 """,
             unsafe_allow_html=True,

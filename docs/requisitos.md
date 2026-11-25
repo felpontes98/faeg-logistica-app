@@ -1,7 +1,7 @@
 # Requisitos do Sistema Web FAEG
 
 **Escopo:** operação de fretes individuais, ciclos, despesas, abastecimentos, consulta e exportação.  
-**Versão:** requisitos do MVP, com saídas na Etapa 2 e rascunhos (Ajuste 29, 25/11/2026).  
+**Versão funcional:** fluxo com saídas na Etapa 2 e rascunhos recuperáveis.  
 **Origem das regras:** planilha de controle operacional da FAEG e definições registradas nas reuniões com o representante da empresa.
 
 Os requisitos documentam o escopo funcional do MVP. Fórmulas e critérios de apuração estão detalhados em [regras de negócio](regras_negocio.md); a persistência, em [arquitetura do banco](arquitetura_banco.md).
@@ -102,39 +102,10 @@ A fonte principal de KM físico da operação são as **saídas cadastradas na E
 - **RI-05:** não usar `0` como leitura medida quando o campo foi deixado em branco; manter ausência de medição distinta de zero real.
 - **RI-06:** documentar o comportamento de segurança do app antes do uso com dados pessoais reais. Autenticação e autorização ainda precisam de projeto.
 
-## Roteiro de verificação funcional do MVP
+## Validação dos requisitos
 
-- [ ] Criar um frete individual, preencher dados de carga, documentos, cliente, negociação, coleta e entrega e salvar.
-- [ ] Iniciar um cadastro incompleto, salvar como rascunho, reabrir e concluir sem perder os campos já registrados.
-- [ ] Cadastrar na Etapa 2 uma saída com KM planejado, odômetro inicial e chegada à base; conferir o KM real automático.
-- [ ] Cadastrar uma segunda saída no mesmo ciclo e verificar a soma dos KM no fechamento, sem duplicação pelos demais fretes.
-- [ ] Registrar uma saída ainda sem retorno: o KM real consolidado deve permanecer pendente.
-- [ ] Verificar prevenção de odômetros invertidos e intervalos sobrepostos no mesmo veículo.
-- [ ] Cadastrar dois fretes vinculados ao mesmo ciclo e conferir que os valores negociados permanecem individuais.
-- [ ] Registrar despesa compartilhada na Etapa 7; o custo deve entrar uma única vez no resultado do ciclo.
-- [ ] Registrar despesa exclusiva do frete e despesa provisória do veículo; conferir a separação dos destinos.
-- [ ] Registrar Diesel com litros, valor, data e odômetro de abastecimento; conferir o histórico sem duplicar a DRE.
-- [ ] Registrar adiantamento e saldo previsto; lançar e cancelar recebimentos efetivos com motivo, verificando os saldos.
-- [ ] Conferir a Etapa 8 sem campos de cadastro de saídas nem recadastro de odômetros; verificar receitas, despesas e situação da operação.
-- [ ] Configurar consumo referencial no cadastro do veículo (Etapa 11); verificar que o consumo estimado não cria uma segunda despesa.
-- [ ] Exportar os relatórios Excel/PDF e conferir os valores consolidados do ciclo, saídas, recebimentos e despesas.
-- [ ] Consultar registros históricos e preservar sua leitura, sem importar automaticamente dados da planilha anterior.
+Os cenários de teste ficam centralizados no [plano de testes](plano_testes.md) e nos arquivos de [`tests/`](../tests/). A verificação funcional cobre cadastro de fretes e ciclos, rascunhos, saídas, odômetros, despesas únicas, recebimentos efetivos, fechamento, consultas e exportações.
 
 ## Funcionalidades previstas para evolução
 
-A evolução do produto contempla fechamento formal de ciclos, conciliação bancária, gestão de usuários e importação em lote com autorização. O MVP utiliza consolidação gerencial por ciclo, registro único de abastecimento/despesas, atribuição e estorno de custos de veículo e registro manual dos recebimentos. Não há rateio automático de custos compartilhados.
-## Cenários de verificação — Saídas operacionais (Ajuste 27)
-
-- [ ] Fazer backup do PostgreSQL antes de publicar código que cria `saidas_operacionais`, `trechos_operacionais` e `parametros_consumo_veiculo`.
-- [ ] Abrir Ciclo 001 com seus fretes preexistentes: conferir que negociação, recebimentos e despesas anteriores **não foram modificados**.
-- [ ] Cadastrar três saídas operacionais no mesmo ciclo (duas coletas preparatórias e uma etapa de entregas/retorno); conferir soma de KM planejado e real sem duplicação.
-- [ ] Cadastrar dois trechos em uma saída: verificar que a soma dos trechos substitui (não acresce) o KM planejado manual daquela saída.
-- [ ] Editar uma saída e um trecho: conferir atualizações no fechamento e exportações.
-- [ ] Registrar odômetro final ausente em uma saída: KM real total deve ficar **pendente**, nunca 0 nem parcial sem aviso.
-- [ ] Registrar intervalos de odômetro sobrepostos no mesmo veículo: fechamento deve alertar e não consolidar KM real.
-- [ ] Abrir dois fretes do mesmo ciclo: ambos devem usar o mesmo total operacional das saídas; o saldo por frete não deve ser apresentado como lucro individual.
-- [ ] Registrar despesa compartilhada na Etapa 7 com destino do ciclo; conferir total somado uma única vez. Não copiar o lançamento já existente do primeiro frete.
-- [ ] Configurar km/L e R$/L de referência por veículo; conferir que consumo estimado não cria nova despesa e não altera a DRE.
-- [ ] Exportar Excel e confirmar as abas `Saidas_Operacionais`, `Trechos_Operacionais` e `KM_Operacional_Ciclos` com valores compatíveis com a Etapa 8.
-- [ ] Conferir um frete individual sem saídas: deve manter o comportamento legado até registrar saídas.
-- [ ] Depois dos testes, revisar diferenças entre compras de diesel e consumo estimado antes de considerar qualquer migração financeira.
+A evolução contempla autenticação e permissões individuais, conciliação bancária, importação em lote autorizada e migrações versionadas. O MVP oferece consolidação gerencial por ciclo, sem rateio automático de custos compartilhados.

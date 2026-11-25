@@ -1,6 +1,6 @@
 # Modelo entidade-relacionamento — 19 tabelas
 
-O diagrama deriva das classes em [`database/models.py`](../../database/models.py) (Ajuste 29), com as chaves e os relacionamentos principais. Inclui todas as 19 tabelas, embora nem todos os atributos e FKs opcionais estejam desenhados para preservar a legibilidade.
+O diagrama deriva das classes em [`database/models.py`](../../database/models.py), com as chaves e os relacionamentos principais. Inclui todas as 19 tabelas, embora nem todos os atributos e FKs opcionais estejam desenhados para preservar a legibilidade.
 
 ```mermaid
 erDiagram

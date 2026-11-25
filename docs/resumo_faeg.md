@@ -1,6 +1,6 @@
 # Resumo do Projeto — FAEG Logística
 
-**Projeto acadêmico aplicado:** Startup Challenge UMC 2026 · **Produto:** Sistema Web FAEG · **Versão do MVP:** Ajuste 29 (25/11/2026).
+**Projeto acadêmico aplicado:** Startup Challenge UMC 2026 · **Produto:** Sistema Web FAEG.
 
 ## Problema e objetivo
 

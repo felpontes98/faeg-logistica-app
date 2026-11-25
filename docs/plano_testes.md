@@ -16,7 +16,7 @@ Arquivo: [`tests/test_saidas_operacionais.py`](../tests/test_saidas_operacionais
 | TU-06 | Cadastro de saída não reescreve KM legado | `test_legacy_cycle_fields_remain_unchanged` |
 
 ```powershell
-python -m pip install pytest
+python -m pip install -r requirements-dev.txt
 python -m pytest -q tests/test_saidas_operacionais.py
 ```
 
@@ -47,7 +47,7 @@ python -m pytest -q tests
 
 ### Processo de execução
 
-1. Criar dados **fictícios** em PostgreSQL isolado/branch de teste; não usar dados pessoais reais em issues ou relatórios públicos.
+1. Criar dados **fictícios** em PostgreSQL isolado. Se for utilizada uma branch clonada de produção, remover ou anonimizar os registros antes de liberar acesso; não usar dados pessoais reais em issues ou relatórios públicos.
 2. Registrar ambiente, versão/commit, data, responsável, entrada, resultado esperado, resultado observado e evidências sanitizadas.
 3. Distinguir falha do código, regra em validação e divergência de dados legados; não corrigir histórico automaticamente.
 4. Executar restauração de backup de ensaio antes de aceitar uma migração de produção.

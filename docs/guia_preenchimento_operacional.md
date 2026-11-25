@@ -1,6 +1,6 @@
 # Guia de preenchimento operacional — FAEG
 
-O sistema possui **11 etapas**. O registro da operação é feito em sequência. Cada informação é lançada uma vez e utilizada automaticamente no fechamento.
+O sistema possui **11 etapas**. O registro da operação é feito em sequência. Cada lançamento operacional pertence à etapa correspondente e é consolidado no fechamento, sem repetir quilômetros entre fretes do mesmo ciclo.
 
 ## Sequência de preenchimento
 

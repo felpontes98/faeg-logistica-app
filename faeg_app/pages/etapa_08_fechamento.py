@@ -1,5 +1,7 @@
 """Etapa 8 — Conferência e fechamento da operação do Sistema Web FAEG."""
 import pandas as pd
+from html import escape
+
 import streamlit as st
 
 from database.connection import SessionLocal
@@ -167,16 +169,16 @@ def render(ctx):
                         <article class="faeg-km-card{classe_real}">
                             <div class="faeg-km-card-label">KM total real</div>
                             <div class="faeg-km-card-value">{fmt_km(km_total_real_op) if km_total_real_op is not None else 'Não informado'}</div>
-                            <div class="faeg-km-card-note">{descricao_real}</div>
+                            <div class="faeg-km-card-note">{escape(str(descricao_real))}</div>
                         </article>
-                        <article class="faeg-km-card{cor_diferenca}">
+                        <article class="faeg-km-card{escape(str(cor_diferenca))}">
                             <div class="faeg-km-card-label">Diferença: real − planejado</div>
-                            <div class="faeg-km-card-value">{diferenca_formatada}</div>
-                            <div class="faeg-km-card-note">{nota_diferenca}</div>
+                            <div class="faeg-km-card-value">{escape(str(diferenca_formatada))}</div>
+                            <div class="faeg-km-card-note">{escape(str(nota_diferenca))}</div>
                         </article>
                         <article class="faeg-km-card">
                             <div class="faeg-km-card-label">Desvio do planejado</div>
-                            <div class="faeg-km-card-value">{desvio_formatado}</div>
+                            <div class="faeg-km-card-value">{escape(str(desvio_formatado))}</div>
                             <div class="faeg-km-card-note">Percentual sobre o total planejado.</div>
                         </article>
                     </div>

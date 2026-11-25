@@ -8,6 +8,8 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from faeg_app.erros import informar_falha
+
 from database.connection import SessionLocal
 from database.models import ParametroConsumoVeiculo, TrechoOperacional, Viagem
 from database.saidas_operacionais import (
@@ -126,8 +128,10 @@ def render_saidas_operacionais(id_ciclo, veiculos, motoristas, *, exibir_formula
                         db.commit()
                     st.success("Saída salva. Os registros anteriores de frete continuam preservados.")
                     st.rerun()
-                except Exception as exc:
-                    st.error(f"Não foi possível salvar a saída: {exc}")
+                except ValueError as exc:
+                    st.warning(str(exc))
+                except Exception:
+                    informar_falha("salvar a saída")
 
     if saidas_dados:
         with st.expander("Cadastrar/corrigir trechos e paradas", expanded=False):
@@ -159,8 +163,10 @@ def render_saidas_operacionais(id_ciclo, veiculos, motoristas, *, exibir_formula
                                      km_planejado=km_trecho, observacoes=obs_trecho)
                         db.commit()
                     st.rerun()
-                except Exception as exc:
-                    st.error(f"Não foi possível salvar trecho: {exc}")
+                except ValueError as exc:
+                    st.warning(str(exc))
+                except Exception:
+                    informar_falha("salvar o trecho")
             if t_atual:
                 confirm = st.checkbox("Confirmo que desejo remover este trecho (não remove a saída)",
                                       key=f"faeg_confirm_del_trecho_{tid}")

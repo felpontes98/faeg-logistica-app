@@ -30,4 +30,4 @@ flowchart LR
     DV -.-> C9
 ```
 
-A equipe de desenvolvimento mantém os módulos e a suíte de testes. Autenticação própria, emissão fiscal automática e importação persistente de planilhas não integram o escopo atual do MVP.
+A manutenção dos módulos e dos testes integra o processo de desenvolvimento. Autenticação individual, emissão fiscal automática e importação persistente de planilhas compõem o planejamento evolutivo.

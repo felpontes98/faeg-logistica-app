@@ -1,7 +1,7 @@
 # ADR-003 — Compatibilidade histórica sem migração automática
 
 - **Data:** 24/11/2026
-- **Status:** aplicada na implantação do Ajuste 27; melhoria arquitetural pendente
+- **Status:** aplicada; migrações versionadas previstas
 
 ## Contexto
 
@@ -9,7 +9,7 @@ A base contém fretes anteriores ao novo controle de saídas, despesas e odômet
 
 ## Decisão
 
-Criar três novas tabelas ORM no Ajuste 27 sem redistribuir registros antigos. Até a primeira saída de uma operação, preservar o cálculo anterior. A inicialização da aplicação atual utiliza `sincronizar_colunas_banco()` para criar estruturas ausentes; **essa prática não é um sistema de migrações versionadas**.
+Introduzir as tabelas de saídas e parâmetros de consumo sem redistribuir registros antigos. Até a primeira saída de uma operação, preservar o cálculo anterior. A inicialização da aplicação atual utiliza `sincronizar_colunas_banco()` para criar estruturas ausentes; **essa prática não é um sistema de migrações versionadas**.
 
 ## Consequências e evolução
 

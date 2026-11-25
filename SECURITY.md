@@ -1,13 +1,15 @@
-# Segurança — Sistema Web FAEG
+# Política de segurança
 
-O Sistema Web FAEG utiliza dados operacionais e comerciais. Credenciais, informações pessoais e detalhes sensíveis de infraestrutura não devem ser publicados em issues, commits ou documentação pública.
+A aplicação gerencia dados operacionais e comerciais. Credenciais, informações pessoais, documentos de clientes e dados de infraestrutura não devem ser publicados no repositório, em issues ou em capturas de tela.
 
-## Comunicação de questões de segurança
+## Reportar uma questão de segurança
 
-Questões relacionadas a segurança e privacidade devem ser encaminhadas diretamente aos responsáveis pelo desenvolvimento, por um canal privado previamente acordado com a equipe FAEG.
+Informações sobre possíveis vulnerabilidades devem ser encaminhadas de modo privado aos responsáveis pelo desenvolvimento. Não publique credenciais, dados reais ou detalhes exploráveis em issues públicas.
 
-## Controles e evolução
+## Proteção de ambientes
 
-O MVP utiliza configurações de ambiente para a conexão com o banco. A autenticação própria por usuário e as permissões por perfil estão previstas para evolução do produto; o acesso à implantação deve ser administrado pelos responsáveis pelo ambiente.
+O MVP não possui autenticação individual. Uma implantação pública deve utilizar **banco de demonstração isolado e dados fictícios/anonimizados**, sem conexão à base operacional. Tornar o repositório privado não restringe o acesso a um aplicativo Streamlit que permaneça público.
 
-Para diretrizes adicionais, consulte [`docs/seguranca_privacidade.md`](docs/seguranca_privacidade.md).
+As configurações sensíveis são mantidas fora do versionamento. Antes de alterações de esquema ou publicação de novas funcionalidades, utilizar backup e validar em ambiente separado.
+
+Consulte [Segurança e privacidade](docs/seguranca_privacidade.md) para as diretrizes de implantação e tratamento de dados.
