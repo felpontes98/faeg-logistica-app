@@ -1,8 +1,6 @@
-"""Núcleo compartilhado do FAEG.
+"""Operações compartilhadas entre as etapas do Sistema Web FAEG.
 
-Contém callbacks Streamlit, consultas SQLAlchemy e comandos de persistência
-preexistentes. A separação posterior por serviços deve ser incremental e
-coberta por testes integrados; nenhum cálculo foi reescrito nesta etapa.
+Reúne consultas, validações, callbacks Streamlit e rotinas de persistência.
 """
 
 import base64
@@ -28,7 +26,6 @@ from database.controle_abastecimentos import calcular_indicadores_abastecimentos
 from database.fechamento_ciclos import consolidar_ciclos, reconciliar_resultado_gerencial
 from database.importador_planilha import preparar_previa_importacao_faeg
 from database.saidas_operacionais import consultar_todas_saidas, resumo_saidas
-from views.saidas_operacionais import render_saidas_operacionais
 from database.models import (
     Abastecimento,
     CicloOperacional,

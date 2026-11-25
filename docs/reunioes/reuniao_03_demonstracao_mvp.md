@@ -3,6 +3,8 @@
 **Data / Versão:** 13/11/2026 - v1.1
 **Participantes:** Felipe Pontes e Eduardo Pontes
 
+**Escopo:** registro da versão apresentada nesta data; o fluxo operacional vigente está descrito no [guia de preenchimento](../guia_preenchimento_operacional.md).
+
 ---
 
 ## 1. Contexto e Objetivo da Reunião
@@ -51,7 +53,7 @@ O sistema diferencia **frete individual** e **ciclo operacional**, permitindo or
 
 As previsões de pagamento permanecem separadas dos valores efetivamente recebidos, preservando a análise financeira.
 
-## 3. Análise e Pontos para Validação
+## 3. Pontos de validação
 
 * **Fluxo completo da viagem:** Confirmar que os dados inseridos permanecem consistentes ao avançar, retornar, salvar e reabrir um registro.
 
@@ -69,7 +71,7 @@ As previsões de pagamento permanecem separadas dos valores efetivamente recebid
 
 * **Persistência e segurança:** Confirmar integridade de relacionamentos, controle de acesso e estabilidade da conexão com o PostgreSQL.
 
-Esses aspectos formam um roteiro de validação funcional. A existência das funcionalidades na interface não substitui a execução de testes práticos com registros de exemplo.
+Os pontos de validação serão registrados por meio de cenários operacionais, dados de exemplo e conferência da persistência e dos resultados.
 
 ## 4. Próximos Passos e Alinhamentos Propostos
 

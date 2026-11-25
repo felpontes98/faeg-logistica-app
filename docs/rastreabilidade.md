@@ -13,7 +13,7 @@
 | RF-14–16, RF-19, RF-28, RF-30 | `database/fechamento_ciclos.py`, `faeg_app/pages/etapa_08_fechamento.py`, `etapa_09_relatorios.py` | Roteiro TI-03/TI-08 |
 | RF-23, RF-25–27 | `database/atribuicao_despesas.py`, `faeg_app/pages/etapa_07_despesas.py` | Roteiro TI-05 |
 | RF-31–33, RF-35–36 | `database/conferencia_duplicidades.py`, `faeg_app/pages/etapa_07_despesas.py` | Roteiro TI-11 |
-| RF-42–45 | `database/saidas_operacionais.py`, `views/percurso_etapa2.py`, `views/saidas_operacionais.py` | TU-01, TU-02, TU-03, TU-05, TU-06 |
+| RF-42–45 | `database/saidas_operacionais.py`, `views/percurso_etapa2.py` | TU-01, TU-02, TU-03, TU-05, TU-06 |
 | RF-46 | `database/saidas_operacionais.py` (`estimar_consumo`) | TU-04 |
 | RF-47 | `faeg_app/reporting.py`, `faeg_app/pages/etapa_09_relatorios.py` (exportação) | Roteiro TI-09 |
 | RF-48 | `database/rascunhos.py`, `faeg_app/rascunhos_ui.py`, `faeg_app/layout.py` | `tests/test_fluxo_operacional.py` |

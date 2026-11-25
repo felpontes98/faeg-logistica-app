@@ -93,7 +93,7 @@ def render_sidebar(ctx):
 
 
 def render_top_context(ctx):
-    """Apresenta dados do frete; mantém rótulos e regras financeiras originais."""
+    """Apresenta a identificação e os indicadores operacionais e financeiros do frete."""
     clientes_db = ctx.clientes_db
     motoristas_db = ctx.motoristas_db
     viagem_sel_id = ctx.viagem_sel_id
