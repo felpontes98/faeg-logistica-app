@@ -1,7 +1,7 @@
 # Requisitos do Sistema Web FAEG
 
 **Escopo:** operação de fretes individuais, ciclos, despesas, abastecimentos, consulta e exportação.
-**Fluxo operacional:** saídas na Etapa 2 e rascunhos recuperáveis.  
+**Fluxo operacional:** saídas na Etapa 2 e rascunhos recuperáveis.
 **Origem das regras:** planilha de controle operacional da FAEG e definições registradas nas reuniões com o representante da empresa.
 
 Os requisitos documentam o escopo funcional do MVP. Fórmulas e critérios de apuração estão detalhados em [regras de negócio](regras_negocio.md); a persistência, em [arquitetura do banco](arquitetura_banco.md).
