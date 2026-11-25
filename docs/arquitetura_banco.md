@@ -1,12 +1,12 @@
 # Arquitetura do Banco de Dados — FAEG
 
-**Modelo de dados:** classes SQLAlchemy em `database/models.py` (Ajuste 27, 24/11/2026), com 18 tabelas ORM utilizadas pela aplicação Streamlit/PostgreSQL (Neon). A evolução técnica inclui migrações versionadas e administração de permissões.
+**Fonte:** classes SQLAlchemy em `database/models.py`. O modelo atual descreve **19 tabelas ORM**, com preenchimento por rascunho e saídas operacionais. Os dados anteriores permanecem nas tabelas originais.
 
 ## 1. Arquitetura atual
 
 O Streamlit (`app.py`) acessa o PostgreSQL por sessões SQLAlchemy criadas em `database/connection.py`. Os modelos são definidos em `database/models.py`; o importador lê arquivos Excel por `database/importador_planilha.py`.
 
-### Tabelas mapeadas no ORM (18 no total)
+### Tabelas mapeadas no ORM (19 no total)
 
 | Tabela | Chave primária | Finalidade e vínculo principal |
 | --- | --- | --- |
@@ -18,14 +18,15 @@ O Streamlit (`app.py`) acessa o PostgreSQL por sessões SQLAlchemy criadas em `d
 | `ciclos_operacionais` | `id_ciclo` | Nome, cliente de referência, datas, status, total `km_deslocamentos_operacionais` e componentes opcionais `km_saida_entre_coletas` e `km_retorno_operacional` (únicos por ciclo) |
 | `ciclos_financeiro` | `id_ciclo` (também FK) | Valores legados do ciclo; mantidos para compatibilidade histórica |
 | `viagens` | `id_viagem` | Frete/viagem com código, motorista, veículo, rota e documentos; `id_ciclo` pode ser compartilhado |
-| `fretes_financeiro` | `id_viagem` (também FK) | Tabela vigente com cliente, negociação, percentuais e parcelas específicos do frete |
+| `fretes_financeiro` | `id_viagem` (também FK) | **Nova tabela** com cliente, negociação, percentuais e parcelas específicos do frete |
 | `recebimentos_frete` | `id_recebimento` | Pagamentos efetivos, cada um associado a um frete via `id_viagem`, com data, valor, forma, referência e status de cancelamento |
 | `viagens_despesas` | `id_despesa` | Despesa financeira ligada a `id_viagem`; fornecedor e campo legado `odometro_abastecimento` são opcionais |
 | `ciclos_despesas` | `id_despesa_ciclo` | Despesa compartilhada associada uma vez ao `id_ciclo`, com fornecedor opcional e cancelamento auditável; não é distribuída por frete |
 | `veiculos_despesas` | `id_despesa_veiculo` | Origem de gasto do veículo: **pendente fora dos resultados** ou atribuído a frete/ciclo (contabilizado apenas no destino), com cancelamento auditável |
 | `veiculos_despesas_atribuicoes` | `id_evento` | Eventos imutáveis de atribuição/estorno com destino, data/hora e justificativa |
 | `abastecimentos` | `id_abastecimento` | Visão operacional de Diesel/ARLA por veículo, criada a partir da **mesma despesa**, com vínculo à despesa de frete/ciclo/veículo, odômetro e cancelamento |
-| `saidas_operacionais` | `id_saida` | Saídas físicas de um ciclo (inclusive individual), com veículo, motorista opcional, datas, KM planejado e odômetros |
+| `saidas_operacionais` | `id_saida` | Saídas físicas de um ciclo (inclusive individual), com veículo, motorista opcional, datas, três componentes de KM planejado, odômetros e total calculado |
+| `rascunhos_viagens` | `id_rascunho` | Formulário parcialmente preenchido, incluindo saídas e despesas provisórias, sem afetar a DRE antes do salvamento definitivo |
 | `trechos_operacionais` | `id_trecho` | Trechos físicos pertencentes a uma saída; usados como KM planejado quando cadastrados |
 | `parametros_consumo_veiculo` | `id_veiculo` (também FK) | km/L e preço/litro referenciais por veículo para estimativa de consumo |
 
@@ -55,7 +56,7 @@ erDiagram
     VEICULOS_DESPESAS ||--o| ABASTECIMENTOS : origina
 ```
 
-Cada viagem possui ainda duas referências a `locais`, uma para coleta e outra para entrega. O diagrama acima resume a estrutura anterior ao Ajuste 27; para **todas as 18 tabelas**, consulte o [DER atualizado](diagramas/entidade_relacionamento.md) e o [diagrama de classes](diagramas/classes.md).
+Cada viagem possui ainda duas referências a `locais`, uma para coleta e outra para entrega. O diagrama acima resume a estrutura anterior ao Ajuste 27; para **todas as 19 tabelas**, consulte o [DER atualizado](diagramas/entidade_relacionamento.md) e o [diagrama de classes](diagramas/classes.md).
 
 ## 2. Evolução histórica do modelo (ajustes já presentes no código)
 
@@ -66,7 +67,7 @@ Na evolução anterior do sistema, a tela de cadastro foi desenhada para funcion
 3. Ao editar um frete de um ciclo compartilhado, seus dados financeiros e seu cliente são alterados de maneira independente; mudar o número do ciclo transfere apenas aquele frete para o outro grupo.
 4. Registros históricos ainda sem linha em `fretes_financeiro` continuam sendo exibidos a partir de `ciclos_financeiro` e do cliente do ciclo. O histórico **não é migrado nem reagrupado automaticamente**.
 5. A prévia da planilha identifica linhas de frete, de fechamento, ciclos com vários fretes e ciclos com vários clientes. A rotina `database/conciliacao_planilha.py` audita separadamente os fechamentos: compara os valores com os fretes anteriores, sinaliza IDs ausentes/divergentes, distingue possíveis totais gerais e destaca fretes ainda sem fechamento. A **gravação Excel permanece bloqueada**.
-6. O cálculo da Etapa 8 soma `viagens.km_rota_planejado` de todos os fretes do **mesmo `id_ciclo` interno**, sem duplicar o frete aberto para edição, e acrescenta **uma única vez** `ciclos_operacionais.km_deslocamentos_operacionais`, que passa a ser o total dos dois campos manuais da Etapa 2 (`km_saida_entre_coletas + km_retorno_operacional`). Ciclos históricos homônimos não são misturados; uma seleção ambígua não soma os KM dos outros ciclos e bloqueia novos vínculos automáticos até conferência. O odômetro inicial/final pode ser preenchido nas Etapas 2 ou 8 e utiliza os mesmos dois campos em `viagens`, permanecendo separado da quilometragem planejada e dos abastecimentos da Etapa 7.
+6. O cálculo da Etapa 8 soma `viagens.km_rota_planejado` de todos os fretes do **mesmo `id_ciclo` interno**, sem duplicar o frete aberto para edição, e acrescenta **uma única vez** `ciclos_operacionais.km_deslocamentos_operacionais`, que passa a ser o total dos dois campos manuais da Etapa 2 (`km_saida_entre_coletas + km_retorno_operacional`). Ciclos históricos homônimos não são misturados; uma seleção ambígua não soma os KM dos outros ciclos e bloqueia novos vínculos automáticos até conferência. No modo atual, os odômetros de cada saída são preenchidos na Etapa 2 e consolidados na Etapa 8, sem reutilizar os odômetros por frete da tabela `viagens`. As leituras de abastecimento continuam independentes na Etapa 7.
 7. A Etapa 7 possui **um único formulário de despesas**, inclusive para Diesel e ARLA. O usuário escolhe o dono do custo: `viagens_despesas` (ID Frete atual), `ciclos_despesas` (ID Ciclo existente) ou `veiculos_despesas` (veículo sem operação definida). Para combustível, o campo **ODÔMETRO NO ABASTECIMENTO (KM)** aparece ao lado de litros e preço, sem checkbox; `0` significa leitura não informada (`NULL`). **No mesmo salvamento**, a aplicação gera uma linha operacional em `abastecimentos` com uma única FK de origem financeira, sem segunda digitação e sem somá-la novamente no DRE. A tabela de abastecimentos mantém `id_veiculo` próprio para o consumo, independentemente de ID Frete. Dados históricos não são convertidos automaticamente.
 8. A Etapa 7 mostra distância entre dois abastecimentos de Diesel consecutivos e indicadores aproximados de KM/L e R$/KM, quando as leituras são válidas. A Etapa 8 apresenta o último indicador disponível do veículo, além de diferença e desvio entre KM total real e planejado. Em ciclo, o total real só é consolidado quando todos os fretes têm odômetros válidos e não há intervalos sobrepostos no mesmo veículo; o KM real individual permanece visível no topo. Leituras ausentes não aparecem como zero medido.
 9. O módulo `database/fechamento_ciclos.py` consolida valores somente em memória, agrupando os fretes pelo `id_ciclo` interno (sem misturar nomes legados iguais). O fechamento na Etapa 8 substitui o frete atual pelos valores não salvos; a Etapa 9 cria a visão por ciclo e a aba Excel `Fechamento_Ciclos`. Despesas por frete e despesas compartilhadas do ciclo são somadas uma vez cada; parcelas previstas aparecem separadas dos pagamentos registrados efetivamente.
@@ -79,7 +80,7 @@ Na evolução anterior do sistema, a tela de cadastro foi desenhada para funcion
 16. O módulo `database/conferencia_duplicidades.py` compara despesas de frete e compartilhadas **no mesmo ID de ciclo** por data, categoria, descrição, fornecedor, quantidade, preço e valor; para combustível, utiliza veículo/odômetro quando disponíveis. Retorna **alertas**, nunca ordens de exclusão. A Etapa 7 solicita confirmação explícita se um novo lançamento se parece com custo de outro destino; a atribuição do veículo também verifica o destino cruzado e exige confirmação com justificativa quando a despesa é efetivamente distinta. A Etapa 9 e a aba Excel `Possiveis_Duplicidades` exibem indícios históricos e os IDs para conferência dos comprovantes. Nenhuma nova tabela é criada nesta etapa.
 17. As Etapas 2 e 8 mantêm a decisão de Eduardo: `KM X ROTA PLANEJADO` é apenas título; os três componentes da rota são manuais na Etapa 2; `KM PLANEJADO` é soma dos fretes do mesmo ID interno; `KM DESLOCAMENTOS OPERACIONAIS` é saída/entre coletas + retorno, único por operação/ciclo; `KM TOTAL PLANEJADO` soma os componentes; `KM TOTAL REAL` e diferença dependem dos odômetros da operação preenchidos na Etapa 2. A edição valida ID Frete não reutilizado, impede troca de veículo com abastecimento ativo e bloqueia saída do último frete de ciclo com despesas compartilhadas ativas. Não há transferência automática de custos ou reagrupamento de ciclos antigos.
 
-**Compatibilidade histórica:** ciclos duplicados já existentes na base não são mesclados; isso exige migração específica, conferência e backup. O **resumo gerencial**, os **recebimentos**, o **lançamento único de combustível/despesa** e a **atribuição/estorno manual de gastos do veículo** foram preparados no código. **Rateio automático, conciliação bancária, estornos externos e fechamento formal com alteração de status** não foram implementados.
+**Limitação:** ciclos duplicados já existentes na base não são mesclados; isso exige migração específica, conferência e backup. O **resumo gerencial**, os **recebimentos**, o **lançamento único de combustível/despesa** e a **atribuição/estorno manual de gastos do veículo** foram preparados no código. **Rateio automático, conciliação bancária, estornos externos e fechamento formal com alteração de status** não foram implementados.
 
 **Critério de segurança:** a proximidade entre uma linha de fechamento e os fretes anteriores é utilizada para sugerir a correspondência na auditoria. Ela **não autoriza corrigir automaticamente** o ID do ciclo nem transferir valores ou despesas. Linhas interpretadas como total geral não são somadas como fretes adicionais.
 
@@ -108,29 +109,33 @@ Os códigos de negócio devem ser gerados e validados no banco de forma segura p
 
 ## 4. Integridade, segurança e migração
 
-### Histórico das alterações estruturais já incorporadas
+### Estado do código proposto
 
-Os itens abaixo são **evoluções anteriores**, presentes no esquema descrito pelo ORM. Não representam novas migrações desta revisão documental:
-
-- O banco utiliza `Base.metadata.create_all()` e comandos `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` dentro de `sincronizar_colunas_banco()`. Esse mecanismo **continua ativo** e pode executar DDL na abertura do aplicativo, conforme o banco configurado.
-- As tabelas `fretes_financeiro`, `recebimentos_frete`, `ciclos_despesas`, `veiculos_despesas`, `veiculos_despesas_atribuicoes` e `abastecimentos` pertencem às versões anteriores. A tabela `fretes_financeiro` permite informações comerciais individuais em um mesmo ciclo.
-- As colunas `km_deslocamentos_operacionais`, `km_saida_entre_coletas` e `km_retorno_operacional` de `ciclos_operacionais` preservam a compatibilidade com os campos legados de deslocamento. A separação posterior em **saídas operacionais e trechos** prevalece no cálculo físico quando há saídas registradas.
-- O campo opcional `odometro_abastecimento` em `viagens_despesas` e a tabela `abastecimentos` suportam o histórico de combustível sem segundo lançamento financeiro.
-- Os modelos `saidas_operacionais`, `trechos_operacionais` e `parametros_consumo_veiculo` foram incorporados no Ajuste 27. Os registros históricos não são convertidos automaticamente.
-- A inicialização modular utiliza atualmente **`inicializar_banco_uma_vez(schema_v=13)`** em `app.py`/`faeg_app/bootstrap.py`. Alterar essa chave de cache não substitui migrações formais nem realiza recuperação de dados.
-- O diagnóstico `python -m database.diagnostico_ciclos` consulta o banco separadamente, para evidenciar ciclos duplicados e conciliações pendentes; não é rotina de migração.
-- A string de conexão vem de `DATABASE_URL` (variável de ambiente ou `.env` não versionado). Existem restrições de unicidade em campos como placa e código da viagem e FKs descritas nos diagramas.
+- `database/models.py` usa `Base.metadata.create_all()` e comandos manuais `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. **Na primeira abertura do app alterado, `create_all()` tentará criar a nova tabela `fretes_financeiro` no banco configurado.**
+- A atualização do cálculo de KM acrescenta a coluna `km_deslocamentos_operacionais` em `ciclos_operacionais` por meio de `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`; essa alteração de esquema ocorre na inicialização do aplicativo atualizado.
+- O novo detalhamento da Etapa 2 adiciona **duas colunas opcionais** em `ciclos_operacionais`: `km_saida_entre_coletas` e `km_retorno_operacional` (`NUMERIC(12,2)`, inicialmente `NULL` em linhas legadas). A migração preserva o total preexistente em `km_deslocamentos_operacionais`; só uma edição explícita da composição atualiza as duas colunas e o total. A inicialização do aplicativo modificado executa os `ADD COLUMN IF NOT EXISTS` — ensaiar primeiro em cópia do PostgreSQL.
+- A revisão visual da Tela 8 utiliza `schema_v=12` na chave do cache de inicialização para **não reutilizar** indevidamente a inicialização anterior de versão 11 após a inclusão dessas duas colunas. O aumento de versão não altera registros por si só; a sincronização estrutural permanece sujeita à validação prévia em banco de testes.
+- O controle do odômetro no abastecimento acrescenta `odometro_abastecimento INTEGER NULL` à tabela `viagens_despesas`; essa coluna também é criada automaticamente na inicialização da nova versão.
+- A tabela independente `abastecimentos` (com FK para `veiculos` e fornecedor opcional) é criada por `Base.metadata.create_all()` na inicialização da versão 6. O schema existente de `viagens_despesas` não é removido nem reescrito.
+- A tabela `recebimentos_frete` é criada por `Base.metadata.create_all()` na inicialização da versão 8. Nenhuma coluna de dados históricos é removida e os recebimentos não são deduzidos automaticamente das parcelas previstas.
+- A tabela `ciclos_despesas` é criada por `Base.metadata.create_all()` na inicialização da versão 9. Não redistribui custos existentes nem converte registros de abastecimento em despesas financeiras.
+- A versão 10 cria `veiculos_despesas`, adiciona FKs opcionais de origem e campos de cancelamento em `abastecimentos`, e amplia a precisão do valor unitário em `viagens_despesas` e `ciclos_despesas` para quatro decimais. A inicialização altera esquema, mas **não reclassifica nem copia automaticamente os dados legados**.
+- A versão 11 cria `veiculos_despesas_atribuicoes` e adiciona em `veiculos_despesas` duas FKs opcionais para o lançamento financeiro de destino e a data de atribuição. Não atribui gastos antigos automaticamente; somente ações explícitas na Etapa 7 produzem eventos.
+- `app.py` chama `sincronizar_colunas_banco()` na inicialização.
+- `database/diagnostico_ciclos.py` pode ser executado separadamente com `python -m database.diagnostico_ciclos`. Esse diagnóstico **não inicializa o app nem migra o banco**: faz exclusivamente consultas SQL em transação `READ ONLY`, identifica IDs de ciclo duplicados e diferencia os valores legados dos financeiros individuais. O resultado é exibido no terminal como JSON.
+- A string de conexão é lida da variável `DATABASE_URL` após `load_dotenv()`.
+- Existem restrições `unique` em alguns campos, como placas e `codigo_viagem`, e chaves estrangeiras nos relacionamentos descritos.
 
 ### Recomendações
 
-1. **Antes de qualquer mudança conectada ao banco oficial**, garantir backup restaurável e testar em uma cópia do banco. O mecanismo de sincronização pode realizar alterações de esquema.
+1. **Antes de copiar este código para um ambiente conectado ao banco oficial**, realizar backup restaurável e testar em uma cópia do banco. A criação da tabela pela inicialização é uma alteração de esquema.
 2. Introduzir migrações versionadas e revisáveis, por exemplo com Alembic, após planejamento técnico.
 3. Criar chaves únicas específicas de frete e ciclo, índices nas chaves estrangeiras e validações para despesas e pagamentos.
 4. Separar permissões de leitura e escrita; restringir acesso a dados pessoais e comerciais.
 5. Registrar trilha mínima de alteração/importação e evitar exclusão física sem avaliação do histórico.
 6. Substituir alterações automáticas de esquema na abertura de cada sessão por um processo controlado de atualização.
 
-## 5. Cenários de integridade e manutenção do banco
+## 5. Verificações necessárias com banco de testes
 
 - [ ] Conferir se a estrutura física hospedada corresponde aos modelos ORM.
 - [ ] Executar `python -m database.diagnostico_ciclos` usando primeiro o `DATABASE_URL` do banco de testes e revisar o resultado.
@@ -186,6 +191,14 @@ O Ajuste 27 acrescentou **três tabelas sem excluir as 15 anteriores**. A funç�
 
 **Exportação:** `Saidas_Operacionais`, `Trechos_Operacionais` e `KM_Operacional_Ciclos` são acrescentadas à base Excel. O indicador de consumo estimado é somente consultivo e não altera a DRE.
 
-**Regras e limites do escopo atual:** não há movimentação de estoques de diesel nem alocação automática do combustível consumido a um ciclo; despesas históricas não são realocadas; sobreposição de odômetros entre ciclos distintos ainda deve ser conferida manualmente; não existe ainda vínculo automático entre cada frete e os trechos físicos onde foi transportado.
+**Limitações operacionais desta versão:** não há movimentação de estoques de diesel nem alocação automática do combustível consumido a um ciclo; despesas históricas não são realocadas; sobreposição de odômetros entre ciclos distintos ainda deve ser conferida manualmente; não existe ainda vínculo automático entre cada frete e os trechos físicos onde foi transportado.
 
-**Nota de arquitetura:** o projeto não possui uma API REST independente. O acesso é feito por `faeg_app/pages/`, `faeg_app/core.py` e módulos Python a sessões do SQLAlchemy. A sincronização automática na inicialização não é um sistema de migrações versionadas; adotar procedimento revisável antes de evoluções estruturais.
+**Nota de arquitetura:** o projeto não possui uma API REST independente. O acesso é feito por `app.py` e módulos Python a sessões do SQLAlchemy. A sincronização automática na inicialização não é um sistema de migrações versionadas; adotar procedimento revisável antes de evoluções estruturais.
+
+## Fluxo operacional de preenchimento — versão atual
+
+O cadastro e a edição das saídas são realizados na **Etapa 2**, após escolher a operação na Etapa 1. Cada saída contém KM de coleta, rota e retorno à base, leituras inicial/final e datas. As informações são compartilhadas pelos fretes do mesmo ciclo. A **Etapa 7** registra despesas uma vez, com vínculo comercial ao frete ou à operação; a **Etapa 8** apresenta exclusivamente o fechamento. Os parâmetros referenciais de consumo ficam na Etapa 11.
+
+Os rascunhos são armazenados em `rascunhos_viagens`; o salvamento definitivo exige os vínculos obrigatórios das tabelas operacionais. Ao salvar, as saídas e despesas provisórias são transferidas na mesma transação SQL para o ciclo ou frete correto, e o rascunho é excluído.
+
+A atualização de esquema cria `rascunhos_viagens` e adiciona as colunas opcionais `km_saida_coletas`, `km_rota_principal` e `km_retorno_base` a `saidas_operacionais`, sem excluir dados históricos.

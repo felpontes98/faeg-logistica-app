@@ -43,7 +43,8 @@ def validar_saida(dados):
 def salvar_saida(session, *, id_ciclo, id_veiculo, id_motorista=None, id_saida=None,
                  descricao, data_inicio=None, data_fim=None,
                  odometro_inicial=None, odometro_final=None,
-                 km_planejado_manual=None, observacoes=None):
+                 km_planejado_manual=None, observacoes=None,
+                 km_saida_coletas=None, km_rota_principal=None, km_retorno_base=None):
     dados = locals().copy()
     validar_saida(dados)
     ciclo = session.get(CicloOperacional, int(id_ciclo))
@@ -59,7 +60,8 @@ def salvar_saida(session, *, id_ciclo, id_veiculo, id_motorista=None, id_saida=N
         if saida is None or saida.id_ciclo != id_ciclo:
             raise ValueError("Saída não pertence à operação selecionada.")
     for campo in ("id_veiculo", "id_motorista", "descricao", "data_inicio", "data_fim",
-                  "odometro_inicial", "odometro_final", "km_planejado_manual", "observacoes"):
+                  "odometro_inicial", "odometro_final", "km_planejado_manual", "observacoes",
+                  "km_saida_coletas", "km_rota_principal", "km_retorno_base"):
         setattr(saida, campo, dados[campo])
     session.flush()
     return saida.id_saida

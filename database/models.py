@@ -8,6 +8,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     Time,
     text,
 )
@@ -382,6 +383,18 @@ class Abastecimento(Base):
     fornecedor = relationship("Fornecedor", back_populates="abastecimentos")
 
 
+class RascunhoViagem(Base):
+    """Progresso de preenchimento antes de atender os campos obrigatórios do frete.
+
+    Rascunho não é viagem operacional nem compõe indicadores financeiros.
+    """
+    __tablename__ = "rascunhos_viagens"
+    id_rascunho = Column(Integer, primary_key=True, autoincrement=True)
+    titulo = Column(String(150), nullable=False)
+    conteudo_json = Column(Text, nullable=False)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class SaidaOperacional(Base):
     """Deslocamento físico da van, pertencente a um ciclo (inclusive individual)."""
     __tablename__ = "saidas_operacionais"
@@ -394,6 +407,10 @@ class SaidaOperacional(Base):
     data_inicio = Column(Date, nullable=True)
     data_fim = Column(Date, nullable=True)
     km_planejado_manual = Column(Numeric(12, 2), nullable=True)
+    # Composição simples do percurso, informada uma única vez na Etapa 2.
+    km_saida_coletas = Column(Numeric(12, 2), nullable=True)
+    km_rota_principal = Column(Numeric(12, 2), nullable=True)
+    km_retorno_base = Column(Numeric(12, 2), nullable=True)
     odometro_inicial = Column(Integer, nullable=True)
     odometro_final = Column(Integer, nullable=True)
     observacoes = Column(String(600), nullable=True)
@@ -469,6 +486,9 @@ def sincronizar_colunas_banco():
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_abast_origem_frete ON abastecimentos (id_despesa_viagem) WHERE id_despesa_viagem IS NOT NULL;",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_abast_origem_ciclo ON abastecimentos (id_despesa_ciclo) WHERE id_despesa_ciclo IS NOT NULL;",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_abast_origem_veiculo ON abastecimentos (id_despesa_veiculo) WHERE id_despesa_veiculo IS NOT NULL;",
+        "ALTER TABLE saidas_operacionais ADD COLUMN IF NOT EXISTS km_saida_coletas NUMERIC(12, 2);",
+        "ALTER TABLE saidas_operacionais ADD COLUMN IF NOT EXISTS km_rota_principal NUMERIC(12, 2);",
+        "ALTER TABLE saidas_operacionais ADD COLUMN IF NOT EXISTS km_retorno_base NUMERIC(12, 2);",
         "ALTER TABLE viagens ALTER COLUMN rota_resumo TYPE VARCHAR(250);",
         "ALTER TABLE viagens ALTER COLUMN nfe_carga TYPE VARCHAR(120);",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_viagens_codigo_viagem ON viagens (codigo_viagem);",

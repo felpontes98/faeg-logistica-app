@@ -6,6 +6,11 @@ As classes abaixo são **entidades ORM reais** de [`database/models.py`](../../d
 
 ```mermaid
 classDiagram
+    class RascunhoViagem {
+      +int id_rascunho
+      +str titulo
+      +str conteudo_json
+    }
     class Cliente {
       +int id_cliente
       +str razao_social
@@ -42,6 +47,9 @@ classDiagram
       +int id_ciclo
       +int id_veiculo
       +decimal km_planejado_manual
+      +decimal km_saida_coletas
+      +decimal km_rota_principal
+      +decimal km_retorno_base
       +int odometro_inicial
       +int odometro_final
     }

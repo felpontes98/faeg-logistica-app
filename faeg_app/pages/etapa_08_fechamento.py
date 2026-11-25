@@ -4,7 +4,6 @@ import streamlit as st
 
 from database.connection import SessionLocal
 from database.models import Viagem
-from views.saidas_operacionais import render_saidas_operacionais
 from faeg_app.core import (
     OPCOES_SITUACAO_OPERACAO,
     calcular_km_deslocamentos_formulario,
@@ -41,94 +40,49 @@ def render(ctx):
         unsafe_allow_html=True,
     )
 
-    # Saídas são a fonte operacional de KM quando cadastradas. Cada frete
-    # permanece com sua receita própria, mas não recebe KM compartilhados.
+    # Somente conferência: o cadastro das saídas ocorre na Etapa 2.
     resumo_saidas_atual = None
     if viagem_sel_id:
+        from database.saidas_operacionais import consultar_saidas, resumo_saidas
         with SessionLocal() as db:
-            viagem_operacional = db.get(Viagem, viagem_sel_id)
-            ciclo_atual_id = viagem_operacional.id_ciclo if viagem_operacional is not None else None
-        if ciclo_atual_id is not None:
-            resumo_saidas_atual = render_saidas_operacionais(
-                ciclo_atual_id, veiculos_db, motoristas_db
-            )
-    else:
-        st.info("Para cadastrar saídas operacionais, primeiro salve o frete na Etapa 1. "
-                "Na sequência, registre as saídas no fechamento; os demais fretes do ciclo usarão os mesmos percursos.")
-    st.markdown('<div class="sec-subtitle">Leituras e situação da operação</div>', unsafe_allow_html=True)
-    if resumo_saidas_atual:
-        st.caption("Leituras históricas por frete, mantidas para consulta. "
-                   "Com saídas cadastradas, os indicadores de KM usam exclusivamente os odômetros das saídas abaixo, "
-                   "sem somar o mesmo percurso dos fretes.")
-    f1, f2, f3, f4 = st.columns([1.1, 1.1, 1.1, 1.7])
+            operacao = db.get(Viagem, viagem_sel_id)
+            if operacao and operacao.id_ciclo:
+                registros = consultar_saidas(db, operacao.id_ciclo)
+                if registros:
+                    resumo_saidas_atual = resumo_saidas(registros)
+    if not viagem_sel_id and st.session_state.get("saidas_provisorias"):
+        from database.rascunhos import resumo_saidas_provisorias
+        resumo_saidas_atual = resumo_saidas_provisorias(st.session_state["saidas_provisorias"])
+    modo_saidas = resumo_saidas_atual is not None
+    st.markdown('<div class="sec-subtitle">Situação da operação</div>', unsafe_allow_html=True)
+    status_atual = get_campo("status_viagem", "Aguardando Adiantamento")
+    st.selectbox(
+        "SITUAÇÃO DA OPERAÇÃO",
+        OPCOES_SITUACAO_OPERACAO,
+        index=OPCOES_SITUACAO_OPERACAO.index(status_atual) if status_atual in OPCOES_SITUACAO_OPERACAO else 0,
+        key="w_status_viagem", on_change=sync_campo,
+        args=("w_status_viagem", "status_viagem"),
+    )
     odo_ini_v = to_int(get_campo("odo_ini", 0))
     odo_fin_v = to_int(get_campo("odo_fin", 0))
-    with f1:
-        odo_ini_v = st.number_input(
-            "ODÔMETRO INICIAL (HISTÓRICO DO FRETE)" if resumo_saidas_atual else "ODÔMETRO INICIAL",
-            min_value=0,
-            step=1,
-            value=odo_ini_v,
-            key="w_odo_ini",
-            on_change=sync_campo,
-            args=("w_odo_ini", "odo_ini"),
-        )
-    with f2:
-        odo_fin_v = st.number_input(
-            "ODÔMETRO FINAL (HISTÓRICO DO FRETE)" if resumo_saidas_atual else "ODÔMETRO FINAL",
-            min_value=0,
-            step=1,
-            value=odo_fin_v,
-            key="w_odo_fin",
-            on_change=sync_campo,
-            args=("w_odo_fin", "odo_fin"),
-        )
-    km_real_calc = (
-        to_int(odo_fin_v) - to_int(odo_ini_v)
-        if to_int(odo_ini_v) > 0 and to_int(odo_fin_v) >= to_int(odo_ini_v)
-        else None
-    )
-    with f3:
-        st.text_input(
-            "KM REAL RODADO",
-            value=f"{km_real_calc} km" if km_real_calc is not None else "Não informado",
-            disabled=True,
-            key=f"prev_km_{km_real_calc}",
-        )
-    if odo_ini_v > 0 and odo_fin_v > 0 and odo_fin_v < odo_ini_v:
-        st.error("Leituras inconsistentes: odômetro final menor que o inicial.")
-    with f4:
-        st_atual = get_campo("status_viagem", "Aguardando Adiantamento")
-        st.selectbox(
-            "SITUAÇÃO DA OPERAÇÃO",
-            OPCOES_SITUACAO_OPERACAO,
-            index=OPCOES_SITUACAO_OPERACAO.index(st_atual) if st_atual in OPCOES_SITUACAO_OPERACAO else 0,
-            key="w_status_viagem",
-            on_change=sync_campo,
-            args=("w_status_viagem", "status_viagem"),
-        )
-
-    st.caption(
-        "Os odômetros da operação são compartilhados com a Etapa 2. "
-        "O odômetro de cada abastecimento permanece independente na Etapa 7."
-    )
-
-    modo_saidas = resumo_saidas_atual is not None
     if modo_saidas:
-        # Fonte física única: não chamar cálculos legados que podem gerar
-        # alertas indevidos para odômetros por frete de uma mesma rota.
         km_planejado_op = resumo_saidas_atual["km_planejado"]
         km_deslocamentos_op = 0.0
         km_total_previsto_op = km_planejado_op
         km_total_real_op = resumo_saidas_atual["km_real"]
-        st.info("**KM da operação por saídas operacionais.** Os campos de KM dos fretes "
-                "e os deslocamentos antigos não entram nessa soma. "
-                "Não transfira valores históricos sem conferência.")
+        st.caption("KM e odômetros calculados pelas saídas registradas na Etapa 2. "
+                   "Os mesmos percursos não são repetidos nos demais fretes do ciclo.")
+        for aviso in resumo_saidas_atual["avisos"]:
+            if "sobrepostos" in aviso or "inconsistentes" in aviso:
+                st.warning(aviso)
     else:
         km_planejado_op = calcular_km_planejado_operacao(viagem_sel_id)
         km_deslocamentos_op = calcular_km_deslocamentos_formulario()
         km_total_previsto_op = round(km_planejado_op + km_deslocamentos_op, 2)
         km_total_real_op = calcular_km_total_real_operacao(viagem_sel_id, odo_ini_v, odo_fin_v)
+        if viagem_sel_id:
+            st.caption("Exibindo a quilometragem histórica. Para novos percursos, "
+                       "registre as saídas na Etapa 2.")
 
     if km_total_real_op is not None:
         diferenca_km = km_total_real_op - km_total_previsto_op
@@ -167,93 +121,99 @@ def render(ctx):
     nota_km_planejado = "Trechos físicos, sem duplicar fretes." if modo_saidas else "Trechos informados na Etapa 2."
     nota_km_deslocamentos = "Incluído nas saídas físicas." if modo_saidas else "Saída / entre coletas + retorno."
     nota_km_total = "Saídas físicas, sem duplicações." if modo_saidas else "Fretes + deslocamentos, sem repetição."
-    st.markdown(
-        f"""
-            <section class="faeg-km-dashboard" aria-label="Resumo da quilometragem da operação">
-                <div class="faeg-km-heading">
-                    <div>
-                        <div class="faeg-km-eyebrow">Planejamento e execução</div>
-                        <div class="faeg-km-title">Resumo da quilometragem</div>
+    if modo_saidas:
+        st.markdown('<div class="sec-subtitle">Resumo dos quilômetros da operação</div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("KM planejado", fmt_km(km_total_previsto_op))
+        c2.metric("KM real", fmt_km(km_total_real_op) if km_total_real_op is not None else "Em andamento")
+        c3.metric("Diferença real − planejado", diferenca_formatada)
+        if km_total_real_op is not None and km_total_previsto_op > 0:
+            st.caption(f"Desvio do planejamento: {desvio_formatado}. Dados registrados na Etapa 2.")
+    else:
+        st.markdown(
+            f"""
+                <section class="faeg-km-dashboard" aria-label="Resumo da quilometragem da operação">
+                    <div class="faeg-km-heading">
+                        <div>
+                            <div class="faeg-km-eyebrow">Planejamento e execução</div>
+                            <div class="faeg-km-title">Resumo da quilometragem</div>
+                        </div>
+                        <span class="faeg-km-tag">{etiqueta_operacao}</span>
                     </div>
-                    <span class="faeg-km-tag">{etiqueta_operacao}</span>
-                </div>
-                <div class="faeg-km-group-label">Planejado</div>
-                <div class="faeg-km-grid">
-                    <article class="faeg-km-card">
-                        <div class="faeg-km-card-label">{rotulo_km_planejado}</div>
-                        <div class="faeg-km-card-value">{fmt_km(km_planejado_op)}</div>
-                        <div class="faeg-km-card-note">{nota_km_planejado}</div>
-                    </article>
-                    <article class="faeg-km-card">
-                        <div class="faeg-km-card-label">KM deslocamentos operacionais</div>
-                        <div class="faeg-km-card-value">{fmt_km(km_deslocamentos_op)}</div>
-                        <div class="faeg-km-card-note">{nota_km_deslocamentos}</div>
-                    </article>
-                    <article class="faeg-km-card is-primary">
-                        <div class="faeg-km-card-label">KM total planejado</div>
-                        <div class="faeg-km-card-value">{fmt_km(km_total_previsto_op)}</div>
-                        <div class="faeg-km-card-note">{nota_km_total}</div>
-                    </article>
-                </div>
-                <div class="faeg-km-formula">
-                    Memória: {fmt_km(km_planejado_op)} + {fmt_km(km_deslocamentos_op)}
-                    = {fmt_km(km_total_previsto_op)} planejados.
-                </div>
-                <div class="faeg-km-group-label">Realizado e comparação</div>
-                <div class="faeg-km-grid">
-                    <article class="faeg-km-card{classe_real}">
-                        <div class="faeg-km-card-label">KM total real</div>
-                        <div class="faeg-km-card-value">{fmt_km(km_total_real_op) if km_total_real_op is not None else 'Não informado'}</div>
-                        <div class="faeg-km-card-note">{descricao_real}</div>
-                    </article>
-                    <article class="faeg-km-card{cor_diferenca}">
-                        <div class="faeg-km-card-label">Diferença: real − planejado</div>
-                        <div class="faeg-km-card-value">{diferenca_formatada}</div>
-                        <div class="faeg-km-card-note">{nota_diferenca}</div>
-                    </article>
-                    <article class="faeg-km-card">
-                        <div class="faeg-km-card-label">Desvio do planejado</div>
-                        <div class="faeg-km-card-value">{desvio_formatado}</div>
-                        <div class="faeg-km-card-note">Percentual sobre o total planejado.</div>
-                    </article>
-                </div>
-            </section>
-            """,
-        unsafe_allow_html=True,
-    )
-
-    if not modo_saidas and to_float(get_campo("km_rota", 0.0)) <= 0:
-        st.warning(
-            "O campo KM INDIVIDUAL / CICLO do frete atual ainda está zerado "
-            "na Etapa 2. Confira se o trecho foi realmente planejado antes "
-            "de considerar o KM Total Planejado como completo."
+                    <div class="faeg-km-group-label">Planejado</div>
+                    <div class="faeg-km-grid">
+                        <article class="faeg-km-card">
+                            <div class="faeg-km-card-label">{rotulo_km_planejado}</div>
+                            <div class="faeg-km-card-value">{fmt_km(km_planejado_op)}</div>
+                            <div class="faeg-km-card-note">{nota_km_planejado}</div>
+                        </article>
+                        <article class="faeg-km-card">
+                            <div class="faeg-km-card-label">KM deslocamentos operacionais</div>
+                            <div class="faeg-km-card-value">{fmt_km(km_deslocamentos_op)}</div>
+                            <div class="faeg-km-card-note">{nota_km_deslocamentos}</div>
+                        </article>
+                        <article class="faeg-km-card is-primary">
+                            <div class="faeg-km-card-label">KM total planejado</div>
+                            <div class="faeg-km-card-value">{fmt_km(km_total_previsto_op)}</div>
+                            <div class="faeg-km-card-note">{nota_km_total}</div>
+                        </article>
+                    </div>
+                    <div class="faeg-km-formula">
+                        Memória: {fmt_km(km_planejado_op)} + {fmt_km(km_deslocamentos_op)}
+                        = {fmt_km(km_total_previsto_op)} planejados.
+                    </div>
+                    <div class="faeg-km-group-label">Realizado e comparação</div>
+                    <div class="faeg-km-grid">
+                        <article class="faeg-km-card{classe_real}">
+                            <div class="faeg-km-card-label">KM total real</div>
+                            <div class="faeg-km-card-value">{fmt_km(km_total_real_op) if km_total_real_op is not None else 'Não informado'}</div>
+                            <div class="faeg-km-card-note">{descricao_real}</div>
+                        </article>
+                        <article class="faeg-km-card{cor_diferenca}">
+                            <div class="faeg-km-card-label">Diferença: real − planejado</div>
+                            <div class="faeg-km-card-value">{diferenca_formatada}</div>
+                            <div class="faeg-km-card-note">{nota_diferenca}</div>
+                        </article>
+                        <article class="faeg-km-card">
+                            <div class="faeg-km-card-label">Desvio do planejado</div>
+                            <div class="faeg-km-card-value">{desvio_formatado}</div>
+                            <div class="faeg-km-card-note">Percentual sobre o total planejado.</div>
+                        </article>
+                    </div>
+                </section>
+                """,
+            unsafe_allow_html=True,
         )
 
-    with st.expander("Ver detalhes dos cálculos de KM", expanded=False):
-        if modo_saidas:
-            st.info("Para a operação atual, os quilômetros são calculados pelas saídas/trechos "
-                    "cadastrados acima. Os textos abaixo descrevem somente o método legado dos fretes.")
-        st.markdown(
-            "**KM planejado (modo legado):** no frete individual, usa o KM manual da Etapa 2; "
-            "no ciclo, soma os fretes vinculados ao mesmo ID interno."
-        )
-        if get_campo("km_componentes_discriminados", True):
+    if viagem_sel_id and not modo_saidas and km_total_previsto_op == 0:
+        st.info("Ainda não há KM planejado. Registre a saída operacional na Etapa 2.")
+
+    if not modo_saidas and viagem_sel_id:
+        with st.expander("Ver detalhes dos cálculos de KM", expanded=False):
+            if modo_saidas:
+                st.info("Para a operação atual, os quilômetros são calculados pelas saídas/trechos "
+                        "cadastrados acima. Os textos abaixo descrevem somente o método legado dos fretes.")
             st.markdown(
-                f"**Deslocamentos operacionais:** saída / entre coletas "
-                f"({fmt_km(get_campo('km_saida_entre_coletas', 0.0))}) + "
-                f"retorno ({fmt_km(get_campo('km_retorno_operacional', 0.0))}) "
-                f"= **{fmt_km(km_deslocamentos_op)}**, contados uma única vez por ciclo."
+                "**KM planejado (modo legado):** no frete individual, usa o KM manual da Etapa 2; "
+                "no ciclo, soma os fretes vinculados ao mesmo ID interno."
             )
-        else:
-            st.info(
-                "Os KM de deslocamentos foram registrados antes da separação dos campos. "
-                "O valor anterior foi preservado; a discriminação deve ser feita na Etapa 2."
+            if get_campo("km_componentes_discriminados", True):
+                st.markdown(
+                    f"**Deslocamentos operacionais:** saída / entre coletas "
+                    f"({fmt_km(get_campo('km_saida_entre_coletas', 0.0))}) + "
+                    f"retorno ({fmt_km(get_campo('km_retorno_operacional', 0.0))}) "
+                    f"= **{fmt_km(km_deslocamentos_op)}**, contados uma única vez por ciclo."
+                )
+            else:
+                st.info(
+                    "Os KM de deslocamentos foram registrados antes da separação dos campos. "
+                    "O valor anterior foi preservado; a discriminação deve ser feita na Etapa 2."
+                )
+            st.markdown(
+                "**KM total real:** diferença dos odômetros para frete individual; "
+                "no ciclo, soma dos intervalos válidos dos fretes, sem sobreposição no mesmo veículo. "
+                "**Diferença:** KM total real menos KM total planejado."
             )
-        st.markdown(
-            "**KM total real:** diferença dos odômetros para frete individual; "
-            "no ciclo, soma dos intervalos válidos dos fretes, sem sobreposição no mesmo veículo. "
-            "**Diferença:** KM total real menos KM total planejado."
-        )
     if km_total_real_op is None:
         st.info(
             "O KM real consolidado fica indisponível até haver odômetros válidos "
@@ -267,7 +227,8 @@ def render(ctx):
     receita_dre = v_neg_dre
 
     if viagem_sel_id == 0:
-        custos_dre = sum(to_float(d["valor_total"]) for d in st.session_state.get("despesas_temp", []))
+        custos_dre = sum(to_float(d["valor_total"]) for d in st.session_state.get("despesas_temp", [])
+                         if d.get("destino_temp", "frete") != "ciclo")
     else:
         custos_dre = sum(to_float(d["valor_total"]) for d in carregar_despesas_viagem(viagem_sel_id))
 
@@ -329,7 +290,7 @@ def render(ctx):
 
     if get_campo("tipo_viagem", "Individual") == "Ciclo":
         st.markdown('<div class="sec-subtitle">Prévia do Fechamento Financeiro do Ciclo</div>', unsafe_allow_html=True)
-        previa = montar_previa_financeira_ciclo(viagem_sel_id, custos_dre)
+        previa = montar_previa_financeira_ciclo(viagem_sel_id, custos_dre, ctx.clientes_db)
         if previa is None:
             st.info(
                 "Informe o Nº do Ciclo Operacional na Etapa 1. "

@@ -957,6 +957,8 @@ def _mudar_aba_callback(nova_aba):
 def _abrir_viagem_para_edicao(id_v, destino_aba):
     st.session_state["viagem_ativa_id"] = id_v
     st.session_state["loaded_viagem_id"] = None
+    st.session_state["rascunho_ativo_id"] = None
+    st.session_state["saidas_provisorias"] = []
     st.session_state["menu_operacional_radio"] = destino_aba
 
 
@@ -964,6 +966,8 @@ def _iniciar_nova_viagem():
     st.session_state["viagem_ativa_id"] = 0
     st.session_state["loaded_viagem_id"] = None
     st.session_state["despesas_temp"] = []
+    st.session_state["saidas_provisorias"] = []
+    st.session_state["rascunho_ativo_id"] = None
     st.session_state["menu_operacional_radio"] = "1. Frota FAEG"
 
 
@@ -1285,7 +1289,7 @@ def calcular_km_total_real_operacao(id_viagem_atual, odo_inicial, odo_final):
     return sum(fim - inicio for _, inicio, fim in intervalos)
 
 
-def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual):
+def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual, clientes_db=None):
     """Considera fretes salvos e substitui o atual pelo formulário não salvo."""
     identificador = (get_campo("ciclo_nome") or "").strip()
     if get_campo("tipo_viagem", "Individual") != "Ciclo" or not identificador:
@@ -1320,6 +1324,7 @@ def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual):
         and v["id_viagem"] != id_viagem_atual
     ] if id_ciclo is not None else []
 
+    clientes_db = clientes_db if clientes_db is not None else carregar_listas_base()[2]
     cli_obj = next((c for c in clientes_db if c["id_cliente"] == get_campo("cli_id", 0)), None)
     frete_atual = {
         "id_viagem": id_viagem_atual,
@@ -1394,8 +1399,9 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 
     if not all([mot_id, vei_id, cli_id, col_id, ent_id]):
         st.error(
-            "Para salvar a viagem, selecione obrigatoriamente: Motorista (1), Veículo (1), "
-            "Cliente (3), Local de Coleta (5) e Local de Entrega (6)."
+            "Para concluir o cadastro, selecione obrigatoriamente: Motorista (1), Veículo (1), "
+            "Cliente (3), Local de Coleta (5) e Local de Entrega (6). "
+            "Se ainda não tiver essas informações, clique em Salvar rascunho."
         )
         return
 
@@ -1531,6 +1537,26 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 session.add(financeiro_frete)
 
                 for dt in st.session_state.get("despesas_temp", []):
+                    if dt.get("destino_temp") == "ciclo":
+                        desp_ciclo = CicloDespesa(
+                            id_ciclo=ciclo.id_ciclo,
+                            id_fornecedor=dt.get("id_fornecedor") or None,
+                            tipo_despesa=dt["tipo_despesa"],
+                            descricao_detalhe=dt["descricao_detalhe"],
+                            quantidade=dt["quantidade"],
+                            valor_unitario=dt["valor_unitario"],
+                            valor_total=dt["valor_total"],
+                            data_despesa=dt.get("data_despesa") or date.today(),
+                        )
+                        session.add(desp_ciclo)
+                        session.flush()
+                        if dt["tipo_despesa"] in {"Posto de Combustível", "Abast. ARLA"}:
+                            dados_abast_temp = dict(dt)
+                            dados_abast_temp["id_veiculo_abast"] = dt.get("id_veiculo_abast") or vg.id_veiculo
+                            registrar_abastecimento_do_lancamento(
+                                session, dados_abast_temp, "id_despesa_ciclo", desp_ciclo.id_despesa_ciclo,
+                            )
+                        continue
                     desp_salva = ViagemDespesa(
                             id_viagem=vg.id_viagem,
                             id_fornecedor=dt.get("id_fornecedor") or None,
@@ -1550,7 +1576,21 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                         registrar_abastecimento_do_lancamento(
                             session, dados_abast_temp, "id_despesa_viagem", desp_salva.id_despesa,
                         )
+                # Saídas preparadas antes do primeiro salvamento passam a integrar
+                # a operação na MESMA transação do frete, sem duplicidade.
+                from database.rascunhos import publicar_saidas_rascunho
+                from database.models import RascunhoViagem
+                publicar_saidas_rascunho(
+                    session, ciclo.id_ciclo, st.session_state.get("saidas_provisorias", [])
+                )
+                rascunho_id = st.session_state.get("rascunho_ativo_id")
+                if rascunho_id:
+                    salvo = session.get(RascunhoViagem, int(rascunho_id))
+                    if salvo is not None:
+                        session.delete(salvo)
                 session.commit()
+                st.session_state["rascunho_ativo_id"] = None
+                st.session_state["saidas_provisorias"] = []
                 st.session_state["viagem_ativa_id"] = vg.id_viagem
                 st.session_state["loaded_viagem_id"] = None
                 st.session_state["despesas_temp"] = []

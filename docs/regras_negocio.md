@@ -2,6 +2,18 @@
 
 Este documento traduz as decisões da operação em comportamento esperado do sistema. **As regras abaixo descrevem o objetivo do produto; nem todas estão implementadas nesta versão.** Eduardo valida as regras operacionais; Felipe e Larissa definem a implementação técnica e os testes.
 
+## Fluxo de preenchimento do MVP
+
+- **Etapa 1:** identificação da operação, veículo e motorista.
+- **Etapa 2:** frete, carga, documentos e cadastro sequencial de saídas. Cada saída começa na base, recebe KM de saída/coletas, rota e retorno e é encerrada com o odômetro de chegada à base.
+- **Etapas 3 a 6:** cliente, negociação e recebimentos, coleta e entrega, sem alterações na lógica comercial.
+- **Etapa 7:** despesa lançada uma vez; gastos compartilhados de ciclo não são multiplicados pelo número de fretes. O odômetro do abastecimento é independente dos odômetros de saída/retorno.
+- **Etapa 8:** indicadores, prévia financeira e fechamento, sem cadastro de saídas ou repetição de odômetros.
+- **Etapa 11:** parâmetros de consumo de referência por veículo.
+- **Salvamento parcial:** rascunhos são recuperáveis e não entram no resultado financeiro até o cadastro definitivo.
+
+Os registros históricos permanecem no banco, mas os campos legados de KM não fazem parte do preenchimento normal. As RN-04 e RN-05 abaixo registram também as regras do modelo anterior para interpretação do histórico.
+
 ## RN-01 — Identificação de fretes e ciclos
 
 - Um **frete** é um serviço comercial individual com cliente, carga, rota, valor e documentação próprios. Padrão de referência: `F26-000001`.
@@ -96,7 +108,7 @@ O campo `viagens_despesas.odometro_abastecimento` não é excluído. Em novos la
 
 - Cada despesa deve ter categoria, descrição, data, valor e associação clara a **um frete**, **um ciclo** ou, provisoriamente, **um veículo**.
 - Despesa de uso comum no ciclo entra **uma vez** no fechamento consolidado, sem cópia integral em cada frete.
-- A Etapa 7 possui **um formulário único** para despesas, com campos agrupados em **Vínculo financeiro** e **Dados da despesa**: padrão **Frete atual**, opção **Ciclo inteiro** (`ciclos_despesas`, apenas ciclo salvo), opção **Veículo sem frete/ciclo** (`veiculos_despesas`, pendente). Despesas provisórias não entram em DRE/BI enquanto pendentes. A **atribuição posterior** a frete/ciclo é uma ação explícita, com justificativa, exclusiva para destinos do mesmo veículo; o custo passa ao destino, nunca é duplicado. Cancelamentos de gastos comuns/provisórios preservam histórico e motivo. A proteção de lançamentos semelhantes não elimina a necessidade de conferência humana.
+- A Etapa 7 possui **um formulário único** para despesas, com campos agrupados em **Vínculo financeiro** e **Dados da despesa**: padrão **Ciclo inteiro quando o frete pertence a ciclo**, ou **Frete atual em operação individual**, opção **Ciclo inteiro** (`ciclos_despesas`, apenas ciclo salvo), opção **Veículo sem frete/ciclo** (`veiculos_despesas`, pendente). Despesas provisórias não entram em DRE/BI enquanto pendentes. A **atribuição posterior** a frete/ciclo é uma ação explícita, com justificativa, exclusiva para destinos do mesmo veículo; o custo passa ao destino, nunca é duplicado. Cancelamentos de gastos comuns/provisórios preservam histórico e motivo. A proteção de lançamentos semelhantes não elimina a necessidade de conferência humana.
 - Caso seja necessário mostrar custo individual de cada frete do ciclo, estabelecer antes um critério de rateio acordado (por exemplo, participação na receita ou quilômetros), identificando o valor rateado como estimativa gerencial. **O rateio ainda não foi definido.**
 - Um abastecimento deve registrar data, veículo, posto/fornecedor, litros, preço por litro, valor e odômetro quando disponível. Diesel e ARLA devem ser distinguíveis.
 - Evitar lançamento em duplicidade quando o abastecimento também aparece como despesa financeira.
@@ -109,7 +121,7 @@ O campo `viagens_despesas.odometro_abastecimento` não é excluído. Em novos la
 
 **Ciclo:** soma da receita negociada dos fretes vinculados − despesas dos fretes − despesas compartilhadas do ciclo = resultado operacional do ciclo.
 
-A Etapa 8 apresenta uma **prévia** financeira do ciclo considerando os fretes já salvos, o formulário atual e despesas comuns ativas vinculadas a esse `id_ciclo`, sem somar nada duas vezes. A Etapa 9 reúne os fretes salvos por `id_ciclo`; a aba `Fechamento_Ciclos` separa despesas por frete e compartilhadas, e `Despesas_Ciclo` mantém o histórico auditável. **Não existe rateio:** o BI por frete/cliente não incorpora as despesas compartilhadas, enquanto o fechamento do ciclo as incorpora uma vez. Não somar ambos os painéis.
+**Implementação parcial proposta:** a Etapa 8 apresenta uma **prévia** financeira do ciclo considerando os fretes já salvos, o formulário atual e despesas comuns ativas vinculadas a esse `id_ciclo`, sem somar nada duas vezes. A Etapa 9 reúne os fretes salvos por `id_ciclo`; a aba `Fechamento_Ciclos` separa despesas por frete e compartilhadas, e `Despesas_Ciclo` mantém o histórico auditável. **Não existe rateio:** o BI por frete/cliente não incorpora as despesas compartilhadas, enquanto o fechamento do ciclo as incorpora uma vez. Não somar ambos os painéis.
 
 **Conferência Financeira Geral:** a Etapa 9 apresenta uma visão independente dos filtros do BI, baseada na base inteira salva. `Resultado operacional parcial gerencial = receita negociada considerada dos fretes − despesas diretas dos fretes − despesas compartilhadas ativas dos ciclos`. As fontes financeiras são `viagens_despesas` e `ciclos_despesas`; `abastecimentos` serve ao histórico de consumo e **não é somado novamente**. Despesas de veículo **pendentes** ficam fora desse resultado; despesas de veículo **já atribuídas** são apenas informação de origem e **já estão contadas no destino financeiro**. A conferência inclui custos ativos de ciclos mesmo que, por inconsistência cadastral, não haja fretes do tipo Ciclo associados, e sinaliza essa situação. A planilha exporta a mesma composição em `Conferencia_Financeira`.
 
@@ -140,16 +152,16 @@ O importador precisa reconhecer os IDs de frete e ciclo, as linhas de fechamento
 
 Campos ausentes não devem ser substituídos por datas atuais ou valores zero sem regra explícita. Antes de gravar, apresentar divergências e solicitar confirmação; em uma reimportação, não apagar despesas editadas manualmente sem autorização.
 
-## RN-10 — Decisões e evolução das regras
+## RN-10 — Validação e decisões ainda pendentes
 
-- [x] Separação entre KM comercial, deslocamentos operacionais e total planejado definida com a FAEG.
-- [x] Registro único de gastos comuns por ID do ciclo, sem rateio automático.
-- [x] Registro provisório de despesas do veículo, fora do DRE enquanto não atribuídas.
-- [x] Atribuição e estorno de despesas provisórias a fretes/ciclos compatíveis, com histórico de ações.
+- [x] Eduardo definiu a separação entre KM Individual/Ciclo, deslocamentos operacionais e total planejado. A implementação ainda precisa de teste integrado.
+- [x] Gastos comuns podem ser registrados uma vez por ID do ciclo, sem rateio automático (implementação pendente de testes).
+- [x] Registro provisório de despesas sem operação identificada por veículo, fora do DRE (implementação pendente de testes).
+- [x] Atribuição manual e estorno auditável de despesas provisórias por veículo a fretes/ciclos compatíveis (implementação pendente de testes).
 - [ ] A equipe decide se haverá rateio de custos compartilhados entre os fretes e aprova seu critério.
 - [ ] A equipe aprova a nomenclatura final das situações operacional e financeira.
-- [ ] Ampliar o conjunto de cenários de teste com registros anonimizados de operações individuais e ciclos.
-- [ ] Implantar processo versionado de migração e preservação do histórico.
+- [ ] São preparados cenários reais anonimizados para teste individual e por ciclo.
+- [ ] Todas as alterações preservam histórico já cadastrado após teste de migração.
 ## RN-11 — Saídas operacionais, trechos e custo de combustível (Ajuste 27)
 
 **Regra prioritária quando existem saídas cadastradas no mesmo ID interno da operação** (individual ou ciclo):

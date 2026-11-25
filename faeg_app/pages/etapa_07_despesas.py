@@ -66,7 +66,7 @@ def render(ctx):
         for v in veiculos_db
     }
     opcoes_destino = ["Frete atual (ID Frete)"]
-    if ciclos_destino:
+    if ciclos_destino or get_campo("tipo_viagem", "Individual") == "Ciclo":
         opcoes_destino.append("Ciclo inteiro (ID Ciclo)")
     if veiculos_destino:
         opcoes_destino.append("Veículo (sem frete/ciclo definido)")
@@ -75,7 +75,7 @@ def render(ctx):
     # O usuário pode selecionar explicitamente o frete para custos exclusivos.
     destino_padrao = (
         "Ciclo inteiro (ID Ciclo)"
-        if viagem_sel_id and get_campo("tipo_viagem", "Individual") == "Ciclo"
+        if get_campo("tipo_viagem", "Individual") == "Ciclo"
         and "Ciclo inteiro (ID Ciclo)" in opcoes_destino
         else "Frete atual (ID Frete)"
     )
@@ -83,7 +83,7 @@ def render(ctx):
         st.session_state["desp_destino_lancamento"] = destino_padrao
         st.session_state["desp_destino_viagem_anterior"] = viagem_sel_id
     destino_desp = st.selectbox(
-        "VINCULAR ESTA DESPESA A *", opcoes_destino,
+        "DESTINO DO CUSTO *", opcoes_destino,
         index=opcoes_destino.index(destino_padrao),
         key="desp_destino_lancamento",
         help="No ciclo, gastos comuns pertencem à operação. Use o ID Frete somente para custos comprovadamente exclusivos.",
@@ -91,17 +91,25 @@ def render(ctx):
     ciclo_desp_id = None
     veiculo_desp_id = None
     if destino_desp.startswith("Ciclo inteiro"):
-        if viagem_sel_id and st.session_state.get("desp_ciclo_viagem_anterior") != viagem_sel_id:
-            with SessionLocal() as db:
-                vi_atual = db.get(Viagem, viagem_sel_id)
-                if vi_atual is not None and vi_atual.id_ciclo in ciclos_destino:
-                    st.session_state["desp_ciclo_destino_unico"] = vi_atual.id_ciclo
-            st.session_state["desp_ciclo_viagem_anterior"] = viagem_sel_id
-        ciclo_desp_id = st.selectbox(
-            "ID CICLO QUE RECEBERÁ ESTE CUSTO *", options=list(ciclos_destino),
-            format_func=lambda x: f"{ciclos_destino[x]} (ID interno {x})",
-            key="desp_ciclo_destino_unico",
-        )
+        # Mostrar a identificação comercial; o ID interno não é necessário
+        # para quem cadastra a despesa. Nunca vincular a outro ciclo por engano.
+        if get_campo("tipo_viagem", "Individual") == "Ciclo" and (get_campo("ciclo_nome") or "").strip():
+            nome_atual = (get_campo("ciclo_nome") or "").strip()
+            ids_iguais = [cid for cid, nome in ciclos_destino.items()
+                          if nome.strip().casefold() == nome_atual.casefold()]
+            ciclo_desp_id = ids_iguais[0] if len(ids_iguais) == 1 else None
+            st.caption(f"Despesa compartilhada da operação: **{nome_atual}**")
+            if len(ids_iguais) > 1:
+                st.error("Há ciclos com nomes repetidos; confira a operação antes de lançar despesas.")
+            if viagem_sel_id == 0:
+                st.caption("Este custo permanecerá no rascunho até o frete ser salvo.")
+        elif ciclos_destino:
+            ciclo_desp_id = st.selectbox(
+                "CICLO QUE RECEBERÁ ESTE CUSTO *", options=list(ciclos_destino),
+                format_func=lambda x: ciclos_destino[x], key="desp_ciclo_destino_unico",
+            )
+        else:
+            st.warning("Informe o nome do ciclo na Etapa 1 para vincular esta despesa.")
     elif destino_desp.startswith("Veículo"):
         veiculo_desp_id = st.selectbox(
             "VEÍCULO / PLACA *", options=list(veiculos_destino),
@@ -166,6 +174,7 @@ def render(ctx):
         veiculo_abast_id = st.selectbox(
             "VEÍCULO QUE FOI ABASTECIDO *", options=list(veiculos_destino),
             format_func=lambda x: veiculos_destino[x], key="desp_veiculo_abast_ciclo",
+            index=list(veiculos_destino).index(get_campo("vei_id", 0)) if get_campo("vei_id", 0) in veiculos_destino else 0,
         ) if veiculos_destino else None
 
     data_despesa_unica = st.date_input(
@@ -257,7 +266,8 @@ def render(ctx):
                 "data_despesa": data_despesa_unica,
                 "id_veiculo_abast": veiculo_abast_id if eh_combustivel else None,
             }
-            if destino_desp.startswith("Frete") and viagem_sel_id == 0:
+            if viagem_sel_id == 0 and (destino_desp.startswith("Frete") or destino_desp.startswith("Ciclo")):
+                dados_desp["destino_temp"] = "ciclo" if destino_desp.startswith("Ciclo") else "frete"
                 pendentes = st.session_state.setdefault("despesas_temp", [])
                 chaves_duplicidade_temp = (
                     "tipo_despesa", "data_despesa", "quantidade", "valor_total",
@@ -272,12 +282,12 @@ def render(ctx):
                     )) for d in pendentes
                 )
                 if ja_existe:
-                    st.warning("Esta despesa já está na lista temporária do frete.")
+                    st.warning("Esta despesa já está nos lançamentos provisórios.")
                     st.stop()
                 pendentes.append(dados_desp)
                 st.session_state["versao_campos_despesa"] = versao_campos_despesa + 1
                 st.session_state["desp_similar_versao"] = st.session_state.get("desp_similar_versao", 0) + 1
-                st.toast("Despesa adicionada à lista temporária!", icon="🧾")
+                st.toast("Despesa registrada no preenchimento atual. Salve o rascunho ou o frete.", icon="🧾")
                 st.rerun()
             else:
                 with SessionLocal() as db:

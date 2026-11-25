@@ -1,36 +1,50 @@
-# Diagrama de componentes — arquitetura modular implementada
+# Diagrama de componentes — arquitetura do FAEG
 
-O projeto é um **monólito Streamlit modularizado**. `app.py` apenas inicializa e seleciona a etapa; os módulos Python compartilham a mesma aplicação e acessam o banco por SQLAlchemy. **Não existe API REST própria**, microsserviço ou autenticação por perfis implementada no código revisado.
+A aplicação é executada em um único processo Streamlit, com interface modularizada,
+regras de negócio em Python e persistência no PostgreSQL (Neon) por SQLAlchemy.
+Não existe uma API REST intermediária.
+
+## Visão lógica
 
 ```mermaid
 flowchart LR
-    P["Operador FAEG"]
-    subgraph APP["Aplicação Streamlit - Python"]
-        ENTRY["app.py - ponto de entrada"]
-        BOOT["faeg_app/bootstrap.py"]
-        LAYOUT["layout.py e theme.py"]
-        PAGES["faeg_app/pages - 11 etapas"]
-        CORE["faeg_app/core.py - lógica compartilhada"]
-        REPORT["faeg_app/reporting.py - PDF e Excel"]
-        VIEWS["views/saidas_operacionais.py"]
-        SERVICES["database - serviços operacionais"]
-        ORM["database/models.py e connection.py"]
+    P["Operador ou gestor"]
+    subgraph S["Aplicação FAEG - Streamlit"]
+        UI["Interface e 11 etapas"]
+        REG["Regras de negócio e consultas"]
+        REL["Relatórios PDF e Excel"]
+        ORM["Modelos SQLAlchemy"]
+        CON["Conexão e sessões"]
     end
     DB[("PostgreSQL - Neon")]
-    P --> ENTRY
-    ENTRY --> BOOT
-    ENTRY --> LAYOUT
-    ENTRY --> PAGES
-    PAGES --> CORE
-    PAGES --> REPORT
-    PAGES --> VIEWS
-    CORE --> SERVICES
-    VIEWS --> SERVICES
-    REPORT --> SERVICES
-    SERVICES --> ORM
-    ORM --> DB
+    P --> UI
+    UI --> REG
+    UI --> REL
+    REG --> ORM
+    ORM --> CON
+    CON --> DB
 ```
 
-O diretório `assets/` fornece o logotipo e o estilo visual. O importador em `database/importador_planilha.py` permite **prévia e auditoria**, não importação persistente liberada. O serviço inicializa a sincronização de esquema já existente; ela não é equivalente a um controle de migrações versionadas.
+## Organização dos módulos Python
 
-Referência de implementação: [arquitetura da aplicação](../arquitetura_aplicacao.md).
+```mermaid
+flowchart TB
+    A["app.py"] --> BOOT["faeg_app/bootstrap.py"]
+    A --> L["faeg_app/layout.py"]
+    A --> T["faeg_app/theme.py"]
+    A --> P["faeg_app/pages - 11 etapas"]
+    P --> CORE["faeg_app/core.py"]
+    P --> V["views - percurso, saídas e parâmetros"]
+    P --> R["faeg_app/reporting.py"]
+    CORE --> D["database - modelos e operações"]
+    V --> D
+    R --> D
+    D --> C["database/connection.py"]
+    C --> N[("PostgreSQL - Neon")]
+    T --> CSS["assets/faeg_styles.html"]
+```
+
+Os módulos de interface compartilham o contexto do Streamlit. O código de
+persistência e os modelos ORM permanecem na pasta `database/`; a pasta `views/`
+contém componentes operacionais reutilizáveis. Os diagramas representam a
+organização do código, não serviços independentes.

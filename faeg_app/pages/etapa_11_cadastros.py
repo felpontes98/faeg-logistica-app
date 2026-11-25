@@ -388,6 +388,9 @@ def render(ctx):
                                 st.session_state["confirm_dl_vei"] = None
                                 st.rerun()
 
+        from views.parametros_veiculo import render_parametros_consumo
+        render_parametros_consumo(veiculos_db)
+
     # ----------------------------------------------------------------------
     # ABA 3: CLIENTES CONTRATANTES
     # ----------------------------------------------------------------------

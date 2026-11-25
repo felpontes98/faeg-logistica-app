@@ -3,7 +3,6 @@ import streamlit as st
 
 from faeg_app.core import (
     get_campo,
-    on_km_componente_change,
     render_navegacao_rodape,
     sync_campo,
     to_float,
@@ -64,88 +63,22 @@ def render(ctx):
             on_change=sync_campo,
             args=("w_rota_destino", "rota_destino"),
         )
-    st.markdown('<div class="sec-subtitle">KM X ROTA PLANEJADO</div>', unsafe_allow_html=True)
-    st.caption(
-        "O KM deste frete é uma referência comercial. Para operações com várias saídas, "
-        "registre o percurso físico e seus odômetros na Etapa 8 — Saídas Operacionais. "
-        "Quando houver saídas cadastradas, o sistema NÃO somará KM de diferentes fretes. "
-        "Os campos antigos de saída e retorno são preservados para conferência."
-    )
-    km1, km2, km3 = st.columns(3)
-    with km1:
-        st.number_input(
-            "KM DE SAÍDA E DESLOCAMENTO ENTRE COLETAS",
-            min_value=0.0,
-            step=1.0,
-            format="%.2f",
-            value=to_float(get_campo("km_saida_entre_coletas", 0.0)),
-            key="w_km_saida_entre_coletas",
-            on_change=on_km_componente_change,
-            args=("w_km_saida_entre_coletas", "km_saida_entre_coletas"),
-            help="KM adicionais até a primeira coleta e entre coletas, excluindo os trechos já previstos em cada frete.",
-        )
-    with km2:
-        st.number_input(
-            "KM INDIVIDUAL / CICLO",
-            min_value=0.0,
-            step=1.0,
-            format="%.2f",
-            help=(
-                "Campo manual: informe o KM previsto deste ID Frete. "
-                "Se a viagem fizer parte de um ciclo, a Etapa 8 somará o KM "
-                "dos fretes do mesmo ID interno do ciclo, sem repetir este trecho."
-            ),
-            value=to_float(get_campo("km_rota", 0.0)),
-            key="w_km_rota",
-            on_change=sync_campo,
-            args=("w_km_rota", "km_rota"),
-        )
-    with km3:
-        st.number_input(
-            "KM OPERACIONAL DE RETORNO",
-            min_value=0.0,
-            step=1.0,
-            format="%.2f",
-            value=to_float(get_campo("km_retorno_operacional", 0.0)),
-            key="w_km_retorno_operacional",
-            on_change=on_km_componente_change,
-            args=("w_km_retorno_operacional", "km_retorno_operacional"),
-            help="KM adicional de retorno após a última entrega, excluindo trechos já associados a fretes.",
-        )
-    if not get_campo("km_componentes_discriminados", True) and to_float(get_campo("km_deslocamentos", 0.0)) > 0:
-        st.info(
-            "Este ciclo tem KM de deslocamentos registrado na versão anterior, sem separar "
-            "saída e retorno. O total antigo será preservado até você preencher os dois "
-            "campos novos; confira a distribuição antes de salvar."
-        )
+    # A operação física é lançada uma só vez, tanto no Individual como no Ciclo.
+    from views.percurso_etapa2 import render_percurso
+    render_percurso(ctx)
 
-    st.markdown('<div class="sec-subtitle">Odômetros da Operação</div>', unsafe_allow_html=True)
-    st.caption(
-        "Registre as leituras reais de início e fim da operação. Na Etapa 8, os valores "
-        "serão exibidos para calcular o KM real. O odômetro de cada abastecimento "
-        "continua no lançamento único da Etapa 7."
-    )
-    od1, od2 = st.columns(2)
-    with od1:
-        st.number_input(
-            "KM ODÔMETRO INICIAL",
-            min_value=0,
-            step=1,
-            value=to_int(get_campo("odo_ini", 0)),
-            key="w_odo_ini",
-            on_change=sync_campo,
-            args=("w_odo_ini", "odo_ini"),
-        )
-    with od2:
-        st.number_input(
-            "KM ODÔMETRO FINAL",
-            min_value=0,
-            step=1,
-            value=to_int(get_campo("odo_fin", 0)),
-            key="w_odo_fin",
-            on_change=sync_campo,
-            args=("w_odo_fin", "odo_fin"),
-        )
+    # Informações históricas permanecem disponíveis sem pedir novo preenchimento.
+    if any(to_float(get_campo(c, 0)) for c in
+           ("km_rota", "km_saida_entre_coletas", "km_retorno_operacional", "odo_ini", "odo_fin")):
+        with st.expander("Consultar KM e odômetros antigos do frete", expanded=False):
+            st.caption("Registros anteriores à organização por saídas. Não são somados aos novos percursos.")
+            st.write({
+                "KM rota (histórico)": get_campo("km_rota", 0),
+                "KM saída / coletas (histórico)": get_campo("km_saida_entre_coletas", 0),
+                "KM retorno (histórico)": get_campo("km_retorno_operacional", 0),
+                "Odômetro inicial (histórico)": get_campo("odo_ini", 0),
+                "Odômetro final (histórico)": get_campo("odo_fin", 0),
+            })
 
     st.markdown('<div class="sec-subtitle">Detalhes da Carga</div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns([2.4, 1.0, 1.0, 1.2])

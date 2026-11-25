@@ -1,91 +1,76 @@
 # FAEG — Sistema Web de Gestão Logística
 
-**Projeto de desenvolvimento de software — Startup Challenge UMC 2026**
-**Aplicação prática:** FAEG — Soluções Empresariais e Logísticas
+**FAEG — Soluções Empresariais e Logísticas** · Projeto acadêmico aplicado à operação real de transporte de cargas · Startup Challenge UMC 2026.
 
-O FAEG é um sistema web de gestão operacional e financeira de transportes desenvolvido a partir das necessidades da operação logística da empresa. O projeto evoluiu de uma planilha de controle de viagens para um **MVP em Python e Streamlit**, com persistência em **PostgreSQL (Neon)**.
+Aplicação web para cadastrar fretes, agrupar serviços em ciclos operacionais, controlar receitas e despesas, acompanhar deslocamentos e emitir consultas e relatórios gerenciais. O projeto evoluiu de uma planilha de controle de viagens para um MVP em **Python/Streamlit**, com persistência em **PostgreSQL (Neon)**.
 
-O sistema organiza fretes individuais e ciclos com múltiplos serviços, clientes, coletas, entregas, receitas, recebimentos, despesas, abastecimentos, quilometragem, consultas e relatórios.
+> **MVP operacional:** interface Streamlit com fretes individuais e ciclos, consultas, despesas, saídas e fechamento. O preenchimento de KM/odômetros ocorre na Etapa 2; o fechamento da Etapa 8 utiliza esses dados sem digitá-los novamente. Os rascunhos permitem retomar registros incompletos.
 
-## Problema e solução
+## Visão geral
 
-Na operação de transporte, um mesmo percurso pode envolver vários fretes negociados separadamente. O controle em planilhas dificulta consolidar os quilômetros e custos compartilhados sem duplicidade, acompanhar pagamentos e consultar os resultados de cada operação.
+- **Frete:** serviço comercial individual, com cliente, carga, documentos, negociação e recebimentos próprios.
+- **Ciclo operacional:** agrupa um ou mais fretes; consolida receitas e despesas compartilhadas sem rateio automático.
+- **Saída operacional:** deslocamento físico com veículo, datas, KM planejado e leituras de odômetro; um ciclo pode ter várias saídas.
+- **Trecho:** etapa de uma saída, por exemplo base → coleta → entrega → retorno. Se houver trechos, o KM planejado é a soma dos trechos, sem duplicar o KM manual da saída.
+- **Abastecimento:** compra efetiva de Diesel/ARLA registrada uma vez; o consumo por KM é uma **estimativa gerencial separada** da DRE.
 
-O FAEG centraliza esses registros, separando a **negociação comercial de cada frete** da **execução física da operação**. O fechamento gerencial consolida receitas e despesas do ciclo sem atribuir arbitrariamente custos comuns aos contratos individuais.
+### As 11 etapas da aplicação
 
-## Funcionalidades do MVP
-
-| Etapa | Funcionalidade |
+| Etapas | Atividades |
 | --- | --- |
-| 1 | Frota, motorista e identificação da viagem |
-| 2 | Frete, carga, rota e documentos |
-| 3 | Cliente contratante |
-| 4 | Negociação, previsão de pagamento e recebimentos efetivos |
-| 5 | Coleta e origem |
-| 6 | Entrega e destino |
-| 7 | Despesas de frete, ciclo ou veículo; registro de abastecimentos |
-| 8 | Saídas operacionais, trechos, KM planejado e real, fechamento |
-| 9 | Relatórios financeiros e operacionais; exportações |
-| 10 | Consultas e histórico |
-| 11 | Cadastros auxiliares |
+| 1–3 | Frota/viagem, frete/documentos, **saídas e KM/odômetros na Etapa 2**, cliente contratante |
+| 4–6 | Negociação/recebimentos, coleta e entrega |
+| 7 | Despesas de frete/ciclo/veículo e histórico de abastecimentos |
+| 8 | Consulta do KM consolidado, situação operacional e fechamento, sem repetir os lançamentos da Etapa 2 |
+| 9 | Relatórios, indicadores, conferência financeira e exportações |
+| 10–11 | Consultas gerais e cadastros, incluindo parâmetros de consumo no cadastro dos veículos |
 
-**Conceitos principais:** um *frete* representa uma contratação comercial; um *ciclo operacional* reúne fretes e custos compartilhados; uma *saída operacional* registra o deslocamento do veículo; e um *trecho* detalha parte desse percurso. O combustível comprado é registrado uma única vez, enquanto o consumo calculado por KM permanece como indicador gerencial estimado.
+## Tecnologias e arquitetura
 
-## Tecnologias
-
-| Área | Tecnologia |
-| --- | --- |
-| Interface | Python e Streamlit |
-| Persistência | SQLAlchemy ORM |
-| Banco de dados | PostgreSQL (Neon) |
-| Tratamento e exportação de dados | Pandas, OpenPyXL e geração de PDF |
-| Testes automatizados | Pytest |
-| Versionamento e integração contínua | Git, GitHub e GitHub Actions |
-
-A aplicação utiliza 18 modelos de tabelas e uma arquitetura modular, com as 11 etapas distribuídas em `faeg_app/pages/`.
+| Camada | Tecnologias | Arquivos principais |
+| --- | --- | --- |
+| Interface web | Python, Streamlit | [`app.py`](app.py), [`faeg_app/pages/`](faeg_app/pages/), [`views/`](views/) |
+| Lógica compartilhada e callbacks | Python | [`faeg_app/core.py`](faeg_app/core.py) |
+| Regras, dados e serviços | Python | [`database/`](database/) |
+| Persistência | SQLAlchemy ORM | [`database/models.py`](database/models.py) |
+| Banco relacional | PostgreSQL — Neon | Configurado por `DATABASE_URL` |
+| Dados e exportações | Pandas, OpenPyXL, geração PDF | [`faeg_app/reporting.py`](faeg_app/reporting.py) e módulos de importação |
+| Testes automatizados | Pytest + SQLite em memória | [`tests/`](tests/) |
 
 ```mermaid
 flowchart LR
-    U["Usuário"] --> UI["Streamlit"]
-    UI --> P["11 etapas - faeg_app/pages"]
-    P --> C["Serviços e regras Python"]
-    C --> O["SQLAlchemy ORM"]
-    O --> DB[("PostgreSQL - Neon")]
-    P --> R["Relatórios PDF e Excel"]
+    U[Usuário operacional] --> UI[Interface Streamlit]
+    UI --> PAG[Etapas em faeg_app/pages]
+    PAG --> CORE[faeg_app/core: formulários e callbacks]
+    CORE --> DOM[Serviços em database]
+    DOM --> ORM[SQLAlchemy ORM]
+    ORM --> DB[(PostgreSQL / Neon)]
+    PAG --> REL[faeg_app/reporting: PDF e Excel]
 ```
 
-Detalhes: [arquitetura da aplicação](docs/arquitetura_aplicacao.md), [modelo de dados](docs/arquitetura_banco.md) e [diagramas UML](docs/diagramas/README.md).
+O `app.py` é somente o ponto de entrada (74 linhas na refatoração de 24/11/2026). As 11 etapas estão em `faeg_app/pages/`, as consultas/callbacks compartilhadas em `faeg_app/core.py`, a identidade visual em `faeg_app/theme.py` e os relatórios em `faeg_app/reporting.py`. Detalhes: [estrutura de módulos](docs/arquitetura_aplicacao.md).
 
-## Documentação acadêmica e técnica
+O projeto **não implementa uma API REST independente**: a interface chama diretamente funções Python e sessões SQLAlchemy. O modelo atual possui **19 tabelas ORM**, incluindo rascunhos de preenchimento. Consulte os [diagramas técnicos](docs/diagramas/README.md) e o [inventário do banco](docs/arquitetura_banco.md).
 
-| Material | Acesso |
-| --- | --- |
-| Visão do produto e regras operacionais | [Resumo do projeto](docs/resumo_faeg.md) · [Regras de negócio](docs/regras_negocio.md) |
-| Requisitos e rastreabilidade | [Requisitos](docs/requisitos.md) · [Rastreabilidade](docs/rastreabilidade.md) |
-| Modelagem | [Diagramas UML e de arquitetura](docs/diagramas/README.md) |
-| Arquitetura | [Aplicação](docs/arquitetura_aplicacao.md) · [Banco de dados](docs/arquitetura_banco.md) |
-| Evolução do projeto | [Reuniões](docs/reunioes/) · [Protótipo inicial](docs/prototipo/prototipo_inicial.html) · [Decisões técnicas](docs/decisoes/README.md) |
-| Desenvolvimento | [Guia de execução](docs/guia_execucao.md) · [Plano de testes](docs/plano_testes.md) · [Evolução técnica](docs/planejamento_tecnico.md) |
-| Apresentação acadêmica | [Guia do projeto para avaliação](docs/guia_avaliacao_banca.md) |
+## Executar localmente
 
-O índice geral está disponível em [`docs/README.md`](docs/README.md).
-
-## Execução local
-
-**Requisitos:** Python 3.11+, Git e banco PostgreSQL com credenciais próprias. A variável `DATABASE_URL` deve apontar para um ambiente autorizado.
+**Pré-requisitos:** Python 3.11 ou superior recomendado, Git, acesso autorizado a um banco de **teste** PostgreSQL e credenciais próprias. Não compartilhe a `DATABASE_URL`.
 
 ```powershell
+# Na pasta do repositório (PowerShell)
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
-# Configurar DATABASE_URL no arquivo .env local
+# Edite .env e configure DATABASE_URL para um banco DE TESTES.
 python -m streamlit run app.py
 ```
 
-O arquivo `.env` não deve ser publicado. A inicialização do aplicativo pode sincronizar tabelas e colunas; ambientes de desenvolvimento devem utilizar banco isolado. Procedimentos completos: [guia de execução](docs/guia_execucao.md).
+Em Linux/macOS, ative o ambiente com `source .venv/bin/activate` e use `cp .env.example .env`.
 
-## Testes automatizados
+**Atenção ao banco:** `app.py` executa `sincronizar_colunas_banco()` ao iniciar e pode **criar tabelas ou adicionar colunas**. Use primeiro uma branch isolada do Neon ou PostgreSQL de teste; faça backup antes de qualquer mudança em produção. **Não execute o aplicativo local apontando acidentalmente para a base produtiva.** Mais informações: [instalação e operação](docs/guia_execucao.md).
+
+## Testes de desenvolvimento
 
 ```powershell
 python -m pip install pytest
@@ -93,18 +78,31 @@ python -m compileall -q app.py faeg_app database views tests
 python -m pytest -q tests
 ```
 
-A suíte inclui testes de regras de saídas e quilômetros, estrutura modular, exportações e consistência documental. A execução automática está configurada em [GitHub Actions](.github/workflows/ci.yml). Os cenários funcionais e critérios de aceite estão documentados em [plano de testes](docs/plano_testes.md).
+Os testes automatizados exercitam a estrutura de saídas, a conversão dos rascunhos em fretes, o lançamento financeiro único, os relatórios e a renderização simulada das 11 etapas, em **SQLite local** e sem acesso ao Neon. A rotina de CI em [`.github/workflows/ci.yml`](.github/workflows/ci.yml) executa essas verificações em pushes e pull requests; **não** certifica integração completa com o PostgreSQL. Consulte o [plano de testes](docs/plano_testes.md).
 
-## Escopo e evolução
+## Documentação do projeto
 
-O MVP contempla o controle operacional e o fechamento **gerencial**. A importação de planilhas utiliza prévia e conferência, sem gravação automática em lote. Custos compartilhados não são rateados entre fretes individuais; o consumo estimado de combustível não constitui lançamento adicional na DRE.
+O [índice da documentação](docs/README.md) organiza os materiais técnicos e acadêmicos. Para o usuário operacional, consulte o [guia de preenchimento](docs/guia_preenchimento_operacional.md). Materiais principais:
 
-**Evoluções previstas:** autenticação e permissões próprias por usuário, migrações versionadas de banco, aprimoramento dos testes integrados e conciliação financeira. O acesso à implantação e aos dados operacionais deve ser administrado pelos responsáveis pelo ambiente.
+- [Requisitos funcionais e critérios de aceite](docs/requisitos.md) · [Regras de negócio](docs/regras_negocio.md)
+- [Arquitetura da aplicação](docs/arquitetura_aplicacao.md) · [Arquitetura e modelo de dados](docs/arquitetura_banco.md) · [Diagramas UML e de arquitetura](docs/diagramas/README.md)
+- [Plano de testes](docs/plano_testes.md) · [Matriz de rastreabilidade](docs/rastreabilidade.md) · [Avaliação técnica](docs/avaliacao_repositorio.md)
+- [Histórico das reuniões](docs/reunioes/) · [Protótipo inicial](docs/prototipo/prototipo_inicial.html)
+- [Registro de decisões técnicas](docs/decisoes/README.md) · [Histórico de versões](CHANGELOG.md)
 
-## Equipe e licenciamento
+## Limitações e próximos passos
+
+- A autenticação e autorização individual por perfil ainda não integram o MVP. O acesso é controlado no ambiente de implantação e pelas credenciais autorizadas.
+- A sincronização automática do esquema deve evoluir para migrações versionadas após planejamento.
+- Não há rateio aprovado de custos compartilhados; **saldo comercial por frete de um ciclo não representa lucro individual**.
+- O consumo de Diesel por KM é estimativo e **não substitui** a conciliação do combustível comprado e consumido.
+- Importação Excel: existem prévia e auditoria; a gravação automática permanece bloqueada.
+- Faltam testes end-to-end, verificação de restauração de backup e homologação abrangente com base isolada.
+
+## Equipe e licença
 
 - **Felipe Pontes:** desenvolvimento de software.
 - **Larissa do Espírito Santo:** desenvolvimento de software.
-- **Eduardo Pontes:** representante da FAEG, levantamento operacional e validação das regras de negócio.
+- **Eduardo Pontes:** cliente/representante da FAEG, regras operacionais e validação do negócio.
 
-**Licenciamento:** direitos reservados para novas contribuições, respeitando as permissões concedidas às versões anteriormente disponibilizadas sob MIT. Consulte [`LICENSE`](LICENSE) e [`docs/licenciamento.md`](docs/licenciamento.md).
+**Licenciamento:** política de [direitos reservados para novas contribuições](LICENSE), **respeitando a MIT das versões anteriores**. Consulte o [histórico de licenciamento](docs/licenciamento.md) e a [MIT previamente publicada](licenses/MIT-VERSOES-ANTERIORES.txt). A marca e os dados institucionais da FAEG não são abrangidos por autorização de uso do código.

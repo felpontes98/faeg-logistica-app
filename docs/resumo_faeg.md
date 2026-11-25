@@ -1,47 +1,60 @@
-# Resumo do projeto — FAEG Logística
+# Resumo do Projeto — FAEG Logística
 
-**Projeto:** Sistema Web FAEG · **Contexto:** Startup Challenge UMC 2026
-**Aplicação:** controle operacional e financeiro da FAEG — Soluções Empresariais e Logísticas.
+**Projeto acadêmico aplicado:** Startup Challenge UMC 2026 · **Produto:** Sistema Web FAEG · **Revisão documental:** 24/11/2026 (Ajuste 27).
 
-## Problema
+## Problema e objetivo
 
-A operação de transportes envolve fretes negociados separadamente, deslocamentos compartilhados, coletas e entregas em diferentes datas, despesas de veículo, abastecimentos e recebimentos. O modelo inicial em planilhas exige conciliação manual desses registros e dificulta a análise consolidada por operação.
+O controle inicial de viagens da FAEG foi organizado em planilha, exigindo conciliar fretes, ciclos, recebimentos, custos e quilômetros. O projeto busca estruturar esses dados em aplicação web, com registro persistente, consultas, indicadores e relatórios, respeitando a dinâmica real de fretes simultâneos e sequenciais.
 
-## Solução proposta
+## Escopo funcional atual
 
-O Sistema Web FAEG organiza essas informações em um MVP acessível pelo navegador, com banco de dados relacional e relatórios gerenciais. A interface reúne 11 etapas: Frota, Frete e Documentos, Cliente, Negociação e Recebimentos, Coleta, Entrega, Despesas, Fechamento, Relatórios, Consultas e Cadastros.
+O MVP possui **11 etapas**: Frota; Frete e Documentos; Cliente; Negociação e Recebimentos; Coleta; Entrega; Despesas; Fechamento; Relatórios; Consultas; Cadastros.
 
-### Estrutura operacional
+O domínio distingue:
 
-- **Frete:** contratação com cliente, carga, documentos e negociação próprios.
-- **Ciclo operacional:** agrupamento de fretes e despesas compartilhadas, inclusive retornos e coletas complementares.
-- **Saída operacional:** deslocamento realizado pelo veículo, com datas, planejamento e odômetros.
-- **Trecho:** segmento de percurso vinculado à saída.
-- **Abastecimento:** aquisição registrada em despesa única e histórico operacional; consumo por quilometragem calculado separadamente como estimativa gerencial.
+1. **Frete:** serviço comercial e negociação individual.
+2. **Ciclo:** agrupamento operacional com receitas dos fretes e gastos compartilhados.
+3. **Saída:** deslocamento físico, inclusive coletas preparatórias e retorno.
+4. **Trecho:** segmento planejado de uma saída, evitando soma de quilômetros sobrepostos.
+5. **Abastecimento:** compra vinculada a despesa única; estimativa de consumo por KM é separada.
 
-As receitas são vinculadas aos fretes. Os custos compartilhados e os quilômetros efetivamente rodados são consolidados na operação, sem rateio automático entre contratos.
+O código ORM contém **19 tabelas**, conforme o [inventário técnico](arquitetura_banco.md), incluindo uma tabela específica para rascunhos. As saídas, os quilômetros e os odômetros são preenchidos na Etapa 2; a Etapa 8 concentra conferência e fechamento.
 
-## Tecnologias e organização
+## Tecnologia e organização
 
-| Camada | Implementação |
+- **Interface:** Python e Streamlit; entrada em `app.py`, onze módulos em `faeg_app/pages/`, recursos compartilhados em `faeg_app/` e módulo visual específico em `views/`.
+- **Persistência:** SQLAlchemy e PostgreSQL/Neon, configurados por `DATABASE_URL`.
+- **Dados:** Pandas e OpenPyXL; importação Excel com prévia, sem gravação automática liberada.
+- **Relatórios:** exportações Excel e PDF; indicadores financeiros parciais.
+- **Modelagem:** [diagramas UML e de arquitetura](diagramas/README.md).
+
+## Regra operacional central
+
+Um **ciclo** pode iniciar com um frete principal, agregar novos contratos ao longo da rota ou em dias distintos e conter várias saídas da base. As receitas pertencem aos fretes; os custos compartilhados e o KM físico pertencem à operação. Não é permitido inventar rateio por frete. A despesa é registrada uma única vez; a estimativa de combustível não substitui o gasto contabilizado.
+
+## Avaliação do estágio de maturidade
+
+| Área | Situação documentada |
 | --- | --- |
-| Interface | Python/Streamlit, com 11 módulos em `faeg_app/pages/` |
-| Regras e serviços | `faeg_app/`, `database/` e `views/` |
-| Persistência | SQLAlchemy e PostgreSQL/Neon |
-| Modelo relacional | 18 tabelas ORM |
-| Relatórios | Exportações Excel/PDF e indicadores gerenciais |
-| Qualidade | Testes automatizados em `tests/` e integração contínua no GitHub Actions |
+| Protótipo e requisitos | Documentados em reuniões e regras de negócio |
+| Código com 11 etapas | Presente no ZIP revisado |
+| PostgreSQL/Neon e 19 modelos | Código e implantação das novas tabelas confirmados |
+| Testes de saídas | Seis cenários unitários existentes em SQLite |
+| Testes integrados completos | Pendentes de evidência de homologação |
+| Autenticação e autorização | Não identificadas no código revisado |
+| Migrações versionadas | Pendentes; o app atualmente sincroniza o esquema ao iniciar |
+| Conciliação bancária e rateio financeiro | Não implementados/homologados como fechamento definitivo |
 
-## Escopo atual e evolução
+## Equipe e registros acadêmicos
 
-O MVP contempla cadastros, controle de fretes e ciclos, pagamentos efetivos, despesas, abastecimentos, saídas operacionais, consultas e relatórios. A importação de planilhas oferece prévia e conferência, sem gravação automática em lote. O fechamento é gerencial e não substitui escrituração contábil.
+- **Felipe Pontes:** desenvolvimento.
+- **Larissa do Espírito Santo:** desenvolvimento.
+- **Eduardo Pontes:** cliente/representante da FAEG, referência operacional e validação das regras.
 
-O planejamento de continuidade inclui autenticação por usuário, permissões, migrações versionadas, conciliação de combustível e ampliação dos testes integrados. Consulte [planejamento técnico](planejamento_tecnico.md).
+O [histórico de reuniões](reunioes/) documenta o kickoff, o protótipo inicial e a evolução até o MVP. Para evidências de validação, consulte o [plano de testes](plano_testes.md).
 
-## Equipe e documentação
+## Histórico de importação e conciliação
 
-- **Felipe Pontes:** desenvolvimento de software.
-- **Larissa do Espírito Santo:** desenvolvimento de software.
-- **Eduardo Pontes:** representante da FAEG, requisitos operacionais e validação das regras de negócio.
+Em análise anterior da planilha de referência, foram apontadas divergências em linhas de fechamento e associação de ciclos. Essas observações são **registros de auditoria histórica, não correções efetuadas no Neon**. O importador mantém a prévia e a auditoria; a gravação em lote continua bloqueada.
 
-O projeto é documentado em [reuniões](reunioes/), [requisitos](requisitos.md), [regras de negócio](regras_negocio.md), [decisões técnicas](decisoes/README.md), [diagramas](diagramas/README.md) e [protótipo inicial](prototipo/prototipo_inicial.html).
+A visão atual do projeto é descrita pelo [README principal](../README.md) e pelo [índice documental](README.md).

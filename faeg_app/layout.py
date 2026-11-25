@@ -83,6 +83,9 @@ def render_sidebar(ctx):
             unsafe_allow_html=True,
         )
 
+        from faeg_app.rascunhos_ui import controles_rascunho
+        controles_rascunho(viagem_sel_id)
+
         if st.button("Salvar Viagem", type="primary", use_container_width=True):
             salvar_viagem_completa(viagem_sel_id, viagens_db)
 

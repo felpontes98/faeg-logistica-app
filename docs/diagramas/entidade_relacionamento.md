@@ -1,26 +1,35 @@
-# Diagramas entidade-relacionamento — 18 tabelas SQLAlchemy
+# Modelo entidade-relacionamento — 19 tabelas
 
-**Fonte:** [`database/models.py`](../../database/models.py), versão do repositório de 24/11/2026. As 18 tabelas são divididas em duas visões para permitir leitura no GitHub; entidades compartilhadas aparecem em ambas. As chaves e relacionamentos destacados correspondem às FKs do ORM. Os diagramas **não substituem** a verificação das restrições físicas do Neon.
-
-## 1. Cadastros, fretes, ciclos e percurso
+O diagrama deriva das classes em [`database/models.py`](../../database/models.py) (Ajuste 27), com as FKs principais. Inclui todas as 19 tabelas, embora nem todos os atributos e FKs opcionais estejam desenhados para preservar a legibilidade.
 
 ```mermaid
 erDiagram
     CLIENTES ||--o{ CICLOS_OPERACIONAIS : referencia
-    CLIENTES |o--o{ LOCAIS : vincula_opcionalmente
-    CLIENTES ||--o{ FRETES_FINANCEIRO : contrata
-    CICLOS_OPERACIONAIS ||--o| CICLOS_FINANCEIRO : financeiro_legado
+    CLIENTES |o--o{ LOCAIS : referencia_opcional
+    CLIENTES |o--o{ FRETES_FINANCEIRO : contratante
+    CICLOS_OPERACIONAIS ||--o| CICLOS_FINANCEIRO : legado
     CICLOS_OPERACIONAIS ||--o{ VIAGENS : agrupa
-    CICLOS_OPERACIONAIS ||--o{ SAIDAS_OPERACIONAIS : inclui
+    CICLOS_OPERACIONAIS ||--o{ CICLOS_DESPESAS : compartilha
+    CICLOS_OPERACIONAIS ||--o{ SAIDAS_OPERACIONAIS : executa
     VIAGENS ||--o| FRETES_FINANCEIRO : negocia
-    VIAGENS ||--o{ RECEBIMENTOS_FRETE : recebe
-    MOTORISTAS ||--o{ VIAGENS : conduz
-    MOTORISTAS |o--o{ SAIDAS_OPERACIONAIS : opcional
+    VIAGENS ||--o{ RECEBIMENTOS_FRETE : registra
+    VIAGENS ||--o{ VIAGENS_DESPESAS : possui
     VEICULOS ||--o{ VIAGENS : aloca
-    VEICULOS ||--o{ SAIDAS_OPERACIONAIS : percorre
-    LOCAIS ||--o{ VIAGENS : coleta_e_entrega
+    MOTORISTAS ||--o{ VIAGENS : conduz
+    VEICULOS ||--o{ SAIDAS_OPERACIONAIS : desloca
+    MOTORISTAS |o--o{ SAIDAS_OPERACIONAIS : opcional
     SAIDAS_OPERACIONAIS ||--o{ TRECHOS_OPERACIONAIS : detalha
     VEICULOS ||--o| PARAMETROS_CONSUMO_VEICULO : parametriza
+    VEICULOS ||--o{ VEICULOS_DESPESAS : origina
+    VEICULOS_DESPESAS ||--o{ VEICULOS_DESPESAS_ATRIBUICOES : audita
+    VEICULOS ||--o{ ABASTECIMENTOS : compra
+    FORNECEDORES |o--o{ VIAGENS_DESPESAS : fornece
+    FORNECEDORES |o--o{ CICLOS_DESPESAS : fornece
+    FORNECEDORES |o--o{ VEICULOS_DESPESAS : fornece
+    FORNECEDORES |o--o{ ABASTECIMENTOS : fornece
+    VIAGENS_DESPESAS |o--o| ABASTECIMENTOS : origem_opcional
+    CICLOS_DESPESAS |o--o| ABASTECIMENTOS : origem_opcional
+    VEICULOS_DESPESAS |o--o| ABASTECIMENTOS : origem_opcional
     CLIENTES {
         int id_cliente PK
         string razao_social
@@ -38,6 +47,10 @@ erDiagram
         int id_local PK
         int id_cliente FK
     }
+    FORNECEDORES {
+        int id_fornecedor PK
+        string nome_fantasia
+    }
     CICLOS_OPERACIONAIS {
         int id_ciclo PK
         int id_cliente FK
@@ -50,8 +63,6 @@ erDiagram
     VIAGENS {
         int id_viagem PK
         int id_ciclo FK
-        int id_veiculo FK
-        int id_motorista FK
         string codigo_viagem UK
     }
     FRETES_FINANCEIRO {
@@ -63,55 +74,6 @@ erDiagram
         int id_recebimento PK
         int id_viagem FK
         decimal valor_recebido
-    }
-    SAIDAS_OPERACIONAIS {
-        int id_saida PK
-        int id_ciclo FK
-        int id_veiculo FK
-        int id_motorista FK
-    }
-    TRECHOS_OPERACIONAIS {
-        int id_trecho PK
-        int id_saida FK
-        decimal km_planejado
-    }
-    PARAMETROS_CONSUMO_VEICULO {
-        int id_veiculo PK, FK
-        decimal km_por_litro
-    }
-```
-
-**Observação:** `viagens` possui duas referências obrigatórias a `locais` (`id_local_coleta` e `id_local_entrega`), representadas por uma única ligação para preservar a leitura. `saidas_operacionais.id_motorista` e `locais.id_cliente` são opcionais. `ciclos_financeiro` mantém dados legados; a negociação atual é individualizada em `fretes_financeiro`.
-
-## 2. Despesas e abastecimentos
-
-```mermaid
-erDiagram
-    VIAGENS ||--o{ VIAGENS_DESPESAS : possui
-    CICLOS_OPERACIONAIS ||--o{ CICLOS_DESPESAS : possui
-    VEICULOS ||--o{ VEICULOS_DESPESAS : registra
-    VEICULOS_DESPESAS ||--o{ VEICULOS_DESPESAS_ATRIBUICOES : historico
-    VEICULOS ||--o{ ABASTECIMENTOS : abastece
-    FORNECEDORES |o--o{ VIAGENS_DESPESAS : fornece
-    FORNECEDORES |o--o{ CICLOS_DESPESAS : fornece
-    FORNECEDORES |o--o{ VEICULOS_DESPESAS : fornece
-    FORNECEDORES |o--o{ ABASTECIMENTOS : fornece
-    VIAGENS_DESPESAS |o--o| ABASTECIMENTOS : origem_opcional
-    CICLOS_DESPESAS |o--o| ABASTECIMENTOS : origem_opcional
-    VEICULOS_DESPESAS |o--o| ABASTECIMENTOS : origem_opcional
-    VEICULOS_DESPESAS |o--o| VIAGENS_DESPESAS : destino_opcional
-    VEICULOS_DESPESAS |o--o| CICLOS_DESPESAS : destino_opcional
-    VIAGENS {
-        int id_viagem PK
-    }
-    CICLOS_OPERACIONAIS {
-        int id_ciclo PK
-    }
-    VEICULOS {
-        int id_veiculo PK
-    }
-    FORNECEDORES {
-        int id_fornecedor PK
     }
     VIAGENS_DESPESAS {
         int id_despesa PK
@@ -136,8 +98,28 @@ erDiagram
         int id_abastecimento PK
         int id_veiculo FK
         int odometro
-        decimal litros
+    }
+    SAIDAS_OPERACIONAIS {
+        int id_saida PK
+        int id_ciclo FK
+        int id_veiculo FK
+    }
+    TRECHOS_OPERACIONAIS {
+        int id_trecho PK
+        int id_saida FK
+        decimal km_planejado
+    }
+    RASCUNHOS_VIAGENS {
+        int id_rascunho PK
+        string titulo
+        string conteudo_json
+    }
+    PARAMETROS_CONSUMO_VEICULO {
+        int id_veiculo PK, FK
+        decimal km_por_litro
     }
 ```
 
-**Regra essencial:** cada abastecimento aponta para a despesa financeira de origem de frete, ciclo **ou** veículo. O histórico de abastecimento **não** é somado novamente à DRE. As três FKs de origem são opcionais no ORM; as validações de negócio devem impedir origens conflitantes. Atributos de cancelamento, fornecedores e atribuições estão resumidos no diagrama.
+**Vínculos não desenhados:** `viagens` referencia `locais` duas vezes (coleta e entrega); os campos de origem de `abastecimentos` são FKs opcionais e alternativas; `veiculos_despesas` mantém possíveis FKs para despesas de destino após atribuição. Verificar restrições efetivas no PostgreSQL antes de afirmar exclusividade transacional completa.
+
+`RASCUNHOS_VIAGENS` é independente dos registros definitivos: um rascunho ainda não representa um frete fechado ou lançamento financeiro.

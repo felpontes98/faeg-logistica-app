@@ -32,7 +32,7 @@ from faeg_app.pages.etapa_10_consultas import render as render_etapa_10
 from faeg_app.pages.etapa_11_cadastros import render as render_etapa_11
 
 # Inalterado: a aplicação existente sincroniza o esquema no primeiro carregamento.
-inicializar_banco_uma_vez(schema_v=13)
+inicializar_banco_uma_vez(schema_v=14)
 aplicar_tema()
 
 # Snapshot dos cadastros e seleção da viagem: ordem idêntica ao app anterior.

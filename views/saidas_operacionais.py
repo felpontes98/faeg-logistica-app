@@ -173,33 +173,6 @@ def render_saidas_operacionais(id_ciclo, veiculos, motoristas, *, exibir_formula
                     st.rerun()
             st.caption("Se houver trechos, a soma dos quilômetros deles substitui o KM manual da saída no fechamento — nunca se somam os dois.")
 
-    with st.expander("Parâmetros de consumo estimado (por veículo)", expanded=False):
-        st.info("O abastecimento é uma compra de combustível. Esta simulação calcula consumo estimado por KM REAL e NÃO gera outra despesa nem altera a DRE.")
-        ids_veiculos = sorted({s["id_veiculo"] for s in saidas_dados})
-        if not ids_veiculos:
-            st.caption("Cadastre uma saída para configurar o veículo.")
-        else:
-            vid = st.selectbox("VEÍCULO", ids_veiculos,
-                format_func=lambda x: next((v["placa"] for v in veiculos if v["id_veiculo"] == x), str(x)),
-                key=f"faeg_consumo_veiculo_{id_ciclo}")
-            atual = parametros.get(vid, (0., 0.))
-            with st.form(f"faeg_consumo_form_{vid}"):
-                a, b = st.columns(2)
-                consumo = a.number_input("MÉDIA DE CONSUMO (KM/L)", min_value=0.01,
-                                          value=atual[0] if atual[0] > 0 else 10.0, step=0.1, format="%.2f")
-                preco = b.number_input("PREÇO DE REFERÊNCIA DO DIESEL (R$/L)", min_value=0.01,
-                                         value=atual[1] if atual[1] > 0 else 6.0, step=0.01, format="%.2f")
-                submit_param = st.form_submit_button("Salvar parâmetros do veículo")
-            if submit_param:
-                with SessionLocal() as db:
-                    item = db.get(ParametroConsumoVeiculo, vid)
-                    if item is None:
-                        item = ParametroConsumoVeiculo(id_veiculo=vid)
-                        db.add(item)
-                    item.km_por_litro = consumo
-                    item.preco_litro_referencia = preco
-                    db.commit()
-                st.rerun()
     if estimativas:
         st.dataframe(pd.DataFrame([{
             "Veículo": next((v["placa"] for v in veiculos if v["id_veiculo"] == e["id_veiculo"]), e["id_veiculo"]),

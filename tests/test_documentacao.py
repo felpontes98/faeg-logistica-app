@@ -1,7 +1,8 @@
-"""Verificações estáticas, sem dependências externas e sem acessar o Neon.
+"""Validacoes da documentacao mantida pelo projeto FAEG.
 
-A suíte não executa o renderizador Mermaid do GitHub. Ela testa apenas
-estruturas, referências e erros documentais reconhecíveis estaticamente.
+Os testes examinam apenas os arquivos do repositorio; pacotes instalados
+em ambientes virtuais nao fazem parte da documentacao do projeto.
+A sintaxe Mermaid e validada estaticamente, sem simular a renderizacao web.
 """
 
 import ast
@@ -16,7 +17,11 @@ VALID_START = {"flowchart", "erDiagram", "classDiagram", "sequenceDiagram", "sta
 
 
 def _docs():
-    return sorted(ROOT.rglob("*.md"))
+    """Documentos da raiz e de docs/, nunca a .venv/ ou dependencias."""
+    raiz = ROOT.glob("*.md")
+    pasta_docs = (ROOT / "docs").rglob("*.md")
+    github = (ROOT / ".github").rglob("*.md")
+    return sorted({*raiz, *pasta_docs, *github})
 
 
 def test_links_markdown_locais_existentes():
@@ -30,7 +35,7 @@ def test_links_markdown_locais_existentes():
             path = unquote(link.split("#", 1)[0])
             if path and not (doc.parent / path).exists():
                 errors.append(f"{doc.relative_to(ROOT)}: {link}")
-    assert not errors, "Referências Markdown inexistentes:\n" + "\n".join(errors)
+    assert not errors, "Referencias Markdown inexistentes:\n" + "\n".join(errors)
 
 
 def test_mermaid_blocos_identificados_e_formato_conservador():
@@ -42,9 +47,8 @@ def test_mermaid_blocos_identificados_e_formato_conservador():
             count += 1
             lines = [line.strip() for line in diagram.splitlines() if line.strip()]
             assert lines[0].split()[0] in VALID_START, (doc, lines[0])
-            assert "PK,FK" not in diagram, f"Separar chaves com vírgula e espaço: {doc}"
+            assert "PK,FK" not in diagram, f"Separar chaves com virgula e espaco: {doc}"
             for line in lines:
-                # Rótulos de fluxograma em uma linha: evita quebras internas não-portáveis.
                 assert line.count('"') % 2 == 0, (doc, line)
     assert count >= 16, f"Esperados diagramas do projeto, encontrados {count}"
 
@@ -58,13 +62,18 @@ def test_der_cobre_todas_as_tabelas_orm():
                 if isinstance(node, ast.Assign):
                     if any(isinstance(t, ast.Name) and t.id == "__tablename__" for t in node.targets):
                         tabelas.add(ast.literal_eval(node.value).upper())
+
     er = (ROOT / "docs/diagramas/entidade_relacionamento.md").read_text(encoding="utf-8")
-    blocos = [m for m in MERMAID.findall(er) if m.startswith("erDiagram")]
+    blocos = [m for m in MERMAID.findall(er) if m.lstrip().startswith("erDiagram")]
     cobertura = set()
     for bloco in blocos:
-        cobertura.update(re.findall(r"^\s*([A-Z_]+)\s*\{", bloco, flags=re.MULTILINE))
-    assert len(tabelas) == 18, f"Inventário ORM inesperado: {len(tabelas)}"
-    assert cobertura == tabelas, f"DER com diferenças: faltantes={tabelas - cobertura}; extras={cobertura - tabelas}"
+        cobertura.update(re.findall(r"^\s*([A-Z0-9_]+)\s*\{", bloco, flags=re.MULTILINE))
+
+    assert tabelas, "Nenhuma tabela ORM encontrada em database/models.py"
+    assert cobertura == tabelas, (
+        f"DER com diferencas: faltantes={tabelas - cobertura}; "
+        f"extras={cobertura - tabelas}"
+    )
 
 
 def test_estrutura_modular_e_pontos_de_entrada_documentados():
