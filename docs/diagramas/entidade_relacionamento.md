@@ -19,6 +19,7 @@ erDiagram
     VEICULOS ||--o{ SAIDAS_OPERACIONAIS : desloca
     MOTORISTAS |o--o{ SAIDAS_OPERACIONAIS : opcional
     SAIDAS_OPERACIONAIS ||--o{ TRECHOS_OPERACIONAIS : detalha
+    SAIDAS_OPERACIONAIS |o--o{ VIAGENS : coleta
     VEICULOS ||--o| PARAMETROS_CONSUMO_VEICULO : parametriza
     VEICULOS ||--o{ VEICULOS_DESPESAS : origina
     VEICULOS_DESPESAS ||--o{ VEICULOS_DESPESAS_ATRIBUICOES : audita
@@ -63,6 +64,7 @@ erDiagram
     VIAGENS {
         int id_viagem PK
         int id_ciclo FK
+        int id_saida_coleta FK
         string codigo_viagem UK
     }
     FRETES_FINANCEIRO {

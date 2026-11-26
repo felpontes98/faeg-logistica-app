@@ -126,6 +126,8 @@ def render(ctx):
             [
                 {
                     "Código": v["codigo_viagem"],
+                    "ID Frete": v["id_frete"],
+                    "Saída de Coleta": v.get("saida_coleta", "-"),
                     "Situação": v["status"],
                     "Tipo": v["tipo_viagem"],
                     "Ciclo": v["ciclo"],

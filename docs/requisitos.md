@@ -61,6 +61,8 @@ Os requisitos documentam o escopo funcional do MVP. Fórmulas e critérios de ap
 | RF-49 | Permitir uma ou várias saídas por operação individual ou ciclo, com os mesmos campos e totais calculados na Etapa 2 | Implementado no MVP |
 | RF-50 | Manter os parâmetros de consumo referencial por veículo no cadastro (Etapa 11), sem lançamento financeiro automático | Implementado no MVP |
 | RF-51 | Reservar a Etapa 8 para situação operacional, indicadores e fechamento, sem recadastrar saídas ou odômetros | Implementado no MVP |
+| RF-52 | Gerar automaticamente o código interno V e o ID Frete FV em sequência única sem ano, sem alterar identificadores históricos | Implementado no MVP |
+| RF-53 | Vincular frete à saída de coleta do próprio ciclo e veículo, com vários fretes por saída e sem replicar KM e mostrando o vínculo nas consultas e exportações | Implementado no MVP |
 
 ## Critérios de aceite dos cálculos
 

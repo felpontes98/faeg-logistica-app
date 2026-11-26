@@ -99,12 +99,12 @@ def render(ctx):
     c_id, c_tipo_vg, c_ciclo, c_data = st.columns([1.2, 1.3, 1.8, 1.2])
     with c_id:
         st.text_input(
-            "CÓDIGO DA VIAGEM (ÚNICO) *",
+            "CÓDIGO INTERNO (AUTOMÁTICO)",
             value=get_campo("id_viagem_label", prox_cod_sidebar),
-            placeholder=f"Ex: {prox_cod_sidebar}",
+            placeholder=f"Ex.: {prox_cod_sidebar}",
+            help="Identificador interno. O código definitivo é reservado ao salvar o frete.",
+            disabled=True,
             key="w_id_viagem_label",
-            on_change=sync_campo,
-            args=("w_id_viagem_label", "id_viagem_label"),
         )
     with c_tipo_vg:
         tipos_vg = ["Individual", "Ciclo"]

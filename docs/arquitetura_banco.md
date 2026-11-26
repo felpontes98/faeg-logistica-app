@@ -29,6 +29,8 @@ A persistência utiliza PostgreSQL (Neon), SQLAlchemy ORM e sessões definidas e
 ## Relacionamentos e integridade
 
 - Cada frete em `viagens` possui identificador próprio e pode estar associado ao `id_ciclo` de `ciclos_operacionais`; o cliente e a negociação individuais ficam em `fretes_financeiro`.
+- `viagens.id_saida_coleta` é uma FK opcional para a saída física que coletou o frete. A mesma saída pode ser referenciada por vários fretes do próprio ciclo; o vínculo é validado também por veículo no salvamento da aplicação.
+- Os códigos internos `V` e IDs comerciais `FV` são reservados em uma única transação. No PostgreSQL, o bloqueio consultivo transacional serializa novas reservas.
 - `saidas_operacionais` pertence ao ciclo operacional, inclusive em operações individuais. Uma saída pode ter vários `trechos_operacionais`. O KM planejado dos trechos, quando presente, substitui o KM manual da mesma saída.
 - `recebimentos_frete` registra pagamentos efetivos separadamente das parcelas previstas; cancelamentos não apagam o histórico.
 - Os custos de `viagens_despesas` pertencem ao frete e os de `ciclos_despesas` pertencem ao ciclo. Não há rateio automático dos custos compartilhados.

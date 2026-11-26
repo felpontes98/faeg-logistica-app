@@ -39,3 +39,13 @@ A opção **Salvar rascunho / continuar depois** registra informações ainda in
 O destino da despesa define sua contabilização: **Frete** para gasto exclusivo, **Ciclo** para gasto compartilhado ou **Veículo** para custo provisório ainda não atribuído. O número interno do ciclo é utilizado pela aplicação; o cadastro apresenta sua identificação operacional.
 
 Abastecimentos são registrados na Etapa 7 com data, litros, preço e odômetro no posto. Essa leitura integra o histórico do veículo e não acrescenta quilômetros à operação. O fechamento apresenta os dados consolidados sem duplicar os lançamentos.
+
+## Associação de fretes a saídas
+
+1. Crie ou selecione o ciclo na Etapa 1. O código interno `V` e o ID `FV` são gerados automaticamente no salvamento.
+2. Cadastre uma saída na Etapa 2, com datas, veículo e quilômetros. Se ela já existe no ciclo, não crie outra.
+3. Em **Saída de coleta deste frete**, escolha a saída correspondente. Preencha os detalhes de carga e os demais dados do frete individualmente.
+4. Para outra carga coletada na mesma saída, inicie um novo frete, informe o mesmo nome de ciclo e selecione a saída existente.
+5. Abra o frete salvo para alterar seu vínculo ou os detalhes de carga, se necessário. A edição não cria nova saída e não soma KM novamente. As consultas e a exportação incluem a saída de coleta associada.
+
+Os fretes com entrega pendente continuam vinculados ao ciclo original. Não é necessário gerar novo ID para entregas posteriores aproveitando outros percursos.

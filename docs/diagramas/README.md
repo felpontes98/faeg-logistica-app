@@ -8,7 +8,7 @@ Os diagramas representam a arquitetura e os fluxos do Sistema Web FAEG. Foram cr
 | [Componentes](componentes.md) | Dependências entre os módulos | Fluxograma de componentes |
 | [Classes](classes.md) | Estruturas de domínio e associações | `classDiagram` |
 | [Entidade-relacionamento](entidade_relacionamento.md) | Tabelas, chaves e cardinalidades | `erDiagram` |
-| [Sequências](sequencias.md) | Cadastro, abastecimento e saídas | `sequenceDiagram` |
+| [Sequências](sequencias.md) | Cadastro e vínculo à saída, abastecimento e KM | `sequenceDiagram` |
 | [Atividades](atividades.md) | Preenchimento e fechamento | Fluxograma de atividades |
 | [Estados](estados.md) | Situações operacionais e financeiras | `stateDiagram-v2` |
 | [Implantação](implantacao.md) | Aplicação, navegador e banco | Fluxograma de implantação |

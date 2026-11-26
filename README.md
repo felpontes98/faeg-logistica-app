@@ -10,8 +10,8 @@ O produto foi desenvolvido a partir da rotina logística da FAEG, inicialmente c
 
 ## Funcionalidades
 
-- **Fretes e ciclos:** cadastro comercial independente por frete, com agrupamento de operações e consolidação dos custos compartilhados.
-- **Planejamento e execução:** saídas operacionais, quilômetros planejados por percurso e odômetros de partida e retorno à base.
+- **Fretes e ciclos:** cadastro comercial independente por frete, com identificação automática `V`/`FV`, agrupamento de operações e consolidação dos custos compartilhados.
+- **Planejamento e execução:** uma saída operacional pode atender vários fretes, preservando seus dados individuais e contabilizando apenas uma vez os quilômetros planejados e realizados.
 - **Gestão financeira:** valores negociados, parcelas previstas, recebimentos confirmados, despesas e resultados operacionais.
 - **Abastecimentos:** histórico de Diesel e ARLA por veículo, com litros, valores e leitura do odômetro. As estimativas de consumo são apresentadas separadamente das despesas registradas.
 - **Rascunhos:** salvamento parcial e retomada de cadastros não concluídos.

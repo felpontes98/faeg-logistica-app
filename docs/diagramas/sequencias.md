@@ -1,83 +1,89 @@
 # Diagramas de sequência UML
 
-Os diagramas descrevem **fluxos resumidos** observáveis no código. Transações, validações e mensagens foram agrupadas para legibilidade; não representam linha a linha todas as ramificações.
+Os fluxos representam a criação do frete, o registro das saídas e a persistência das despesas. As validações e transações estão agrupadas por responsabilidade.
 
-## 1. Cadastro de frete e vínculo a ciclo
+## 1. Cadastro do frete e vínculo à saída
 
 ```mermaid
 sequenceDiagram
     actor Operador
-    participant UI as Streamlit (app.py)
-    participant ORM as SQLAlchemy / SessionLocal
-    participant DB as PostgreSQL / Neon
-    Operador->>UI: Preenche etapas 1 a 6 e solicita salvar
-    UI->>UI: Valida ID Frete, dados e situação do ciclo
-    UI->>ORM: Localiza ou cria CicloOperacional
-    ORM->>DB: SELECT / INSERT de ciclo
-    DB-->>ORM: ID interno do ciclo
-    UI->>ORM: Cria/atualiza Viagem e FreteFinanceiro
-    ORM->>DB: INSERT / UPDATE na transação
-    alt Gravação confirmada
-        DB-->>ORM: Commit
-        ORM-->>UI: Identificadores persistidos
-        UI-->>Operador: Confirmação da viagem salva
-    else Violação ou erro
-        DB-->>ORM: Falha/rollback
-        UI-->>Operador: Aviso; não considerar salvo
+    participant UI as Interface Streamlit
+    participant ID as Identificacao de fretes
+    participant ORM as SQLAlchemy
+    participant DB as PostgreSQL
+    Operador->>UI: Preenche cadastro e seleciona ciclo e saida
+    UI->>ORM: Inicia transacao de salvamento
+    alt Novo frete
+        ORM->>ID: Reserva codigo interno e ID Frete
+        ID->>DB: Consulta codigos com bloqueio transacional
+        DB-->>ID: Proxima sequencia disponivel
+        ID-->>ORM: Codigos V e FV
+    else Edicao de frete
+        ORM->>ORM: Preserva os codigos existentes
+    end
+    ORM->>DB: Localiza ou cria o ciclo operacional
+    ORM->>DB: Valida saida e veiculo do mesmo ciclo
+    alt Vinculo valido
+        ORM->>DB: Grava frete e vinculo da saida de coleta
+        ORM->>DB: Grava financeiro individual
+        ORM->>DB: Confirma a transacao
+        ORM-->>UI: Frete salvo
+        UI-->>Operador: Exibe identificadores e saida vinculada
+    else Dados inconsistentes
+        ORM->>DB: Desfaz a transacao
+        UI-->>Operador: Exibe motivo da validacao
     end
 ```
 
-**Regra:** o ID comercial de cada frete é independente do ID interno do ciclo; pagamentos confirmados têm registros próprios, não são inferidos a partir do adiantamento previsto.
+**Regra:** cada frete recebe um ID `FV` único e contínuo. Uma saída admite vários fretes, mantendo seus dados comerciais individuais. A quilometragem permanece registrada somente na saída.
 
 ## 2. Despesa e abastecimento sem duplicação
 
 ```mermaid
 sequenceDiagram
     actor Operador
-    participant UI as Etapa 7 / app.py
+    participant UI as Etapa 7
     participant ORM as SQLAlchemy
     participant DB as PostgreSQL
-    Operador->>UI: Informa Diesel/ARLA, litros, preço, odômetro e destino
-    UI->>UI: Valida destino e verifica possíveis custos semelhantes
-    alt Custo de um frete
-        UI->>ORM: Cria ViagemDespesa
-    else Compartilhado do ciclo
-        UI->>ORM: Cria CicloDespesa
-    else Pendente do veículo
-        UI->>ORM: Cria VeiculoDespesa
+    Operador->>UI: Informa combustivel ou despesa e destino
+    UI->>ORM: Verifica dados e possiveis duplicidades
+    alt Despesa exclusiva do frete
+        ORM->>DB: Cria ViagemDespesa
+    else Despesa compartilhada do ciclo
+        ORM->>DB: Cria CicloDespesa
+    else Despesa pendente do veiculo
+        ORM->>DB: Cria VeiculoDespesa
     end
-    ORM->>DB: Persiste despesa financeira de origem
-    UI->>ORM: Vincula Abastecimento à mesma despesa
-    ORM->>DB: Persiste histórico operacional e efetua commit
-    DB-->>UI: Transação confirmada
-    UI-->>Operador: Histórico e custo sem lançamento financeiro duplo
+    opt Diesel ou ARLA
+        ORM->>DB: Cria historico de Abastecimento vinculado a despesa
+    end
+    ORM->>DB: Confirma a transacao
+    ORM-->>UI: Lancamento persistido
+    UI-->>Operador: Atualiza historico e saldo
 ```
 
-**Regra:** a linha de `abastecimentos` é apenas uma projeção operacional da despesa original e não entra novamente na DRE.
+**Regra:** `abastecimentos` registra o histórico operacional da compra e não acrescenta uma segunda despesa ao DRE.
 
-## 3. Registrar saída e atualizar KM físico
+## 3. Cadastro de saída e quilometragem
 
 ```mermaid
 sequenceDiagram
     actor Operador
-    participant UI as Etapa 2 / views/percurso_etapa2
-    participant S as database/saidas_operacionais.py
-    participant DB as SQLAlchemy / PostgreSQL
-    Operador->>UI: Informa saída, datas, veículo, KM e odômetros
-    UI->>S: salvar_saida(...)
-    S->>S: validar_saida(...)
-    S->>DB: INSERT/UPDATE SaidaOperacional
-    DB-->>S: ID da saída
-    UI->>DB: Commit da transação
-    opt Registrar trechos
-        Operador->>UI: Informa origem, destino e KM de cada trecho
-        UI->>S: salvar_trecho(...)
-        S->>DB: INSERT/UPDATE TrechoOperacional
-        UI->>DB: Commit
+    participant UI as Etapa 2
+    participant S as Servico de saidas
+    participant ORM as SQLAlchemy
+    Operador->>UI: Informa datas e quilometragem da saida
+    UI->>S: Valida dados da saida
+    S->>ORM: Salva SaidaOperacional no ciclo
+    ORM-->>UI: Identificador da saida
+    opt Novo frete do mesmo ciclo
+        Operador->>UI: Seleciona a saida ja cadastrada
+        UI->>ORM: Registra vinculo de coleta do frete
+        ORM-->>UI: Frete associado sem nova saida
     end
-    UI->>S: consultar_saidas() e resumo_saidas()
-    S-->>UI: KM planejado e KM real (ou pendente)
-    UI-->>Operador: Resumo físico da operação para a Etapa 8
+    UI->>S: Consulta resumo das saidas
+    S-->>UI: KM planejado e real do ciclo
+    UI-->>Operador: Exibe operacao consolidada
 ```
 
-**Regra:** se há trechos, eles prevalecem sobre o KM manual da saída; odômetro parcial impede total real definitivo.
+**Regra:** os odômetros de saída e chegada à base determinam o KM real. Uma saída com múltiplos fretes contribui apenas uma vez para os totais físicos do ciclo.

@@ -13,6 +13,15 @@ Este documento estabelece os critérios utilizados no cadastro, planejamento, ex
 
 O cadastro compreende identificação da frota, dados do frete e documentos, cliente, negociação, coleta, entrega e despesas. A aplicação permite salvar e retomar um **rascunho** com campos incompletos. O rascunho não integra receitas, despesas ou indicadores até seu salvamento definitivo. O salvamento como frete definitivo verifica os relacionamentos obrigatórios.
 
+## RN-02A — Identificação dos fretes e saídas
+
+- Cada frete salvo recebe um código interno `V` e um ID comercial `FV` gerados na mesma sequência numérica, sem referência ao ano. Por exemplo, `V11` e `FV000000011`.
+- A sequência é global e não reinicia quando muda o ciclo, a saída ou o ano. A numeração é reservada durante a transação do primeiro salvamento. Uma prévia exibida durante o preenchimento pode mudar caso outro frete seja salvo antes.
+- Os identificadores de fretes históricos não são alterados automaticamente. Códigos já utilizados não são reutilizados.
+- A numeração exibida das saídas (`Saída 01`, `Saída 02`...) acompanha a ordem de cadastro por `id_saida` dentro do ciclo e não muda quando a data da saída é corrigida. O `id_saida` é a chave interna persistida no banco.
+- Cada frete pode indicar a saída em que foi coletado. Uma saída pode atender vários fretes; cada frete mantém carga, cliente, coleta, entrega, documentos e negociação próprios.
+- A identificação da saída de coleta não transfere o frete para outro ciclo nem adiciona KM ao cadastro comercial.
+
 ## RN-03 — Negociação e recebimentos
 
 - Valor divulgado e valor negociado são informados manualmente por frete.

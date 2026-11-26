@@ -1,4 +1,9 @@
-"""Verificações de links, diagramas e referências da documentação FAEG."""
+"""Validacoes da documentacao mantida pelo projeto FAEG.
+
+Os testes examinam apenas os arquivos do repositorio; pacotes instalados
+em ambientes virtuais nao fazem parte da documentacao do projeto.
+A sintaxe Mermaid e validada estaticamente, sem simular a renderizacao web.
+"""
 
 import ast
 import re
@@ -12,7 +17,7 @@ VALID_START = {"flowchart", "erDiagram", "classDiagram", "sequenceDiagram", "sta
 
 
 def _docs():
-    """Documentos Markdown do projeto."""
+    """Documentos da raiz e de docs/, nunca a .venv/ ou dependencias."""
     raiz = ROOT.glob("*.md")
     pasta_docs = (ROOT / "docs").rglob("*.md")
     github = (ROOT / ".github").rglob("*.md")
@@ -86,3 +91,27 @@ def test_documentacao_descreve_fluxo_atual_e_modelo_de_dados():
     assert "19 tabelas ORM" in indice
     assert "Etapa 2" in guia and "Etapa 8" in guia
     assert "RF-51" in requisitos and "rascunhos" in requisitos.lower()
+    assert not (ROOT / "docs/auditoria_final_2026-11-24.md").exists()
+    assert not (ROOT / "docs/avaliacao_repositorio.md").exists()
+
+
+def test_diagramas_sequencia_com_blocos_balanceados_e_mensagens_validas():
+    """Evita separadores em mensagens e estruturas condicionais incompletas."""
+    doc = ROOT / "docs/diagramas/sequencias.md"
+    texto = doc.read_text(encoding="utf-8")
+    blocos = [b for b in MERMAID.findall(texto) if b.lstrip().startswith("sequenceDiagram")]
+    assert len(blocos) >= 3
+    for bloco in blocos:
+        profundidade = 0
+        for linha in (l.strip() for l in bloco.splitlines()):
+            if not linha or linha == "sequenceDiagram":
+                continue
+            assert ";" not in linha, (doc, linha)
+            if linha.startswith(("alt ", "opt ", "loop ", "par ", "critical ")):
+                profundidade += 1
+            elif linha.startswith(("else ", "and ", "option ")):
+                assert profundidade > 0, (doc, linha)
+            elif linha == "end":
+                profundidade -= 1
+                assert profundidade >= 0, (doc, linha)
+        assert profundidade == 0, doc

@@ -26,6 +26,7 @@ classDiagram
       +int id_viagem
       +str codigo_viagem
       +int id_ciclo
+      +int id_saida_coleta
       +str tipo_viagem
       +str rota_resumo
       +decimal km_rota_planejado
@@ -74,6 +75,7 @@ classDiagram
     Viagem "1" --> "0..1" FreteFinanceiro : possui
     Viagem "1" --> "0..*" RecebimentoFrete : recebe
     CicloOperacional "1" --> "0..*" SaidaOperacional : executa
+    SaidaOperacional "0..1" --> "0..*" Viagem : coleta
     SaidaOperacional "1" *-- "0..*" TrechoOperacional : detalha
     Veiculo "1" --> "0..*" Viagem : vinculado
     Veiculo "1" --> "0..*" SaidaOperacional : realiza

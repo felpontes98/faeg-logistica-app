@@ -6,7 +6,8 @@ O processo apresenta a organização vigente das telas e os caminhos de salvamen
 flowchart TD
     A([Início]) --> B["Etapa 1: definir operação, veículo e motorista"]
     B --> C["Etapa 2: dados do frete, carga, documentos e saídas"]
-    C --> D{"Dados suficientes para salvar o frete?"}
+    C --> C1["Selecionar a saida de coleta deste frete"]
+    C1 --> D{"Dados suficientes para salvar o frete?"}
     D -->|"Não"| E["Salvar rascunho"]
     E --> F["Retomar e completar etapas 1 a 6"]
     F --> C

@@ -8,6 +8,7 @@ from faeg_app.core import (
     to_float,
     to_int,
 )
+from database.identificacao_fretes import previsualizar_frete
 
 
 def render(ctx):
@@ -26,13 +27,11 @@ def render(ctx):
     f1, f2, f3, f4 = st.columns([1.1, 1.3, 1.6, 1.6])
     with f1:
         st.text_input(
-            "ID FRETE",
-            value=get_campo("id_frete", ""),
-            placeholder="Ex: FRT-102",
-            help="Identificador próprio e único do serviço, independente do ID Ciclo. Não reutilize o mesmo ID em outro frete.",
+            "ID FRETE (AUTOMÁTICO)",
+            value=get_campo("id_frete", "") or previsualizar_frete(get_campo("id_viagem_label", "")),
+            help="Sequência global FV sem ano. No primeiro salvamento o código é reservado no banco; históricos permanecem iguais.",
+            disabled=True,
             key="w_id_frete",
-            on_change=sync_campo,
-            args=("w_id_frete", "id_frete"),
         )
     with f2:
         tipos_frete_ops = ["Dedicado", "Complemento", "Fracionado", "Retorno", "Transferência"]

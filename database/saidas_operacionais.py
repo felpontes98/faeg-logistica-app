@@ -59,6 +59,13 @@ def salvar_saida(session, *, id_ciclo, id_veiculo, id_motorista=None, id_saida=N
         saida = session.get(SaidaOperacional, int(id_saida))
         if saida is None or saida.id_ciclo != id_ciclo:
             raise ValueError("Saída não pertence à operação selecionada.")
+        if int(saida.id_veiculo) != int(id_veiculo) and any(
+            frete.id_veiculo != int(id_veiculo) for frete in saida.fretes_coletados
+        ):
+            raise ValueError(
+                "Esta saída possui fretes vinculados ao veículo atual. "
+                "Revise esses vínculos antes de trocar o veículo da saída."
+            )
     for campo in ("id_veiculo", "id_motorista", "descricao", "data_inicio", "data_fim",
                   "odometro_inicial", "odometro_final", "km_planejado_manual", "observacoes",
                   "km_saida_coletas", "km_rota_principal", "km_retorno_base"):
@@ -152,15 +159,19 @@ def resumo_saidas(saidas):
 
 def consultar_saidas(session, id_ciclo):
     return (session.query(SaidaOperacional)
-            .options(selectinload(SaidaOperacional.trechos))
+            .options(
+                selectinload(SaidaOperacional.trechos),
+                selectinload(SaidaOperacional.fretes_coletados),
+            )
             .filter_by(id_ciclo=id_ciclo)
-            .order_by(SaidaOperacional.data_inicio, SaidaOperacional.id_saida).all())
+            .order_by(SaidaOperacional.id_saida).all())
 
 
 def consultar_todas_saidas(session):
     return (session.query(SaidaOperacional)
-            .options(selectinload(SaidaOperacional.trechos))
-            .order_by(SaidaOperacional.id_ciclo, SaidaOperacional.data_inicio, SaidaOperacional.id_saida).all())
+            .options(selectinload(SaidaOperacional.trechos),
+                     selectinload(SaidaOperacional.fretes_coletados))
+            .order_by(SaidaOperacional.id_ciclo, SaidaOperacional.id_saida).all())
 
 
 def estimar_consumo(km, km_por_litro, preco_por_litro):

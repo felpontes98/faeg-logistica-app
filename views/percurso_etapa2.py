@@ -13,24 +13,30 @@ from faeg_app.erros import informar_falha
 
 from database.connection import SessionLocal
 from database.models import Viagem
+from database.identificacao_fretes import ciclo_existente_unico
 from database.saidas_operacionais import consultar_saidas, resumo_saidas, salvar_saida, validar_saida
-from faeg_app.core import get_campo
+from faeg_app.core import get_campo, sync_campo
 
 
 def _as_float(value):
     return float(value or 0)
 
 
-def _obter_contexto(viagem_id):
-    if not viagem_id:
-        return None, []
+def _obter_contexto(viagem_id, tipo_viagem, nome_ciclo):
+    """Localiza a operação sem vincular ciclos homônimos por aproximação."""
     with SessionLocal() as db:
-        viagem = db.get(Viagem, viagem_id)
-        if not viagem:
-            return None, []
-        cid = viagem.id_ciclo
+        if viagem_id:
+            viagem = db.get(Viagem, viagem_id)
+            ciclo = viagem.ciclo if viagem else None
+        elif tipo_viagem == "Ciclo":
+            ciclo = ciclo_existente_unico(db, nome_ciclo)
+        else:
+            ciclo = None
+        if ciclo is None:
+            return None, [], []
+        cid = ciclo.id_ciclo
         saidas = consultar_saidas(db, cid)
-        return cid, [{
+        saidas_info = [{
             "id": s.id_saida,
             "descricao": s.descricao,
             "id_veiculo": s.id_veiculo,
@@ -47,6 +53,12 @@ def _obter_contexto(viagem_id):
             "tem_trechos_legados": bool(s.trechos),
             "observacoes": s.observacoes or "",
         } for s in saidas]
+        fretes_por_saida = {
+            s.id_saida: [(v.codigo_viagem or f"V{v.id_viagem}", v.id_frete_externo or "—")
+                         for v in s.fretes_coletados]
+            for s in saidas
+        }
+        return cid, saidas_info, fretes_por_saida
 
 
 def validar_preenchimento_saida(item):
@@ -99,7 +111,13 @@ def render_percurso(ctx):
         "quando o veículo retorna. Em ciclos, várias coletas e fretes podem compartilhar a mesma saída. "
         "Os quilômetros serão contabilizados uma única vez."
     )
-    cid, salvas = _obter_contexto(ctx.viagem_sel_id)
+    try:
+        cid, salvas, fretes_por_saida = _obter_contexto(
+            ctx.viagem_sel_id, tipo, get_campo("ciclo_nome", "")
+        )
+    except ValueError as exc:
+        st.warning(str(exc))
+        return
     if not cid:
         saidas = st.session_state.setdefault("saidas_provisorias", [])
     else:
@@ -107,6 +125,12 @@ def render_percurso(ctx):
         if st.session_state.get("saidas_provisorias"):
             st.info("Há saídas em rascunho. Conclua o salvamento do frete antes de registrar outras saídas.")
     _exibir_resumo(saidas, rascunho=not bool(cid))
+    if cid and fretes_por_saida:
+        with st.expander("Fretes vinculados às saídas", expanded=False):
+            for n, saida in enumerate(saidas, 1):
+                fretes = fretes_por_saida.get(saida["id"], [])
+                resumo = ", ".join(f"{fv} ({interno})" for interno, fv in fretes) or "Nenhum frete vinculado"
+                st.caption(f"Saída {n:02d}: {resumo}")
 
     if cid and salvas:
         with SessionLocal() as db:
@@ -207,5 +231,29 @@ def render_percurso(ctx):
                 st.warning(str(exc))
             except Exception:
                 informar_falha("registrar a saída")
+    st.markdown("**Saída de coleta deste frete**")
+    st.caption("Vincule este frete a uma saída já cadastrada. A mesma saída pode receber vários fretes; seu KM não é repetido.")
+    vinculos = {"": "Selecionar depois (sem vínculo de coleta)"}
+    for n, saida in enumerate(saidas, 1):
+        chave = f"s:{saida['id']}" if cid else f"p:{saida['id']}"
+        vinculos[chave] = f"Saída {n:02d} — {saida.get('descricao') or 'Sem descrição'}"
+    referencia_atual = str(get_campo("saida_coleta_ref", "") or "")
+    if referencia_atual not in vinculos:
+        referencia_atual = ""
+        st.session_state.setdefault("form_data", {})["saida_coleta_ref"] = ""
+    if st.session_state.get("w_saida_coleta_ref") not in vinculos:
+        st.session_state.pop("w_saida_coleta_ref", None)
+    # Uma única saída disponível simplifica o primeiro cadastro de frete.
+    if not referencia_atual and len(vinculos) == 2 and not ctx.viagem_sel_id:
+        referencia_atual = next(ch for ch in vinculos if ch)
+    indice = list(vinculos).index(referencia_atual)
+    selecionada = st.selectbox("SAÍDA VINCULADA À COLETA", list(vinculos), index=indice,
+                              format_func=lambda chave: vinculos[chave], key="w_saida_coleta_ref",
+                              on_change=sync_campo, args=("w_saida_coleta_ref", "saida_coleta_ref"))
+    # Aplica o valor inicial também quando o operador não altera o seletor.
+    if referencia_atual and not get_campo("saida_coleta_ref", ""):
+        st.session_state.setdefault("form_data", {})["saida_coleta_ref"] = selecionada
+    if ctx.viagem_sel_id and not selecionada:
+        st.caption("Este frete não possui saída de coleta vinculada. O vínculo pode ser registrado na edição.")
     if not cid and saidas:
         st.info("As saídas estão no preenchimento atual. Use **Salvar rascunho** na barra lateral para guardá-las ou **Salvar viagem** quando completar os dados obrigatórios.")

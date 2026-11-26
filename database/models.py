@@ -162,6 +162,7 @@ class Viagem(Base):
     id_motorista = Column(Integer, ForeignKey("motoristas.id_motorista"), nullable=False)
     id_veiculo = Column(Integer, ForeignKey("veiculos.id_veiculo"), nullable=False)
     id_frete_externo = Column(String(60))
+    id_saida_coleta = Column(Integer, ForeignKey("saidas_operacionais.id_saida", ondelete="SET NULL"), nullable=True, index=True)
     data_criacao = Column(DateTime, default=datetime.utcnow)
     status_viagem = Column(String(50), default="Aguardando Adiantamento")
     tipo_viagem = Column(String(30), default="Individual")
@@ -191,6 +192,7 @@ class Viagem(Base):
     km_real_rodado = Column(Integer, default=0)
 
     ciclo = relationship("CicloOperacional", back_populates="viagens")
+    saida_coleta = relationship("SaidaOperacional", back_populates="fretes_coletados", foreign_keys=[id_saida_coleta])
     motorista = relationship("Motorista", back_populates="viagens")
     veiculo = relationship("Veiculo", back_populates="viagens")
     local_coleta = relationship("Local", foreign_keys=[id_local_coleta])
@@ -416,6 +418,7 @@ class SaidaOperacional(Base):
     observacoes = Column(String(600), nullable=True)
 
     ciclo = relationship("CicloOperacional", back_populates="saidas_operacionais")
+    fretes_coletados = relationship("Viagem", back_populates="saida_coleta", foreign_keys="Viagem.id_saida_coleta")
     veiculo = relationship("Veiculo")
     motorista = relationship("Motorista")
     trechos = relationship("TrechoOperacional", back_populates="saida", cascade="all, delete-orphan",
@@ -462,6 +465,8 @@ def sincronizar_colunas_banco():
         "ALTER TABLE locais ADD COLUMN IF NOT EXISTS id_cliente INTEGER REFERENCES clientes(id_cliente);",
         "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS razao_social VARCHAR(150);",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS codigo_viagem VARCHAR(30);",
+        "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS id_saida_coleta INTEGER REFERENCES saidas_operacionais(id_saida) ON DELETE SET NULL;",
+        "CREATE INDEX IF NOT EXISTS ix_viagens_id_saida_coleta ON viagens (id_saida_coleta);",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS tipo_viagem VARCHAR(30) DEFAULT 'Individual';",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_origem VARCHAR(120);",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_destino VARCHAR(120);",

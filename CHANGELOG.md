@@ -2,6 +2,14 @@
 
 Este arquivo registra as principais entregas funcionais e técnicas do Sistema Web FAEG. Alterações pontuais e seus responsáveis permanecem disponíveis no histórico de commits do Git.
 
+## 2026-11-26 — Identificação automática e vínculos de coleta
+
+- Numeração automática global dos fretes, com código interno `V` e ID comercial `FV` sem referência ao ano.
+- Seleção da saída de coleta no cadastro de cada frete, permitindo vários fretes na mesma saída do ciclo.
+- Verificação de compatibilidade do ciclo e do veículo no vínculo, com preservação dos códigos históricos.
+- Inclusão do vínculo nas consultas e exportações, sem repetir quilômetros nem despesas.
+- Atualização dos diagramas, requisitos e testes de identificação e vínculo.
+
 ## 2026-11-25 — Fluxo operacional e persistência parcial
 
 - Saídas, quilômetros planejados e odômetros da operação concentrados na Etapa 2; fechamento consolidado na Etapa 8.

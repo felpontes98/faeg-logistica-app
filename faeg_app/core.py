@@ -1,6 +1,6 @@
-"""Operações compartilhadas entre as etapas do Sistema Web FAEG.
+"""Núcleo compartilhado do FAEG: validações, consultas, estado e persistência.
 
-Reúne consultas, validações, callbacks Streamlit e rotinas de persistência.
+As regras operacionais e financeiras são utilizadas pelas etapas da interface.
 """
 
 import base64
@@ -26,6 +26,9 @@ from database.controle_abastecimentos import calcular_indicadores_abastecimentos
 from database.fechamento_ciclos import consolidar_ciclos, reconciliar_resultado_gerencial
 from database.importador_planilha import preparar_previa_importacao_faeg
 from database.saidas_operacionais import consultar_todas_saidas, resumo_saidas
+from database.identificacao_fretes import (
+    previsualizar_frete, reservar_identificadores, validar_vinculo_saida,
+)
 from database.models import (
     Abastecimento,
     CicloOperacional,
@@ -40,6 +43,7 @@ from database.models import (
     VeiculoDespesa,
     VeiculoDespesaAtribuicao,
     Viagem,
+    SaidaOperacional,
     ViagemDespesa,
     sincronizar_colunas_banco,
 )
@@ -716,6 +720,12 @@ def carregar_todas_viagens_consulta():
         desp_por_viagem = {}
         desp_detalhadas = []
         cod_map = {vg.id_viagem: resolver_codigo_viagem(vg, vg.ciclo) for vg in viagens_raw}
+        saida_ordinal = {}
+        numeros_por_ciclo = {}
+        for id_saida, id_ciclo in (session.query(SaidaOperacional.id_saida, SaidaOperacional.id_ciclo)
+                                   .order_by(SaidaOperacional.id_ciclo, SaidaOperacional.id_saida).all()):
+            numeros_por_ciclo[id_ciclo] = numeros_por_ciclo.get(id_ciclo, 0) + 1
+            saida_ordinal[id_saida] = numeros_por_ciclo[id_ciclo]
 
         for d in despesas_all:
             vt = to_float(d.valor_total)
@@ -793,6 +803,11 @@ def carregar_todas_viagens_consulta():
                     "codigo_viagem": cod_vg,
                     "seq_num": extrair_numero_sequencial(cod_vg, vg.id_viagem),
                     "id_frete": vg.id_frete_externo or "-",
+                    "id_saida_coleta": vg.id_saida_coleta,
+                    "saida_coleta": (
+                        f"Saída {saida_ordinal[vg.id_saida_coleta]:02d}"
+                        if vg.id_saida_coleta in saida_ordinal else "-"
+                    ),
                     "status": vg.status_viagem or "Aguardando Adiantamento",
                     "tipo_viagem": tipo_viagem_atual,
                     "ciclo": ciclo_nome_limpo,
@@ -1007,7 +1022,8 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
             "id_viagem_label": prox_cod,
             "mot_id": 0,
             "vei_id": 0,
-            "id_frete": "",
+            "id_frete": previsualizar_frete(prox_cod),
+            "saida_coleta_ref": "",
             "data_op": date.today(),
             "ciclo_nome": "",
             "tipo_viagem": "Individual",
@@ -1079,6 +1095,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
                     "mot_id": vg.id_motorista or 0,
                     "vei_id": vg.id_veiculo or 0,
                     "id_frete": vg.id_frete_externo or "",
+                    "saida_coleta_ref": f"s:{vg.id_saida_coleta}" if vg.id_saida_coleta else "",
                     "data_op": vg.data_criacao.date() if vg.data_criacao else date.today(),
                     "ciclo_nome": ciclo_exib,
                     "tipo_viagem": tipo_vg_db,
@@ -1383,16 +1400,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 
     prox_cod = calcular_proximo_codigo_viagem(viagens_lista)
     codigo_digitado = (get_campo("id_viagem_label") or prox_cod).strip().upper()
-    if not codigo_digitado:
-        codigo_digitado = prox_cod
-
-    for vg_item in viagens_lista:
-        if vg_item["id_viagem"] != id_viagem_atual and vg_item["codigo_viagem"].upper() == codigo_digitado:
-            st.error(
-                f"Já existe uma viagem salva com o código '{codigo_digitado}'. "
-                f"Informe um código único (sugestão: {prox_cod})."
-            )
-            return
+    saida_ref = get_campo("saida_coleta_ref", "")
 
     if not all([mot_id, vei_id, cli_id, col_id, ent_id]):
         st.error(
@@ -1443,6 +1451,17 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
 
     try:
         with SessionLocal() as session:
+            if id_viagem_atual == 0:
+                codigo_digitado, id_frete_digitado = reservar_identificadores(session)
+                if tipo_viagem_val != "Ciclo":
+                    nome_ciclo = f"Individual - {codigo_digitado}"
+            else:
+                frete_salvo = session.get(Viagem, id_viagem_atual)
+                if frete_salvo is None:
+                    st.error("Frete não encontrado para edição.")
+                    return
+                codigo_digitado = resolver_codigo_viagem(frete_salvo, frete_salvo.ciclo)
+                id_frete_digitado = frete_salvo.id_frete_externo or ""
             if tipo_viagem_val == "Ciclo":
                 ciclo_atual_de_edicao = (
                     session.query(Viagem).filter_by(id_viagem=id_viagem_atual).first()
@@ -1492,6 +1511,11 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     get_campo("data_op", date.today()),
                 )
                 salvar_km_deslocamentos_ciclo(ciclo)
+                ref_provisoria = str(saida_ref or "").startswith("p:")
+                id_saida_vinculada = validar_vinculo_saida(
+                    session, saida_ref, ciclo.id_ciclo, vei_id,
+                    provisoria=st.session_state.get("saidas_provisorias", []) if ref_provisoria else None,
+                )
 
                 vg = Viagem(
                     id_ciclo=ciclo.id_ciclo,
@@ -1501,6 +1525,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     id_local_entrega=ent_id,
                     codigo_viagem=codigo_digitado,
                     id_frete_externo=id_frete_digitado or None,
+                    id_saida_coleta=None if ref_provisoria else id_saida_vinculada,
                     status_viagem=get_campo("status_viagem", "Aguardando Adiantamento"),
                     tipo_viagem=tipo_viagem_val,
                     tipo_frete=tipo_frete_val,
@@ -1577,9 +1602,12 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 # a operação na MESMA transação do frete, sem duplicidade.
                 from database.rascunhos import publicar_saidas_rascunho
                 from database.models import RascunhoViagem
-                publicar_saidas_rascunho(
+                ids_saidas_criadas = publicar_saidas_rascunho(
                     session, ciclo.id_ciclo, st.session_state.get("saidas_provisorias", [])
                 )
+                if ref_provisoria:
+                    vg.id_saida_coleta = ids_saidas_criadas[id_saida_vinculada]
+                    session.flush()
                 rascunho_id = st.session_state.get("rascunho_ativo_id")
                 if rascunho_id:
                     salvo = session.get(RascunhoViagem, int(rascunho_id))
@@ -1677,6 +1705,10 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                         viagem=vg,
                     )
                     salvar_km_deslocamentos_ciclo(ciclo_destino)
+                    id_saida_vinculada = validar_vinculo_saida(
+                        session, saida_ref, ciclo_destino.id_ciclo, vei_id,
+                    )
+                    vg.id_saida_coleta = id_saida_vinculada
                     vg.id_ciclo = ciclo_destino.id_ciclo
                     vg.codigo_viagem = codigo_digitado
                     vg.id_motorista = mot_id
@@ -1728,5 +1760,10 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     carregar_recebimentos_viagem.clear()
                     st.toast(f"Alterações da viagem {codigo_digitado} atualizadas!", icon="✅")
                     st.rerun()
+    except ValueError as exc:
+        st.warning(str(exc))
     except IntegrityError:
-        st.error(f"Não foi possível salvar: o código '{codigo_digitado}' já está em uso por outra viagem.")
+        st.error("Não foi possível salvar. Confira a unicidade dos identificadores e os vínculos do frete.")
+    except Exception:
+        from faeg_app.erros import informar_falha
+        informar_falha("salvar o frete")

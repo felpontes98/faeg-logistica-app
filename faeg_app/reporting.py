@@ -28,6 +28,8 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
             {
                 "Código Viagem": v["codigo_viagem"],
                 "ID Frete": v["id_frete"],
+                "Saída de Coleta": v.get("saida_coleta", "-"),
+                "ID Interno Saída": v.get("id_saida_coleta"),
                 "Situação": v["status"],
                 "Tipo Viagem": v["tipo_viagem"],
                 "Ciclo": v["ciclo"],
@@ -351,6 +353,10 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
             por_ciclo.setdefault(saida.id_ciclo, []).append(saida)
             dados_saidas.append({
                 "ID Saída": saida.id_saida, "ID Ciclo": saida.id_ciclo,
+                "Fretes Vinculados": ", ".join(
+                    v.id_frete_externo or v.codigo_viagem or f"V{v.id_viagem}"
+                    for v in saida.fretes_coletados
+                ),
                 "ID Veículo": saida.id_veiculo, "ID Motorista": saida.id_motorista,
                 "Descrição": saida.descricao, "Início": saida.data_inicio,
                 "Fim": saida.data_fim, "KM Manual de Referência": saida.km_planejado_manual,

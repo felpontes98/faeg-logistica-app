@@ -33,12 +33,12 @@ with SessionLocal() as db:
     db.add_all([m,v,c,l1,l2]);db.commit()
     mid=m.id_motorista;vid=v.id_veiculo;cid=c.id_cliente;oid=l1.id_local;did=l2.id_local
 from faeg_app.core import salvar_viagem_completa
-st.session_state['form_data']={'id_viagem_label':'V1','tipo_viagem':'Ciclo',
+st.session_state['form_data']={'id_viagem_label':'V1','saida_coleta_ref':'p:teste-primeira','tipo_viagem':'Ciclo',
      'ciclo_nome':'Ciclo 001','mot_id':mid,'vei_id':vid,'cli_id':cid,
      'col_id':oid,'ent_id':did,'valor_negociado':500.0,'data_op':date(2026,11,24),
      'data_coleta':date(2026,11,24),'data_entrega':date(2026,11,25)}
 st.session_state['saidas_provisorias']=[{
-    'id_veiculo':vid,'id_motorista':mid,'descricao':'Coletas preparatórias',
+    'id':'teste-primeira', 'id_veiculo':vid,'id_motorista':mid,'descricao':'Coletas preparatórias',
     'data_inicio':date(2026,11,24),'data_fim':date(2026,11,24),
     'km_saida_coletas':30.,'km_rota_principal':80.,'km_retorno_base':20.,
     'km_planejado_manual':130.,'odometro_inicial':40000,'odometro_final':40130,
@@ -68,5 +68,31 @@ with SessionLocal() as db:
     assert db.query(Abastecimento).count()==1
     assert db.query(RascunhoViagem).count()==0
     assert db.query(CicloDespesa).first().valor_total==130
-    assert db.query(Viagem).first().financeiro_frete.valor_negociado_total==500
-print('CICLO OK: frete e saida, uma despesa compartilhada, abastecimento unico, rascunho convertido')
+    primeiro=db.query(Viagem).first()
+    assert primeiro.codigo_viagem=='V1'
+    assert primeiro.id_frete_externo=='FV000000001'
+    assert primeiro.id_saida_coleta==db.query(SaidaOperacional).first().id_saida
+    id_saida=primeiro.id_saida_coleta
+    id_ciclo=primeiro.id_ciclo
+# Segundo frete da mesma saída: nenhuma nova saída ou despesa compartilhada.
+st.session_state['form_data']={'id_viagem_label':'V1','id_frete':'FV000000001',
+     'saida_coleta_ref':f's:{id_saida}', 'tipo_viagem':'Ciclo',
+     'ciclo_nome':'Ciclo 001','mot_id':mid,'vei_id':vid,'cli_id':cid,
+     'col_id':oid,'ent_id':did,'tipo_material':'Carga complementar',
+     'valor_negociado':200.0,'data_op':date(2026,11,24),
+     'data_coleta':date(2026,11,24),'data_entrega':date(2026,11,25)}
+st.session_state['despesas_temp']=[]
+st.session_state['saidas_provisorias']=[]
+salvar_viagem_completa(0,[])
+assert not st.errors,st.errors
+with SessionLocal() as db:
+    fretes=db.query(Viagem).order_by(Viagem.id_viagem).all()
+    assert len(fretes)==2
+    assert [(v.codigo_viagem,v.id_frete_externo) for v in fretes]==[
+        ('V1','FV000000001'),('V2','FV000000002')]
+    assert all(v.id_saida_coleta==id_saida and v.id_ciclo==id_ciclo for v in fretes)
+    assert fretes[1].tipo_material=='Carga complementar'
+    assert db.query(SaidaOperacional).count()==1
+    assert db.query(CicloDespesa).count()==1
+    assert db.query(Abastecimento).count()==1
+print('CICLO OK: dois fretes, uma saida, despesa compartilhada unica e identificacao automatica')
