@@ -2,6 +2,12 @@
 
 Este arquivo registra as principais entregas funcionais e técnicas do Sistema Web FAEG. Alterações pontuais e seus responsáveis permanecem disponíveis no histórico de commits do Git.
 
+## 2026-11-26 — Fechamento e rastreabilidade
+
+- Unificamos a leitura de KM nas consultas e nos relatórios e incluímos a estimativa de Diesel no fechamento.
+- Separamos os filtros operacionais e financeiros, preservamos despesas canceladas e passamos a exigir confirmação para individualizar negociações históricas compartilhadas.
+- Ajustamos a prévia do ciclo e a publicação das saídas provisórias. Incluímos Van e HR no cadastro da frota.
+
 ## 2026-11-26 — Identificação automática e vínculos de coleta
 
 - Numeração automática global dos fretes, com código interno `V` e ID comercial `FV` sem referência ao ano.

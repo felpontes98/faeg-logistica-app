@@ -76,14 +76,11 @@ CATEGORIAS_DESPESA_FORNECEDOR = [
     "Outros",
 ]
 
-OPCOES_SITUACAO_OPERACAO = [
-    "Aguardando Adiantamento",
-    "Adiantamento Recebido",
-    "Em Transporte",
-    "Entregue / Aguardando Saldo",
-    "Quitada / Concluída",
-    "Cancelada",
-]
+OPCOES_SITUACAO_OPERACAO = ["Planejada", "Em Transporte", "Entregue", "Concluída", "Cancelada"]
+
+def situacao_operacional(valor):
+    return {"Aguardando Adiantamento": "Planejada", "Adiantamento Recebido": "Planejada",
+            "Entregue / Aguardando Saldo": "Entregue", "Quitada / Concluída": "Concluída"}.get(valor, valor or "Planejada")
 
 # ==============================================================================
 # FUNÇÕES DE PROGRESSÃO E EXTRAÇÃO DO CÓDIGO ÚNICO DA VIAGEM (V1, V2, V3...)
@@ -106,6 +103,8 @@ def financeiro_e_cliente_do_frete(viagem):
     if financeiro_novo is not None:
         return financeiro_novo, financeiro_novo.cliente
     ciclo = viagem.ciclo
+    if ciclo and len(ciclo.viagens) > 1:
+        return None, ciclo.cliente
     return (ciclo.financeiro, ciclo.cliente) if ciclo is not None else (None, None)
 
 
@@ -385,6 +384,10 @@ def on_cliente_select_change(locais_lista):
 
 def on_tipo_viagem_change():
     """Bloqueia e limpa o campo de Ciclo Operacional quando o Tipo de Viagem for Individual."""
+    if st.session_state.get("saidas_provisorias") or any(d.get("destino_temp") == "ciclo" for d in st.session_state.get("despesas_temp", [])):
+        st.session_state["w_tipo_viagem"] = get_campo("tipo_viagem", "Individual")
+        st.warning("Salve as saídas e despesas pendentes antes de alterar o tipo da operação.")
+        return
     sync_campo("w_tipo_viagem", "tipo_viagem")
     if get_campo("tipo_viagem", "Individual") == "Individual":
         st.session_state["form_data"]["ciclo_nome"] = ""
@@ -401,6 +404,10 @@ def on_tipo_viagem_change():
 
 def on_ciclo_nome_change():
     """Recupera componentes de KM compartilhados só com ID inequívoco."""
+    if st.session_state.get("saidas_provisorias") or any(d.get("destino_temp") == "ciclo" for d in st.session_state.get("despesas_temp", [])):
+        st.session_state["w_ciclo_nome"] = get_campo("ciclo_nome", "")
+        st.warning("Salve o frete no ciclo de origem antes de alterar o ciclo das saídas ou despesas pendentes.")
+        return
     sync_campo("w_ciclo_nome", "ciclo_nome")
     nome = (get_campo("ciclo_nome") or "").strip()
     km_deslocamentos = 0.0
@@ -729,10 +736,14 @@ def carregar_todas_viagens_consulta():
 
         for d in despesas_all:
             vt = to_float(d.valor_total)
-            desp_por_viagem[d.id_viagem] = desp_por_viagem.get(d.id_viagem, 0.0) + vt
+            if not d.cancelado:
+                desp_por_viagem[d.id_viagem] = desp_por_viagem.get(d.id_viagem, 0.0) + vt
             desp_detalhadas.append(
                 {
                     "Código Viagem": cod_map.get(d.id_viagem, f"V{d.id_viagem}"),
+                    "Situação": "Cancelada" if d.cancelado else "Ativa",
+                    "Motivo do cancelamento": d.motivo_cancelamento,
+                    "Data do cancelamento": d.data_cancelamento,
                     "Tipo Despesa": d.tipo_despesa,
                     "Descrição": d.descricao_detalhe or "-",
                     "Fornecedor": d.fornecedor.nome_fantasia if d.fornecedor else "Não informado",
@@ -744,6 +755,10 @@ def carregar_todas_viagens_consulta():
                 }
             )
 
+        por_ciclo = {}
+        for saida in consultar_todas_saidas(session):
+            por_ciclo.setdefault(saida.id_ciclo, []).append(saida)
+        percursos = {cid: resumo_saidas(saidas) for cid, saidas in por_ciclo.items()}
         lista = []
         for vg in viagens_raw:
             ciclo = vg.ciclo
@@ -776,6 +791,9 @@ def carregar_todas_viagens_consulta():
             od_ini = to_int(vg.odometro_inicial)
             od_fim = to_int(vg.odometro_final)
             km_real = od_fim - od_ini if od_ini > 0 and od_fim >= od_ini else None
+            percurso = percursos.get(vg.id_ciclo)
+            if percurso:
+                km_real = percurso["km_real"] if vg.tipo_viagem != "Ciclo" else None
             custo_km = (tot_desp / km_real) if km_real else None
             margem = ((res_liq / receita_base) * 100.0) if receita_base > 0 else 0.0
 
@@ -808,7 +826,8 @@ def carregar_todas_viagens_consulta():
                         f"Saída {saida_ordinal[vg.id_saida_coleta]:02d}"
                         if vg.id_saida_coleta in saida_ordinal else "-"
                     ),
-                    "status": vg.status_viagem or "Aguardando Adiantamento",
+                    "status": situacao_operacional(vg.status_viagem),
+                    "financeiro": "Conferir legado" if legado_ambiguo else situacao_financeira_por_recebimentos(v_neg, total_recebido_real) or "Sem recebimento",
                     "tipo_viagem": tipo_viagem_atual,
                     "ciclo": ciclo_nome_limpo,
                     "tipo_frete": tipo_frete_atual,
@@ -852,6 +871,8 @@ def carregar_todas_viagens_consulta():
                     ),
                     "resultado_liquido": res_liq,
                     "km_rodado": km_real,
+                    "km_real_operacao": percurso["km_real"] if percurso else None,
+                    "tem_saidas": bool(percurso),
                     "odometro_inicial": od_ini,
                     "odometro_final": od_fim,
                     "custo_km": custo_km,
@@ -881,7 +902,7 @@ def carregar_despesas_viagem(id_viagem):
                 "data_despesa": d.data_despesa,
             }
             for d in session.query(ViagemDespesa)
-            .filter_by(id_viagem=id_viagem)
+            .filter_by(id_viagem=id_viagem, cancelado=False)
             .order_by(ViagemDespesa.id_despesa)
             .all()
         ]
@@ -1063,7 +1084,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
             "hora_real_ent": None,
             "odo_ini": 0,
             "odo_fin": 0,
-            "status_viagem": "Aguardando Adiantamento",
+            "status_viagem": "Planejada",
         }
         st.session_state["despesas_temp"] = []
     else:
@@ -1092,6 +1113,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
 
                 st.session_state["form_data"] = {
                     "id_viagem_label": resolver_codigo_viagem(vg, ciclo),
+                    "legado_pendente": vg.financeiro_frete is None and ciclo is not None and len(ciclo.viagens) > 1,
                     "mot_id": vg.id_motorista or 0,
                     "vei_id": vg.id_veiculo or 0,
                     "id_frete": vg.id_frete_externo or "",
@@ -1138,7 +1160,7 @@ def carregar_estado_viagem(id_viagem_escolhida, viagens_lista):
                     "hora_real_ent": vg.hora_real_entrega,
                     "odo_ini": to_int(vg.odometro_inicial),
                     "odo_fin": to_int(vg.odometro_final),
-                    "status_viagem": vg.status_viagem or "Aguardando Adiantamento",
+                    "status_viagem": situacao_operacional(vg.status_viagem),
                 }
         st.session_state["despesas_temp"] = []
 
@@ -1370,7 +1392,12 @@ def montar_previa_financeira_ciclo(id_viagem_atual, despesas_frete_atual, client
         # ser salva com seus próprios valores em fretes_financeiro.
         "financeiro_individual": ativo_salvo["financeiro_individual"] if ativo_salvo else True,
     }
-    consolidados = consolidar_ciclos(outros + [frete_atual], carregar_todas_despesas_ciclo())
+    despesas = list(carregar_todas_despesas_ciclo())
+    if not id_viagem_atual:
+        destino = id_ciclo if id_ciclo is not None else f"novo:{identificador.casefold()}"
+        despesas.extend({**d, "id_ciclo": destino} for d in st.session_state.get("despesas_temp", [])
+                        if d.get("destino_temp") == "ciclo")
+    consolidados = consolidar_ciclos(outros + [frete_atual], despesas)
     return consolidados[0] if consolidados else None
 
 
@@ -1526,7 +1553,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     codigo_viagem=codigo_digitado,
                     id_frete_externo=id_frete_digitado or None,
                     id_saida_coleta=None if ref_provisoria else id_saida_vinculada,
-                    status_viagem=get_campo("status_viagem", "Aguardando Adiantamento"),
+                    status_viagem=get_campo("status_viagem", "Planejada"),
                     tipo_viagem=tipo_viagem_val,
                     tipo_frete=tipo_frete_val,
                     rota_origem=origem_val or None,
@@ -1643,6 +1670,9 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                             or vg.tipo_viagem != tipo_viagem_val
                         )
                     )
+                    if saindo_do_ciclo and len(vg.ciclo.viagens) == 1 and session.query(SaidaOperacional).filter_by(id_ciclo=vg.id_ciclo).first():
+                        st.warning("O último frete de uma operação com saídas registradas deve permanecer no ciclo de origem.")
+                        return
                     if saindo_do_ciclo and len(vg.ciclo.viagens) == 1:
                         despesa_compartilhada_ativa = session.query(CicloDespesa).filter_by(
                             id_ciclo=vg.id_ciclo, cancelado=False,
@@ -1716,7 +1746,7 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     vg.id_local_coleta = col_id
                     vg.id_local_entrega = ent_id
                     vg.id_frete_externo = id_frete_digitado or None
-                    vg.status_viagem = get_campo("status_viagem", "Aguardando Adiantamento")
+                    vg.status_viagem = get_campo("status_viagem", "Planejada")
                     vg.tipo_viagem = tipo_viagem_val
                     vg.tipo_frete = tipo_frete_val
                     vg.rota_origem = origem_val or None
@@ -1742,12 +1772,15 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                     vg.km_real_rodado = km_real
 
                     financeiro_frete = vg.financeiro_frete
-                    if financeiro_frete is None:
+                    individualizar = get_campo("confirmar_individualizacao", False)
+                    legado_compartilhado = financeiro_frete is None and get_campo("legado_pendente", False)
+                    if financeiro_frete is None and (individualizar or not legado_compartilhado):
                         # Primeiro salvamento de um frete legado: copia a visão para
                         # a tabela individual, preservando o histórico do ciclo.
                         financeiro_frete = FreteFinanceiro(id_viagem=vg.id_viagem, id_cliente=cli_id)
                         session.add(financeiro_frete)
-                    preencher_financeiro_do_frete(financeiro_frete, cli_id)
+                    if financeiro_frete is not None:
+                        preencher_financeiro_do_frete(financeiro_frete, cli_id)
                     session.commit()
                     st.session_state["loaded_viagem_id"] = None
                     carregar_listas_base.clear()

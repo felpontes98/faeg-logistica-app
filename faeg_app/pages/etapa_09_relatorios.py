@@ -87,7 +87,7 @@ def render(ctx):
         saldo_real_r = max(0.0, receita_r - receb_real_r)
 
         if viagem_sel_id == 0:
-            desps_r = st.session_state.get("despesas_temp", [])
+            desps_r = [d for d in st.session_state.get("despesas_temp", []) if d.get("destino_temp") != "ciclo"]
         else:
             desps_r = carregar_despesas_viagem(viagem_sel_id)
 
@@ -100,6 +100,12 @@ def render(ctx):
             if od_inicio_rel > 0 and od_final_rel >= od_inicio_rel
             else None
         )
+        atual = next((v for v in todas_vg_exp if v["id_viagem"] == viagem_sel_id), {})
+        if atual.get("tem_saidas"):
+            km_r = atual["km_rodado"]
+        elif not viagem_sel_id and st.session_state.get("saidas_provisorias") and get_campo("tipo_viagem") != "Ciclo":
+            from database.rascunhos import resumo_saidas_provisorias
+            km_r = resumo_saidas_provisorias(st.session_state["saidas_provisorias"])["km_real"]
         custo_km_r = (custos_r / km_r) if km_r else None
         frete_ativo_em_ciclo = get_campo("tipo_viagem", "Individual") == "Ciclo"
         if frete_ativo_em_ciclo:
@@ -142,7 +148,7 @@ def render(ctx):
             "destino": get_campo("rota_destino") or "-",
             "tipo_viagem": get_campo("tipo_viagem", "Individual"),
             "frete_info": f"{get_campo('tipo_frete', 'Dedicado')} / {get_campo('forma_contrat', '-')}",
-            "status": status_ctx,
+            "status": f"{status_ctx} / {atual.get('financeiro') or 'Sem recebimento'}",
             "km_real_fmt": f"{km_r} km" if km_r is not None else "Não informado",
             "receita_fmt": fmt_brl(receita_r),
             "despesa_fmt": fmt_brl(custos_r),
@@ -229,6 +235,9 @@ def render(ctx):
                 )
 
             vg_bi_filtradas = todas_vg_exp
+            filtro_financeiro = st.selectbox("Situação financeira", ["Todas"] + sorted({v.get("financeiro", "Sem recebimento") for v in vg_bi_filtradas}), key="bi_financeiro")
+            if filtro_financeiro != "Todas":
+                vg_bi_filtradas = [v for v in vg_bi_filtradas if v.get("financeiro") == filtro_financeiro]
             if bi_status != "Todas":
                 vg_bi_filtradas = [v for v in vg_bi_filtradas if v["status"] == bi_status]
             if bi_tipo != "Todos":
@@ -238,7 +247,7 @@ def render(ctx):
 
             cods_bi_ativos = {v["codigo_viagem"] for v in vg_bi_filtradas}
             desps_bi_filtradas = [
-                d for d in desp_det_exp if d.get("Código Viagem") in cods_bi_ativos
+                d for d in desp_det_exp if d.get("Situação") != "Cancelada" and d.get("Código Viagem") in cods_bi_ativos
             ]
 
             rec_global = sum(v["receita_base"] for v in vg_bi_filtradas)
@@ -258,9 +267,17 @@ def render(ctx):
                 st.caption("O BI por frete não atribui despesas nem KM comuns aos serviços. "
                            "A margem e o custo por KM do conjunto filtrado devem ser consultados "
                            "no fechamento por ciclo, não por frete.")
-            km_global = sum(v["km_rodado"] or 0 for v in vg_bi_filtradas)
-            quantos_com_odometro = sum(v["km_rodado"] is not None for v in vg_bi_filtradas)
-            km_completo = quantos_com_odometro == len(vg_bi_filtradas) and bool(vg_bi_filtradas)
+            distancias = {}
+            for v in vg_bi_filtradas:
+                if v.get("tem_saidas"):
+                    distancias[("operacao", v["id_ciclo"])] = v["km_real_operacao"]
+                else:
+                    distancias[("frete", v["id_viagem"])] = v["km_rodado"]
+            km_global = sum(km for km in distancias.values() if km is not None)
+            quantos_com_odometro = sum(km is not None for km in distancias.values())
+            km_completo = bool(distancias) and quantos_com_odometro == len(distancias)
+            if mistura_ciclos_bi:
+                st.caption("O KM físico considera cada operação presente no filtro por inteiro, uma única vez.")
             custo_km_global = ((desp_global / km_global)
                                 if km_global > 0 and km_completo and not mistura_ciclos_bi else None)
             km_global_fmt = (

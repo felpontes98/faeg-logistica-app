@@ -68,7 +68,7 @@ def render(ctx):
         for v in veiculos_db
     }
     opcoes_destino = ["Frete atual (ID Frete)"]
-    if ciclos_destino or get_campo("tipo_viagem", "Individual") == "Ciclo":
+    if (viagem_sel_id and ciclos_destino) or get_campo("tipo_viagem", "Individual") == "Ciclo":
         opcoes_destino.append("Ciclo inteiro (ID Ciclo)")
     if veiculos_destino:
         opcoes_destino.append("Veículo (sem frete/ciclo definido)")
@@ -105,7 +105,7 @@ def render(ctx):
                 st.error("Há ciclos com nomes repetidos; confira a operação antes de lançar despesas.")
             if viagem_sel_id == 0:
                 st.caption("Este custo permanecerá no rascunho até o frete ser salvo.")
-        elif ciclos_destino:
+        elif ciclos_destino and viagem_sel_id:
             ciclo_desp_id = st.selectbox(
                 "CICLO QUE RECEBERÁ ESTE CUSTO *", options=list(ciclos_destino),
                 format_func=lambda x: ciclos_destino[x], key="desp_ciclo_destino_unico",
@@ -251,6 +251,8 @@ def render(ctx):
     if btn_add_desp:
         if possiveis_duplicidades and not confirmar_despesa_distinta:
             st.warning("Confirme primeiro a conferência do comprovante para evitar contagem duplicada.")
+        elif destino_desp.startswith("Ciclo") and not ciclo_desp_id and (viagem_sel_id or not get_campo("ciclo_nome", "").strip()):
+            st.warning("Informe um ciclo válido antes de registrar a despesa.")
         elif unit_desp <= 0:
             st.warning("Informe um valor unitário maior que R$ 0,00.")
         elif eh_combustivel and not veiculo_abast_id:
@@ -295,6 +297,7 @@ def render(ctx):
                 with SessionLocal() as db:
                     if destino_desp.startswith("Frete"):
                         consulta_existente = db.query(ViagemDespesa).filter_by(
+                            cancelado=False,
                             id_viagem=viagem_sel_id,
                             tipo_despesa=tipo_desp,
                             data_despesa=data_despesa_unica,
@@ -443,6 +446,7 @@ def render(ctx):
                 col_t2.caption(f"Odômetro no abastecimento: {item['odometro_abastecimento']} km")
             col_t3.markdown(f"{item['quantidade']:.2f} × {fmt_brl(item['valor_unitario'])}")
             col_t4.markdown(f"**{fmt_brl(item['valor_total'])}**")
+            motivo = st.text_input("Motivo do cancelamento", max_chars=200, key=f"motivo_desp_{item['id_despesa']}") if viagem_sel_id else ""
             if col_t5.button("🗑️", key=f"del_desp_{viagem_sel_id}_{item['idx']}", help="Remover despesa"):
                 if viagem_sel_id == 0:
                     st.session_state["despesas_temp"].pop(item["idx"])
@@ -460,16 +464,20 @@ def render(ctx):
                                     "'Estornar atribuição' no histórico de despesas do veículo, "
                                     "preservando a rastreabilidade."
                                 )
+                            elif not motivo.strip():
+                                st.warning("Informe o motivo para cancelar a despesa.")
                             else:
-                                # Abastecimento derivado sai junto com o custo
-                                # removido; não deixar medição órfã no histórico.
+                                # O custo e o abastecimento compartilham o motivo do cancelamento.
                                 db.query(Abastecimento).filter_by(
                                     id_despesa_viagem=obj_d.id_despesa
-                                ).delete(synchronize_session=False)
-                                db.delete(obj_d)
+                                ).update({"cancelado": True, "data_cancelamento": date.today(),
+                                          "motivo_cancelamento": motivo.strip()}, synchronize_session=False)
+                                obj_d.cancelado = True
+                                obj_d.data_cancelamento = date.today()
+                                obj_d.motivo_cancelamento = motivo.strip()
                                 db.commit()
                                 limpar_caches_atribuicao()
-                                st.toast("Despesa removida!", icon="🗑️")
+                                st.toast("Despesa cancelada.", icon="🗑️")
                                 st.rerun()
 
         st.markdown(

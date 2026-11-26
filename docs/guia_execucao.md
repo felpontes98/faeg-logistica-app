@@ -15,6 +15,8 @@ python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
+A conferência desta revisão utilizou Python 3.12, PostgreSQL 16.2, Streamlit 1.67.0, SQLAlchemy 2.1.9 e psycopg 3.3.9. Usamos o prefixo `postgresql+psycopg://` no exemplo de conexão.
+
 A configuração local do banco fica no arquivo `.env`, que não integra o controle de versões. O modelo de configuração está em [`.env.example`](../.env.example).
 
 ```powershell

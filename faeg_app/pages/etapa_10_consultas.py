@@ -86,6 +86,9 @@ def render(ctx):
         filtradas = [v for v in filtradas if v["tipo_viagem"] == filtro_tipo_vg]
     if filtro_situacao != "Todas":
         filtradas = [v for v in filtradas if v["status"] == filtro_situacao]
+    filtro_financeiro = st.selectbox("Situação financeira", ["Todas"] + sorted({v.get("financeiro", "Sem recebimento") for v in filtradas}), key="consulta_financeiro")
+    if filtro_financeiro != "Todas":
+        filtradas = [v for v in filtradas if v.get("financeiro") == filtro_financeiro]
     if filtro_origem != "Todas":
         filtradas = [v for v in filtradas if v["origem_frete"] == filtro_origem]
 
@@ -128,7 +131,8 @@ def render(ctx):
                     "Código": v["codigo_viagem"],
                     "ID Frete": v["id_frete"],
                     "Saída de Coleta": v.get("saida_coleta", "-"),
-                    "Situação": v["status"],
+                    "Situação operacional": v["status"],
+                "Situação financeira": v.get("financeiro"),
                     "Tipo": v["tipo_viagem"],
                     "Ciclo": v["ciclo"],
                     "Cliente": v["cliente"],

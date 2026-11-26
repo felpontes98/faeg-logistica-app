@@ -79,6 +79,7 @@ def atribuir_despesa_veiculo(
         if frete is None or frete.id_veiculo != origem.id_veiculo:
             raise ValueError("Selecione um frete salvo que utilize o mesmo veículo da despesa.")
         duplicada = session.query(ViagemDespesa).filter_by(
+            cancelado=False,
             id_viagem=id_destino,
             tipo_despesa=origem.tipo_despesa,
             descricao_detalhe=origem.descricao_detalhe,
@@ -167,7 +168,9 @@ def estornar_atribuicao_veiculo(session, id_despesa_veiculo, motivo):
         tipo_destino, id_destino, id_lancamento = "Frete", destino.id_viagem, destino.id_despesa
         origem.id_despesa_viagem_destino = None
         session.flush()
-        session.delete(destino)
+        destino.cancelado = True
+        destino.data_cancelamento = date.today()
+        destino.motivo_cancelamento = motivo[:200]
     else:
         destino = session.query(CicloDespesa).filter_by(id_despesa_ciclo=id_desp_ciclo).one_or_none()
         if destino is None or destino.cancelado:

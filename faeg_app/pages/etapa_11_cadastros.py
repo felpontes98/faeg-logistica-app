@@ -252,7 +252,9 @@ def render(ctx):
                     placeholder="ABC1D23",
                     value=vei_edit_obj["placa"] if vei_edit_obj else "",
                 )
-                tipos_v = ["Carreta", "Bitrem", "Rodotrem", "Truck", "Toco", "3/4", "VUC", "Utilitário"]
+                tipos_v = ["Carreta", "Bitrem", "Rodotrem", "Truck", "Toco", "3/4", "VUC", "Utilitário", "Van", "HR"]
+                if vei_edit_obj and vei_edit_obj.get("tipo_veiculo") and vei_edit_obj["tipo_veiculo"] not in tipos_v:
+                    tipos_v.append(vei_edit_obj["tipo_veiculo"])
                 idx_tv = (
                     tipos_v.index(vei_edit_obj["tipo_veiculo"])
                     if vei_edit_obj and vei_edit_obj.get("tipo_veiculo") in tipos_v

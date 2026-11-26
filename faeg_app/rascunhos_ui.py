@@ -40,6 +40,8 @@ def retomar_rascunho(id_rascunho):
             return
         form, saidas, despesas = abrir_rascunho(registro.conteudo_json)
     limpar_widgets_viagem()
+    from faeg_app.core import situacao_operacional
+    form["status_viagem"] = situacao_operacional(form.get("status_viagem"))
     st.session_state["form_data"] = form
     st.session_state["saidas_provisorias"] = saidas
     st.session_state["despesas_temp"] = despesas
@@ -47,7 +49,6 @@ def retomar_rascunho(id_rascunho):
     st.session_state["viagem_ativa_id"] = 0
     st.session_state["loaded_viagem_id"] = 0
     st.session_state["menu_operacional_radio"] = "1. Frota FAEG"
-    st.rerun()
 
 
 def controles_rascunho(viagem_id):
@@ -61,5 +62,4 @@ def controles_rascunho(viagem_id):
     if opcoes:
         with st.expander(f"Retomar rascunho ({len(opcoes)})"):
             selecionado = st.selectbox("Rascunho salvo", list(opcoes), format_func=opcoes.get, key="faeg_rascunho_selecionado")
-            if st.button("Retomar preenchimento", use_container_width=True):
-                retomar_rascunho(selecionado)
+            st.button("Retomar preenchimento", use_container_width=True, on_click=retomar_rascunho, args=(selecionado,))

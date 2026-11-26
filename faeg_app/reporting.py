@@ -30,7 +30,8 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
                 "ID Frete": v["id_frete"],
                 "Saída de Coleta": v.get("saida_coleta", "-"),
                 "ID Interno Saída": v.get("id_saida_coleta"),
-                "Situação": v["status"],
+                "Situação operacional": v["status"],
+                "Situação financeira": v.get("financeiro"),
                 "Tipo Viagem": v["tipo_viagem"],
                 "Ciclo": v["ciclo"],
                 "Tipo Frete": v["tipo_frete"],
@@ -69,12 +70,13 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
                     if v["receita_base"] > 0 and v["tipo_viagem"] != "Ciclo"
                     and not v["financeiro_legado_ambiguo"] else None
                 ),
-                "KM Individual / Ciclo": v["km_rota_planejado"],
+                "KM planejado do frete (histórico)": v["km_rota_planejado"],
                 "KM Saída / Entre Coletas (ciclo)": v["km_saida_entre_coletas"],
                 "KM Retorno Operacional (ciclo)": v["km_retorno_operacional"],
                 "KM Deslocamentos Total (ciclo)": v["km_deslocamentos_operacionais"],
                 "Odômetro Inicial (operação)": v["odometro_inicial"] or None,
                 "Odômetro Final (operação)": v["odometro_final"] or None,
+                "KM real da operação (compartilhado no ciclo)": v.get("km_real_operacao"),
                 "KM Rodado": v["km_rodado"],
                 "Custo por KM (R$)": round(v["custo_km"], 2) if v["custo_km"] is not None else None,
             }

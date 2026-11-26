@@ -38,14 +38,14 @@ python -m pytest -q tests
 | TI-04 | RF-08–10 | Abastecer Diesel/ARLA uma vez; visualizar histórico sem novo custo na DRE | Histórico e resultado |
 | TI-05 | RF-25–26 | Atribuir e estornar despesa provisória com trilha; custo ativo em um único destino | Eventos de auditoria |
 | TI-06 | RF-42–45 | Cadastrar saídas preparatórias, entregas e retorno no mesmo ciclo | Etapa 2 e tabelas de saídas |
-| TI-07 | RF-43–44 | Somar trechos uma vez; rejeitar intervalos sobrepostos ou incompletos | Comparação com odômetros |
+| TI-07 | RF-43–44 | Somar trechos uma vez; manter o KM real indisponível com intervalos sobrepostos ou incompletos | Comparação com odômetros |
 | TI-08 | RF-46 | Estimar consumo sem alterar custo contabilizado | Painel de consumo e DRE |
 | TI-09 | RF-11, RF-29, RF-47 | Exportar relatórios do ciclo, saídas e trechos; conferir totais com banco | Arquivos de teste |
 | TI-10 | RF-12 | Prévia de Excel funciona; gravação no banco permanece bloqueada | Captura/relatório de prévia |
 | TI-11 | RF-35–36 | Tentar IDs repetidos, ciclo ambíguo e troca de veículo com abastecimento | Mensagens e registros preservados |
+| TI-12 | RI-01–06 | Revisar permissões, restauração do backup e dados pessoais | Plano de segurança e ata de aceite |
 | TI-13 | RF-52–53 | Registrar dois fretes na mesma saída e outros em uma segunda saída do mesmo ciclo; verificar IDs automáticos e KM físico não duplicado | Teste de vínculos e conferência de KM |
 | TI-14 | RF-52–53 | Impedir vínculo de frete a saída de outro ciclo ou veículo; preservar identificadores anteriores | Testes de integridade e histórico |
-| TI-12 | RI-01–06 | Revisar permissões, restauração do backup e dados pessoais | Plano de segurança e ata de aceite |
 
 ### Processo de execução
 
@@ -56,3 +56,12 @@ python -m pytest -q tests
 5. Formalizar aprovação operacional pela FAEG e revisão técnica pelos desenvolvedores.
 
 **Critério de aceite:** registrar resultado, responsável e eventuais ajustes para os cenários críticos, garantindo rastreabilidade das alterações.
+
+
+### Conferências de regressão
+
+1. Salvar dois fretes com negociação histórica compartilhada e conferir que a receita só entra após individualização expressa.
+2. Comparar uma saída individual de 120 km no fechamento, relatório, BI e Excel.
+3. Conferir uma despesa de ciclo no rascunho e após o salvamento.
+4. Registrar o pagamento integral e verificar os filtros financeiro e operacional.
+5. Cancelar Diesel do frete e conferir motivo, resultado ativo e medição no histórico.

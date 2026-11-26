@@ -52,12 +52,30 @@ def render(ctx):
                 registros = consultar_saidas(db, operacao.id_ciclo)
                 if registros:
                     resumo_saidas_atual = resumo_saidas(registros)
-    if not viagem_sel_id and st.session_state.get("saidas_provisorias"):
-        from database.rascunhos import resumo_saidas_provisorias
-        resumo_saidas_atual = resumo_saidas_provisorias(st.session_state["saidas_provisorias"])
+                    from database.saidas_operacionais import estimativas_por_veiculo
+                    estimativas, avisos = estimativas_por_veiculo(db, resumo_saidas_atual)
+                    for estimativa in estimativas:
+                        st.caption(f"Diesel estimado · veículo {estimativa['id_veiculo']} · {estimativa['litros_estimados']:.2f} L · {fmt_brl(estimativa['custo_estimado'])}")
+                    for aviso in avisos:
+                        st.caption(aviso)
+    if not viagem_sel_id:
+        from types import SimpleNamespace
+        from database.identificacao_fretes import ciclo_existente_unico
+        from database.saidas_operacionais import consultar_saidas, resumo_saidas
+        with SessionLocal() as db:
+            try:
+                ciclo = ciclo_existente_unico(db, get_campo("ciclo_nome", "")) if get_campo("tipo_viagem") == "Ciclo" else None
+            except ValueError as exc:
+                st.warning(str(exc))
+                ciclo = None
+            registros = consultar_saidas(db, ciclo.id_ciclo) if ciclo else []
+            for i, saida in enumerate(st.session_state.get("saidas_provisorias", []), 1):
+                registros.append(SimpleNamespace(**saida, id_saida=f"provisória {i}", trechos=[]))
+            if registros:
+                resumo_saidas_atual = resumo_saidas(registros)
     modo_saidas = resumo_saidas_atual is not None
     st.markdown('<div class="sec-subtitle">Situação da operação</div>', unsafe_allow_html=True)
-    status_atual = get_campo("status_viagem", "Aguardando Adiantamento")
+    status_atual = get_campo("status_viagem", "Planejada")
     st.selectbox(
         "SITUAÇÃO DA OPERAÇÃO",
         OPCOES_SITUACAO_OPERACAO,
@@ -192,11 +210,8 @@ def render(ctx):
 
     if not modo_saidas and viagem_sel_id:
         with st.expander("Ver detalhes dos cálculos de KM", expanded=False):
-            if modo_saidas:
-                st.info("Para a operação atual, os quilômetros são calculados pelas saídas/trechos "
-                        "cadastrados acima. Os textos abaixo descrevem somente o método legado dos fretes.")
             st.markdown(
-                "**KM planejado (modo legado):** no frete individual, usa o KM manual da Etapa 2; "
+                "**KM planejado (modo legado):** no frete individual, usa o KM histórico do frete; "
                 "no ciclo, soma os fretes vinculados ao mesmo ID interno."
             )
             if get_campo("km_componentes_discriminados", True):
@@ -209,7 +224,7 @@ def render(ctx):
             else:
                 st.info(
                     "Os KM de deslocamentos foram registrados antes da separação dos campos. "
-                    "O valor anterior foi preservado; a discriminação deve ser feita na Etapa 2."
+                    "Preservamos o total histórico. Para novos percursos, registre os componentes por saída na Etapa 2."
                 )
             st.markdown(
                 "**KM total real:** diferença dos odômetros para frete individual; "

@@ -78,6 +78,9 @@ erDiagram
         decimal valor_recebido
     }
     VIAGENS_DESPESAS {
+        boolean cancelado
+        date data_cancelamento
+        string motivo_cancelamento
         int id_despesa PK
         int id_viagem FK
         decimal valor_total

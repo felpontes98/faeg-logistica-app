@@ -28,6 +28,8 @@ def _obter_contexto(viagem_id, tipo_viagem, nome_ciclo):
         if viagem_id:
             viagem = db.get(Viagem, viagem_id)
             ciclo = viagem.ciclo if viagem else None
+            if tipo_viagem == "Ciclo" and ciclo and ciclo.nome_operacao.strip().casefold() != (nome_ciclo or "").strip().casefold():
+                raise ValueError("Salve a mudança de ciclo antes de editar as saídas.")
         elif tipo_viagem == "Ciclo":
             ciclo = ciclo_existente_unico(db, nome_ciclo)
         else:
@@ -118,12 +120,9 @@ def render_percurso(ctx):
     except ValueError as exc:
         st.warning(str(exc))
         return
-    if not cid:
-        saidas = st.session_state.setdefault("saidas_provisorias", [])
-    else:
-        saidas = salvas
-        if st.session_state.get("saidas_provisorias"):
-            st.info("Há saídas em rascunho. Conclua o salvamento do frete antes de registrar outras saídas.")
+    provisoria = st.session_state.setdefault("saidas_provisorias", []) if not ctx.viagem_sel_id else []
+    saidas = salvas + provisoria
+    ids_salvos = {s["id"] for s in salvas}
     _exibir_resumo(saidas, rascunho=not bool(cid))
     if cid and fretes_por_saida:
         with st.expander("Fretes vinculados às saídas", expanded=False):
@@ -132,7 +131,7 @@ def render_percurso(ctx):
                 resumo = ", ".join(f"{fv} ({interno})" for interno, fv in fretes) or "Nenhum frete vinculado"
                 st.caption(f"Saída {n:02d}: {resumo}")
 
-    if cid and salvas:
+    if cid and salvas and not provisoria:
         with SessionLocal() as db:
             resumo = resumo_saidas(consultar_saidas(db, cid))
         col_a, col_b = st.columns(2)
@@ -154,6 +153,8 @@ def render_percurso(ctx):
             st.session_state.pop(seletor, None)
         selected = st.selectbox("REGISTRO", atual_keys, format_func=lambda k: labels[k], key=seletor)
         entry = next((s for c, idx, _ in choices if c == selected and idx is not None for s in [saidas[idx]]), None)
+        if entry and entry["id"] in ids_salvos and not ctx.viagem_sel_id:
+            st.caption("Para editar esta saída salva, abra um frete da operação.")
         if entry and entry.get("tem_trechos_legados"):
             st.warning("Esta saída possui trechos detalhados do formato anterior. Os trechos continuam válidos e não serão sobrescritos; a edição dos KM por componentes fica bloqueada até sua revisão.")
         prefix = f"faeg_percurso_form_{cid or 'novo'}_{selected}"
@@ -189,6 +190,8 @@ def render_percurso(ctx):
             km_rota = y.number_input("KM rota principal", min_value=0., step=1., format="%.2f", value=_as_float(entry.get("km_rota_principal")) if entry else 0., disabled=bloqueado)
             km_retorno = z.number_input("KM retorno à base", min_value=0., step=1., format="%.2f", value=_as_float(entry.get("km_retorno_base")) if entry else 0., disabled=bloqueado)
             planejado = round(km_coletas + km_rota + km_retorno, 2)
+            if entry and not bloqueado and not planejado and not any(entry.get(k) for k in ("km_saida_coletas", "km_rota_principal", "km_retorno_base")):
+                planejado = _as_float(entry.get("km_planejado_manual"))
             if bloqueado:
                 planejado = _as_float(entry.get("km_planejado_manual"))
                 st.caption("Os trechos detalhados desta saída histórica continuarão sendo a referência do fechamento.")
@@ -201,7 +204,7 @@ def render_percurso(ctx):
                                       value=int(entry.get("odometro_final") or 0) if entry else 0)
             st.caption("Deixe a chegada e o odômetro final vazios/zero enquanto a saída estiver em andamento. O KM real é automático.")
             obs = st.text_area("OBSERVAÇÕES", value=entry.get("observacoes", "") if entry else "")
-            submit = st.form_submit_button("Salvar esta saída", type="primary")
+            submit = st.form_submit_button("Salvar esta saída", type="primary", disabled=bool(entry and entry["id"] in ids_salvos and not ctx.viagem_sel_id))
         if submit:
             valores = {
                 "id_veiculo": vid, "id_motorista": mid, "descricao": descricao.strip(),
@@ -213,17 +216,19 @@ def render_percurso(ctx):
             }
             try:
                 validar_preenchimento_saida(valores)
-                if cid:
+                if ctx.viagem_sel_id and cid:
                     with SessionLocal() as db:
                         salvar_saida(db, id_ciclo=cid, id_saida=entry["id"] if entry else None,
                                     **valores)
                         db.commit()
+                        from faeg_app.core import carregar_todas_viagens_consulta
+                        carregar_todas_viagens_consulta.clear()
                 else:
                     if entry:
-                        saidas[choices[[c[0] for c in choices].index(selected)][1]] = {**entry, **valores}
+                        provisoria[provisoria.index(entry)] = {**entry, **valores}
                     else:
-                        saidas.append({"id": str(uuid4()), **valores})
-                    st.session_state["saidas_provisorias"] = saidas
+                        provisoria.append({"id": str(uuid4()), **valores})
+                    st.session_state["saidas_provisorias"] = provisoria
                 st.session_state.pop(seletor, None)
                 st.toast("Saída registrada. Adicione outra se necessário.", icon="✅")
                 st.rerun()
@@ -235,7 +240,7 @@ def render_percurso(ctx):
     st.caption("Vincule este frete a uma saída já cadastrada. A mesma saída pode receber vários fretes; seu KM não é repetido.")
     vinculos = {"": "Selecionar depois (sem vínculo de coleta)"}
     for n, saida in enumerate(saidas, 1):
-        chave = f"s:{saida['id']}" if cid else f"p:{saida['id']}"
+        chave = f"s:{saida['id']}" if saida["id"] in ids_salvos else f"p:{saida['id']}"
         vinculos[chave] = f"Saída {n:02d} — {saida.get('descricao') or 'Sem descrição'}"
     referencia_atual = str(get_campo("saida_coleta_ref", "") or "")
     if referencia_atual not in vinculos:
@@ -255,5 +260,5 @@ def render_percurso(ctx):
         st.session_state.setdefault("form_data", {})["saida_coleta_ref"] = selecionada
     if ctx.viagem_sel_id and not selecionada:
         st.caption("Este frete não possui saída de coleta vinculada. O vínculo pode ser registrado na edição.")
-    if not cid and saidas:
+    if provisoria:
         st.info("As saídas estão no preenchimento atual. Use **Salvar rascunho** na barra lateral para guardá-las ou **Salvar viagem** quando completar os dados obrigatórios.")

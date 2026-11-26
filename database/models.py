@@ -164,7 +164,7 @@ class Viagem(Base):
     id_frete_externo = Column(String(60))
     id_saida_coleta = Column(Integer, ForeignKey("saidas_operacionais.id_saida", ondelete="SET NULL"), nullable=True, index=True)
     data_criacao = Column(DateTime, default=datetime.utcnow)
-    status_viagem = Column(String(50), default="Aguardando Adiantamento")
+    status_viagem = Column(String(50), default="Planejada")
     tipo_viagem = Column(String(30), default="Individual")
     tipo_frete = Column(String(50), default="Dedicado")
     rota_origem = Column(String(120))
@@ -278,6 +278,11 @@ class ViagemDespesa(Base):
 
     viagem = relationship("Viagem", back_populates="despesas")
     fornecedor = relationship("Fornecedor", back_populates="despesas")
+
+
+    cancelado = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    data_cancelamento = Column(Date)
+    motivo_cancelamento = Column(String(200))
 
 
 class VeiculoDespesa(Base):
@@ -457,6 +462,9 @@ def sincronizar_colunas_banco():
     Base.metadata.create_all(bind=engine)
 
     comandos_migracao = [
+        "ALTER TABLE viagens_despesas ADD COLUMN IF NOT EXISTS cancelado BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE viagens_despesas ADD COLUMN IF NOT EXISTS data_cancelamento DATE",
+        "ALTER TABLE viagens_despesas ADD COLUMN IF NOT EXISTS motivo_cancelamento VARCHAR(200)",
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS nome_fantasia VARCHAR(150);",
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cep VARCHAR(15);",
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS endereco_completo VARCHAR(250);",
@@ -467,7 +475,7 @@ def sincronizar_colunas_banco():
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS codigo_viagem VARCHAR(30);",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS id_saida_coleta INTEGER REFERENCES saidas_operacionais(id_saida) ON DELETE SET NULL;",
         "CREATE INDEX IF NOT EXISTS ix_viagens_id_saida_coleta ON viagens (id_saida_coleta);",
-        "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS tipo_viagem VARCHAR(30) DEFAULT 'Individual';",
+        "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS tipo_viagem VARCHAR(30);",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_origem VARCHAR(120);",
         "ALTER TABLE viagens ADD COLUMN IF NOT EXISTS rota_destino VARCHAR(120);",
         "ALTER TABLE ciclos_operacionais ADD COLUMN IF NOT EXISTS km_deslocamentos_operacionais NUMERIC(12, 2) DEFAULT 0;",
@@ -496,13 +504,13 @@ def sincronizar_colunas_banco():
         "ALTER TABLE saidas_operacionais ADD COLUMN IF NOT EXISTS km_retorno_base NUMERIC(12, 2);",
         "ALTER TABLE viagens ALTER COLUMN rota_resumo TYPE VARCHAR(250);",
         "ALTER TABLE viagens ALTER COLUMN nfe_carga TYPE VARCHAR(120);",
-        "CREATE UNIQUE INDEX IF NOT EXISTS ix_viagens_codigo_viagem ON viagens (codigo_viagem);",
     ]
 
     with engine.begin() as conn:
         for sql in comandos_migracao:
             conn.execute(text(sql))
 
+        conn.execute(text("UPDATE viagens SET tipo_viagem = CASE WHEN tipo_frete = 'Ciclo' THEN 'Ciclo' ELSE 'Individual' END WHERE tipo_viagem IS NULL"))
         # Preenche codigo_viagem (V1, V2...) em viagens antigas que ainda não possuem código
         rows_sem_cod = conn.execute(
             text("SELECT id_viagem FROM viagens WHERE codigo_viagem IS NULL OR TRIM(codigo_viagem) = '' ORDER BY id_viagem ASC")
@@ -524,6 +532,8 @@ def sincronizar_colunas_banco():
                     {"cod": cod_novo, "id_v": id_v},
                 )
                 seq += 1
+
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_viagens_codigo_viagem ON viagens (codigo_viagem)"))
 
         # Migra rota_resumo antiga ("Origem -> Destino" ou "Origem x Destino") para rota_origem e rota_destino
         rows_rota = conn.execute(

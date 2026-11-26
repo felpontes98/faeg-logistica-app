@@ -22,3 +22,6 @@
 | **CI** | Integração contínua: verificações automáticas disparadas por push/pull request. |
 | **ADR** | Registro de Decisão de Arquitetura que documenta contexto, escolha e consequências. |
 | **Neon** | Plataforma PostgreSQL utilizada para persistência da aplicação publicada. |
+
+
+A situação operacional acompanha a execução. Para o financeiro, distinguimos fretes sem recebimento, com recebimento parcial, quitados ou sujeitos a conferência.

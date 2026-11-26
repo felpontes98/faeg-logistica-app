@@ -5,7 +5,7 @@ Este documento estabelece os critérios utilizados no cadastro, planejamento, ex
 ## RN-01 — Frete e ciclo
 
 - **Frete:** contratação comercial individual, identificada por código, cliente, carga, documentos, coleta, entrega, negociação e recebimentos próprios.
-- **Ciclo:** agrupamento operacional de um ou mais fretes que compartilham planejamento, deslocamentos ou despesas. A existência de um único frete de retorno já permite tratá-lo no mesmo ciclo da operação de ida.
+- **Ciclo:** agrupamento operacional de um ou mais fretes que compartilham planejamento, deslocamentos ou despesas. Na operação dedicada, registramos o retorno com um único frete como individual. Agrupamos múltiplos fretes de retorno em um ciclo de retorno.
 - Cada frete mantém sua negociação individual. O ciclo consolida as receitas dos fretes vinculados e não distribui despesas comuns automaticamente.
 - O vínculo ao ciclo usa o identificador interno do banco, evitando reunir ciclos históricos homônimos por aproximação textual.
 
@@ -17,7 +17,7 @@ O cadastro compreende identificação da frota, dados do frete e documentos, cli
 
 - Cada frete salvo recebe um código interno `V` e um ID comercial `FV` gerados na mesma sequência numérica, sem referência ao ano. Por exemplo, `V11` e `FV000000011`.
 - A sequência é global e não reinicia quando muda o ciclo, a saída ou o ano. A numeração é reservada durante a transação do primeiro salvamento. Uma prévia exibida durante o preenchimento pode mudar caso outro frete seja salvo antes.
-- Os identificadores de fretes históricos não são alterados automaticamente. Códigos já utilizados não são reutilizados.
+- Os identificadores de fretes históricos não são alterados automaticamente. A reserva verifica os códigos presentes na base.
 - A numeração exibida das saídas (`Saída 01`, `Saída 02`...) acompanha a ordem de cadastro por `id_saida` dentro do ciclo e não muda quando a data da saída é corrigida. O `id_saida` é a chave interna persistida no banco.
 - Cada frete pode indicar a saída em que foi coletado. Uma saída pode atender vários fretes; cada frete mantém carga, cliente, coleta, entrega, documentos e negociação próprios.
 - A identificação da saída de coleta não transfere o frete para outro ciclo nem adiciona KM ao cadastro comercial.
@@ -76,3 +76,5 @@ A importação da planilha disponibiliza prévia e conferência. A gravação au
 A situação de execução da viagem e a situação financeira do frete são independentes: uma entrega concluída pode permanecer com saldo a receber. Os parâmetros de consumo por veículo ficam nos cadastros gerais e podem ser atualizados; são referências gerenciais, não medições diretas de estoque no tanque.
 
 Os [requisitos](requisitos.md) especificam as funcionalidades e o [plano de testes](plano_testes.md) reúne os cenários de verificação do sistema.
+
+Nos relatórios filtrados, o KM físico abrange as operações representadas pelos fretes selecionados. Contamos cada operação uma vez. Um frete em ciclo não recebe parcela da distância compartilhada.

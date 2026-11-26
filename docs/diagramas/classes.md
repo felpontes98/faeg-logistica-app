@@ -87,6 +87,9 @@ classDiagram
 ```mermaid
 classDiagram
     class ViagemDespesa {
+      +bool cancelado
+      +date data_cancelamento
+      +str motivo_cancelamento
       +int id_despesa
       +int id_viagem
       +decimal valor_total

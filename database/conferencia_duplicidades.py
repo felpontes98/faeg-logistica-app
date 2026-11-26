@@ -122,6 +122,7 @@ def procurar_semelhancas_cruzadas(session, destino, id_ciclo, dados):
             Viagem, ViagemDespesa.id_viagem == Viagem.id_viagem,
         ).filter(
             Viagem.id_ciclo == id_ciclo,
+            ViagemDespesa.cancelado.is_(False),
             ViagemDespesa.tipo_despesa == novo["tipo_despesa"],
             ViagemDespesa.data_despesa == novo["data_despesa"],
             ViagemDespesa.valor_total == novo["valor_total"],
@@ -150,7 +151,7 @@ def listar_semelhancas_entre_frete_ciclo(session):
     """Auditoria somente leitura dos custos semelhantes já cadastrados."""
     fretes = session.query(ViagemDespesa, Viagem).join(
         Viagem, ViagemDespesa.id_viagem == Viagem.id_viagem,
-    ).all()
+    ).filter(ViagemDespesa.cancelado.is_(False)).all()
     ciclos = session.query(CicloDespesa).filter_by(cancelado=False).all()
     abastecimentos = session.query(Abastecimento).all()
     ab_fretes = {a.id_despesa_viagem: a for a in abastecimentos if a.id_despesa_viagem}

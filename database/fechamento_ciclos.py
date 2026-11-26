@@ -69,7 +69,7 @@ def consolidar_ciclos(fretes, despesas_ciclo=None):
         km_saida = itens[-1].get("km_saida_entre_coletas")
         km_retorno = itens[-1].get("km_retorno_operacional")
         resultado = round(receita - despesas, 2)
-        margem = round(resultado / receita * 100, 2) if receita > 0 else None
+        margem = round(resultado / receita * 100, 2) if receita > 0 and not ambiguos else None
 
         fechamentos.append({
             "id_ciclo": id_ciclo,

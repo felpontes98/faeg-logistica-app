@@ -1,6 +1,6 @@
 # Diagramas de estados — operação e financeiro
 
-Os diagramas representam o fluxo de estados do negócio. As opções disponíveis na interface incluem “Aguardando Adiantamento”, “Adiantamento Recebido”, “Em Transporte”, “Entregue / Aguardando Saldo”, “Quitada / Concluída” e “Cancelada”.
+Acompanhamos a execução pelas situações Planejada, Em Transporte, Entregue, Concluída e Cancelada. Apuramos a situação financeira pelos recebimentos confirmados de cada frete.
 
 ## 1. Estado operacional conceitual
 
@@ -30,7 +30,8 @@ stateDiagram-v2
     SemRecebimento --> Quitado : Pagamento integral confirmado
     Parcial --> Parcial : Novas parcelas ou cancelamentos
     Quitado --> Parcial : Cancelamento de pagamento com saldo restante
-    Quitado --> [*]
+    Quitado --> SemRecebimento : Cancelar pagamento integral
+    Parcial --> SemRecebimento : Cancelar último pagamento
 ```
 
 O estado operacional e o acompanhamento financeiro são independentes: uma entrega pode estar concluída com recebimentos ainda pendentes. Os diagramas representam transições de negócio e não uma máquina de estados integralmente automatizada.

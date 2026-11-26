@@ -29,6 +29,11 @@ def render(ctx):
     MENU_ITENS = ctx.menu_itens
     viagem_sel_id = ctx.viagem_sel_id
 
+    if get_campo("legado_pendente", False):
+        st.warning("O ciclo tem valores históricos compartilhados. Informe a negociação própria deste frete e confirme a individualização para gravá-la.")
+        st.checkbox("Confirmo os valores individuais deste frete", key="w_confirmar_individualizacao",
+                    value=get_campo("confirmar_individualizacao", False), on_change=sync_campo,
+                    args=("w_confirmar_individualizacao", "confirmar_individualizacao"))
     inicializar_widgets_previsao_financeira()
     st.markdown(
         """

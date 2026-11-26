@@ -28,7 +28,7 @@ O produto foi desenvolvido a partir da rotina logística da FAEG, inicialmente c
 | 5 — Coleta | Local, data e horários |
 | 6 — Entrega | Local, data e horários |
 | 7 — Despesas | Custos de frete, ciclo ou veículo, incluindo abastecimentos |
-| 8 — Fechamento | Conferência dos resultados e encerramento operacional |
+| 8 — Fechamento | Conferência dos resultados e atualização da situação do frete |
 | 9 — Relatórios | Indicadores e exportações |
 | 10 — Consultas | Histórico e pesquisa de registros |
 | 11 — Cadastros | Clientes, motoristas, veículos, fornecedores e parâmetros de consumo |
@@ -92,3 +92,5 @@ python -m pytest -q tests
 ## Licenciamento
 
 As contribuições originais posteriores à mudança de política seguem o aviso de [direitos reservados](LICENSE). Os materiais anteriormente disponibilizados sob MIT permanecem sujeitos aos termos daquela licença, disponíveis em [`licenses/`](licenses/). O histórico está documentado em [licenciamento](docs/licenciamento.md).
+
+No fechamento, conferimos a quilometragem física de cada operação e a situação financeira de cada frete. A frota admite Van, HR e os tipos históricos cadastrados.

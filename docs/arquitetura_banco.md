@@ -54,3 +54,5 @@ Na inicialização, `sincronizar_colunas_banco()` cria estruturas ausentes e rea
 O comando `python -m database.diagnostico_ciclos` executa o diagnóstico de ciclos com a conexão definida em `DATABASE_URL`. A importação de planilha disponibiliza prévia e conferência; a gravação automática não integra o fluxo regular do MVP.
 
 Os cenários de integridade, conciliação financeira e regressão estão organizados no [plano de testes](plano_testes.md). As regras detalhadas estão em [regras de negócio](regras_negocio.md), e o procedimento de publicação em [guia de execução](guia_execucao.md).
+
+Registramos o cancelamento das despesas diretas em viagens_despesas com os campos cancelado, data_cancelamento e motivo_cancelamento. Os totais consideram apenas despesas ativas. O abastecimento associado conserva o mesmo motivo e data.

@@ -60,6 +60,10 @@ sequenceDiagram
     ORM->>DB: Confirma a transacao
     ORM-->>UI: Lancamento persistido
     UI-->>Operador: Atualiza historico e saldo
+    opt Cancelamento de despesa direta
+        Operador->>UI: Informa o motivo
+        UI->>DB: Cancela a despesa e o abastecimento vinculado
+    end
 ```
 
 **Regra:** `abastecimentos` registra o histórico operacional da compra e não acrescenta uma segunda despesa ao DRE.
@@ -74,6 +78,9 @@ sequenceDiagram
     participant ORM as SQLAlchemy
     Operador->>UI: Informa datas e quilometragem da saida
     UI->>S: Valida dados da saida
+    opt Novo frete
+        UI->>UI: Guarda a saída no rascunho até salvar o frete
+    end
     S->>ORM: Salva SaidaOperacional no ciclo
     ORM-->>UI: Identificador da saida
     opt Novo frete do mesmo ciclo

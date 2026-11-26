@@ -96,3 +96,26 @@ with SessionLocal() as db:
     assert db.query(CicloDespesa).count()==1
     assert db.query(Abastecimento).count()==1
 print('CICLO OK: dois fretes, uma saida, despesa compartilhada unica e identificacao automatica')
+
+# A consulta mantém o KM da saída no nível da operação, inclusive em ciclos
+# com mais de um contrato, e preserva a situação financeira de cada frete.
+from faeg_app.core import carregar_todas_viagens_consulta, montar_previa_financeira_ciclo
+from database.models import RecebimentoFrete
+
+with SessionLocal() as db:
+    db.add(RecebimentoFrete(id_viagem=primeiro.id_viagem, tipo_parcela="Saldo",
+                           data_recebimento=date.today(), valor_recebido=500))
+    db.commit()
+
+fretes_consulta, _ = carregar_todas_viagens_consulta()
+assert len(fretes_consulta) == 2
+assert all(frete["km_real_operacao"] == 130 for frete in fretes_consulta)
+assert all(frete["km_rodado"] is None for frete in fretes_consulta)
+frete_pago = next(frete for frete in fretes_consulta if frete["codigo_viagem"] == "V1")
+assert frete_pago["financeiro"] == "Pagamento Quitado"
+assert frete_pago["status"] == "Planejada"
+assert frete_pago["saldo_a_receber"] == 0
+
+st.session_state["despesas_temp"] = [{"destino_temp": "ciclo", "valor_total": 30}]
+previa = montar_previa_financeira_ciclo(0, 0, [])
+assert previa["despesas_compartilhadas_total"] == 160

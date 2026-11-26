@@ -113,7 +113,7 @@ def render_top_context(ctx):
         formatar_rota_exibicao(get_campo("rota_origem", ""), get_campo("rota_destino", ""))
         or "Rota não definida"
     )
-    status_ctx = get_campo("status_viagem", "Aguardando Adiantamento")
+    status_ctx = get_campo("status_viagem", "Planejada")
     id_label_ctx = get_campo("id_viagem_label", prox_cod_sidebar)
     status_financeiro_ctx = None
     if viagem_sel_id != 0:
@@ -123,19 +123,9 @@ def render_top_context(ctx):
             get_campo("valor_negociado", 0.0), total_recebido_ctx
         )
 
-    if status_financeiro_ctx:
-        texto_principal_ctx = status_financeiro_ctx
-        classe_financeira_ctx = " ctx-badge--paid" if status_financeiro_ctx == "Pagamento Quitado" else ""
-        # A Etapa 8 mantém seu status operacional. Se o rótulo antigo conflita
-        # com pagamentos confirmados, pedir revisão sem alterar dados salvos.
-        if status_ctx in {"Aguardando Adiantamento", "Adiantamento Recebido"}:
-            texto_operacional_ctx = "Situação operacional: conferir na Etapa 8"
-        else:
-            texto_operacional_ctx = f"Operação: {status_ctx}"
-    else:
-        texto_principal_ctx = status_ctx
-        classe_financeira_ctx = ""
-        texto_operacional_ctx = "Situação da operação · Etapa 8"
+    texto_principal_ctx = "Conferir legado" if get_campo("legado_pendente", False) else status_financeiro_ctx or "Sem recebimento"
+    classe_financeira_ctx = " ctx-badge--paid" if texto_principal_ctx == "Pagamento Quitado" else ""
+    texto_operacional_ctx = f"Operação: {status_ctx}"
 
     st.markdown(
         f"""
