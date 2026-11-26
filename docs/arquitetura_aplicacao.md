@@ -22,6 +22,8 @@ assets/                           Estilos e logotipo
 tests/                            Testes automatizados
 ```
 
+O formulário da Etapa 7 fica em `views/formulario_despesa.py`. O serviço `database/despesas.py` valida o lançamento, mantém o abastecimento associado e grava o histórico das correções.
+
 ## Fluxo de execução
 
 ```mermaid

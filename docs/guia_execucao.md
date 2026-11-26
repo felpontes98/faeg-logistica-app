@@ -56,3 +56,7 @@ python -m database.diagnostico_ciclos
 ## Recuperação
 
 A recuperação de código utiliza uma revisão validada do repositório. A recuperação de dados e de alterações de esquema utiliza os mecanismos de backup e restauração do PostgreSQL/Neon. Os dois procedimentos são independentes.
+
+## Atualização das despesas
+
+Na primeira inicialização desta versão, a sincronização do esquema cria a tabela `despesas_edicoes`. O histórico começa com a primeira edição de uma despesa salva. As despesas já cadastradas continuam disponíveis pelos mesmos identificadores.

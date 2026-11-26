@@ -13,7 +13,7 @@ flowchart LR
         C3(["Organizar ciclos operacionais"])
         C4(["Negociar e registrar recebimentos"])
         C5(["Registrar coletas e entregas"])
-        C6(["Registrar despesas e abastecimentos"])
+        C6(["Registrar e editar despesas e abastecimentos"])
         C7(["Registrar saídas e trechos"])
         C8(["Consultar fechamento gerencial"])
         C9(["Exportar PDF e Excel"])

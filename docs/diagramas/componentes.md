@@ -34,7 +34,7 @@ flowchart TB
     A --> T["faeg_app/theme.py"]
     A --> P["faeg_app/pages - 11 etapas"]
     P --> CORE["faeg_app/core.py"]
-    P --> V["views - percurso e parâmetros"]
+    P --> V["views - percurso, despesas e parâmetros"]
     P --> R["faeg_app/reporting.py"]
     CORE --> D["database - modelos e operações"]
     V --> D

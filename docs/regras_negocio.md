@@ -52,6 +52,10 @@ O cadastro compreende identificação da frota, dados do frete e documentos, cli
 - Diesel e ARLA são registrados como uma única despesa financeira, com litros, preço, data e odômetro no posto. O histórico de `abastecimentos` referencia o mesmo gasto, sem duplicação na DRE.
 - Compras de combustível e estimativa de consumo por KM são informações distintas. Parâmetros referenciais de consumo não criam custo adicional.
 - Cancelamentos mantêm o histórico. Despesas semelhantes devem ser conferidas antes de confirmar que se referem a comprovantes diferentes.
+- A edição mantém a despesa e seu destino. Quando o custo do veículo já está atribuído, a origem e o destino recebem a correção na mesma transação.
+- Ao corrigir Diesel ou ARLA, atualizamos o abastecimento. Ao mudar para outra categoria, cancelamos o histórico de combustível daquele item. Se o item voltar a ser combustível, reativamos o mesmo abastecimento.
+- Correções de descrição ou odômetro preservam o total registrado no comprovante, inclusive em despesas antigas com arredondamento diferente.
+- Cada edição de uma despesa salva guarda os valores anteriores e atuais. No rascunho, a edição substitui o item antes da publicação.
 
 ## RN-07 — Despesa provisória e atribuição
 
@@ -66,6 +70,8 @@ Os indicadores de margem dependem de receita positiva e dados financeiros sufici
 ## RN-09 — Relatórios e exportações
 
 A Etapa 9 apresenta indicadores e exportações financeiras e operacionais. A Etapa 10 permite consultar os registros e exportar a base completa independentemente de filtros aplicados na lista da tela. Recebimentos cancelados e despesas canceladas permanecem identificáveis no histórico, mas fora dos resultados ativos.
+
+Os campos de texto da exportação Excel preservam a descrição digitada, inclusive quando começa por `=`.
 
 ## RN-10 — Importação e dados históricos
 

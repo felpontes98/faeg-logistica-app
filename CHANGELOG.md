@@ -2,6 +2,14 @@
 
 Este arquivo registra as principais entregas funcionais e técnicas do Sistema Web FAEG. Alterações pontuais e seus responsáveis permanecem disponíveis no histórico de commits do Git.
 
+## 2026-11-26 — Edição de despesas
+
+- Incluímos a edição de despesas no rascunho, no frete, no ciclo e no veículo. Cada correção de uma despesa salva fica disponível na Etapa 7 e na exportação Excel.
+- A correção de combustível atualiza o abastecimento vinculado. Quando o veículo já tem uma atribuição, atualizamos também o custo no destino.
+- Alinhamos os finais de linha do Git ao padrão LF do projeto, inclusive no Windows.
+- Atualizamos a geração das datas de criação e alteração em UTC, mantendo o formato das colunas existentes.
+- Concentramos as regras vigentes nos documentos de arquitetura e de negócio.
+
 ## 2026-11-26 — Fechamento e rastreabilidade
 
 - Unificamos a leitura de KM nas consultas e nos relatórios e incluímos a estimativa de Diesel no fechamento.
@@ -39,4 +47,4 @@ Este arquivo registra as principais entregas funcionais e técnicas do Sistema W
 - Gestão de fretes individuais e ciclos, negociações, pagamentos, despesas e abastecimentos.
 - Consultas, relatórios, exportações e mecanismos de prevenção de lançamentos duplicados.
 
-O detalhamento histórico está disponível nas [reuniões](docs/reunioes/), nas [decisões de arquitetura](docs/decisoes/README.md) e no histórico do repositório.
+O detalhamento histórico está disponível nas [reuniões](docs/reunioes/) e no histórico do repositório.

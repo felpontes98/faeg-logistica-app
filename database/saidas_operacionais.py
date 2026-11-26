@@ -3,7 +3,6 @@
 Não há rateio por frete. As funções de consulta não escrevem no banco.
 Os odômetros de abastecimento pertencem ao veículo e nunca substituem os de saída.
 """
-from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy.orm import selectinload

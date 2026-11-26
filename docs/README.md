@@ -16,12 +16,11 @@ Esta documentação descreve o produto, os requisitos, a arquitetura, as regras 
 | Documento | Conteúdo |
 | --- | --- |
 | [Arquitetura da aplicação](arquitetura_aplicacao.md) | Organização modular e fluxo de execução |
-| [Modelo de dados](arquitetura_banco.md) | Persistência e inventário das 19 tabelas ORM |
+| [Modelo de dados](arquitetura_banco.md) | Persistência e inventário das 20 tabelas ORM |
 | [Diagramas](diagramas/README.md) | UML, modelo ER e infraestrutura |
 | [Rastreabilidade](rastreabilidade.md) | Relação entre requisitos, módulos e testes |
 | [Plano de testes](plano_testes.md) | Casos automatizados e critérios de integração |
 | [Execução e implantação](guia_execucao.md) | Preparação do ambiente, implantação e recuperação |
-| [Decisões de arquitetura](decisoes/README.md) | Registros de decisões técnicas |
 | [Licenciamento](licenciamento.md) | Direitos autorais e histórico MIT |
 | [Segurança](../SECURITY.md) | Controles e política de acesso |
 

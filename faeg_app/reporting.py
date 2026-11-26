@@ -9,14 +9,16 @@ from datetime import date
 import pandas as pd
 
 from database.connection import SessionLocal
+from database.despesas import COLUNAS_EDICAO, consultar_edicoes
 from database.fechamento_ciclos import consolidar_ciclos, reconciliar_resultado_gerencial
 from database.saidas_operacionais import consultar_todas_saidas, resumo_saidas
 
 def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veiculos, clientes, locais, fornecedores, abastecimentos=None, fechamentos_ciclos=None, recebimentos=None, despesas_ciclo=None, despesas_veiculo=None, atribuicoes_veiculo=None, alertas_despesas=None):
     """Gera arquivo Excel (.xlsx) completo com todas as viagens, despesas e cadastros do sistema."""
     buf = io.BytesIO()
-    # Única leitura por exportação; os trechos são eager-loaded para uso após fechar a sessão.
+    # Os trechos são carregados antes de fechar a sessão.
     with SessionLocal() as db:
+        edicoes = consultar_edicoes(db)
         registros_saida = consultar_todas_saidas(db)
         por_ciclo_export = {}
         for saida in registros_saida:
@@ -346,6 +348,7 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         df_recebimentos.to_excel(writer, sheet_name="Recebimentos_Fretes", index=False)
         df_despesas_ciclo.to_excel(writer, sheet_name="Despesas_Ciclo", index=False)
         df_despesas_veiculo.to_excel(writer, sheet_name="Despesas_Veiculo", index=False)
+        pd.DataFrame(edicoes, columns=COLUNAS_EDICAO).to_excel(writer, sheet_name="Edicoes_Despesas", index=False)
         df_atribuicoes.to_excel(writer, sheet_name="Atribuicoes_Despesas", index=False)
         # Exportação da operação física sem rateio de quilômetros por ID Frete.
         dados_saidas = []
@@ -379,6 +382,12 @@ def gerar_excel_base_completa(todas_viagens, desp_detalhadas, motoristas, veicul
         pd.DataFrame(dados_saidas).to_excel(writer, sheet_name="Saidas_Operacionais", index=False)
         pd.DataFrame(dados_trechos).to_excel(writer, sheet_name="Trechos_Operacionais", index=False)
         pd.DataFrame(dados_resumo).to_excel(writer, sheet_name="KM_Operacional_Ciclos", index=False)
+        # Todas as abas exportam valores. Descrições iniciadas por "=" continuam sendo texto.
+        for planilha in writer.sheets.values():
+            for linha in planilha.iter_rows():
+                for celula in linha:
+                    if celula.data_type == "f":
+                        celula.data_type = "s"
 
     return buf.getvalue()
 

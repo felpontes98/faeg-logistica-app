@@ -40,6 +40,10 @@ O destino da despesa define sua contabilização: **Frete** para gasto exclusivo
 
 Abastecimentos são registrados na Etapa 7 com data, litros, preço e odômetro no posto. Essa leitura integra o histórico do veículo e não acrescenta quilômetros à operação. O fechamento apresenta os dados consolidados sem duplicar os lançamentos.
 
+Para corrigir uma despesa do frete ou do rascunho, clique em **Editar** na linha. Para uma despesa compartilhada, abra o histórico do ciclo e selecione o lançamento. Para uma despesa do veículo, selecione o item na lista do veículo. Altere os campos e clique em **Salvar alterações**. No rascunho, salve também o rascunho ou o frete para guardar o preenchimento.
+
+Em **Histórico de edições de despesas**, consulte os campos alterados nas últimas 30 edições de despesas salvas. A aba **Edicoes_Despesas** da exportação Excel traz o histórico completo. Para devolver uma despesa atribuída ao veículo, use o estorno.
+
 ## Associação de fretes a saídas
 
 1. Informe o nome do ciclo na Etapa 1. O código interno `V` e o ID `FV` são gerados automaticamente no salvamento.

@@ -3,28 +3,19 @@
 As regras operacionais e financeiras são utilizadas pelas etapas da interface.
 """
 
-import base64
 from html import escape
-import io
-import os
 import re
-import zlib
 from datetime import date
 
-import pandas as pd
 import streamlit as st
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 
 from database.connection import SessionLocal
-from database.atribuicao_despesas import atribuir_despesa_veiculo, estornar_atribuicao_veiculo
-from database.conferencia_duplicidades import (
-    listar_semelhancas_entre_frete_ciclo,
-    procurar_semelhancas_cruzadas,
-)
+from database.despesas import registrar_despesa
+from database.conferencia_duplicidades import listar_semelhancas_entre_frete_ciclo
 from database.controle_abastecimentos import calcular_indicadores_abastecimentos
-from database.fechamento_ciclos import consolidar_ciclos, reconciliar_resultado_gerencial
-from database.importador_planilha import preparar_previa_importacao_faeg
+from database.fechamento_ciclos import consolidar_ciclos
 from database.saidas_operacionais import consultar_todas_saidas, resumo_saidas
 from database.identificacao_fretes import (
     previsualizar_frete, reservar_identificadores, validar_vinculo_saida,
@@ -45,7 +36,6 @@ from database.models import (
     Viagem,
     SaidaOperacional,
     ViagemDespesa,
-    sincronizar_colunas_banco,
 )
 
 # ==============================================================================
@@ -959,27 +949,6 @@ def carregar_abastecimentos_veiculo(id_veiculo):
     return [a for a in carregar_todos_abastecimentos() if a["id_veiculo"] == id_veiculo]
 
 
-def registrar_abastecimento_do_lancamento(session, dados, campo_origem, id_origem):
-    """Projeção operacional do MESMO custo financeiro, sem segundo registro na tela.
-
-    A tabela abastecimentos é só histórico/consumo; NÃO integra o somatório do DRE.
-    """
-    if dados["tipo_despesa"] not in {"Posto de Combustível", "Abast. ARLA"}:
-        return
-    if not dados.get("id_veiculo_abast"):
-        raise ValueError("Abastecimento requer veículo identificado.")
-    session.add(Abastecimento(
-        id_veiculo=dados["id_veiculo_abast"],
-        id_fornecedor=dados.get("id_fornecedor") or None,
-        data_abastecimento=dados["data_despesa"],
-        tipo_combustivel="ARLA" if dados["tipo_despesa"] == "Abast. ARLA" else "Diesel",
-        odometro=dados.get("odometro_abastecimento"),
-        litros=dados["quantidade"],
-        preco_litro=dados["valor_unitario"],
-        valor_total=dados["valor_total"],
-        **{campo_origem: id_origem},
-    ))
-
 # ==============================================================================
 # NAVEGAÇÃO SEGURA VIA CALLBACK E ESTADO DA VIAGEM
 # ==============================================================================
@@ -988,6 +957,7 @@ def _mudar_aba_callback(nova_aba):
 
 
 def _abrir_viagem_para_edicao(id_v, destino_aba):
+    st.session_state.pop("edicao_despesa", None)
     st.session_state["viagem_ativa_id"] = id_v
     st.session_state["loaded_viagem_id"] = None
     st.session_state["rascunho_ativo_id"] = None
@@ -996,6 +966,7 @@ def _abrir_viagem_para_edicao(id_v, destino_aba):
 
 
 def _iniciar_nova_viagem():
+    st.session_state.pop("edicao_despesa", None)
     st.session_state["viagem_ativa_id"] = 0
     st.session_state["loaded_viagem_id"] = None
     st.session_state["despesas_temp"] = []
@@ -1586,45 +1557,13 @@ def salvar_viagem_completa(id_viagem_atual, viagens_lista):
                 session.add(financeiro_frete)
 
                 for dt in st.session_state.get("despesas_temp", []):
-                    if dt.get("destino_temp") == "ciclo":
-                        desp_ciclo = CicloDespesa(
-                            id_ciclo=ciclo.id_ciclo,
-                            id_fornecedor=dt.get("id_fornecedor") or None,
-                            tipo_despesa=dt["tipo_despesa"],
-                            descricao_detalhe=dt["descricao_detalhe"],
-                            quantidade=dt["quantidade"],
-                            valor_unitario=dt["valor_unitario"],
-                            valor_total=dt["valor_total"],
-                            data_despesa=dt.get("data_despesa") or date.today(),
-                        )
-                        session.add(desp_ciclo)
-                        session.flush()
-                        if dt["tipo_despesa"] in {"Posto de Combustível", "Abast. ARLA"}:
-                            dados_abast_temp = dict(dt)
-                            dados_abast_temp["id_veiculo_abast"] = dt.get("id_veiculo_abast") or vg.id_veiculo
-                            registrar_abastecimento_do_lancamento(
-                                session, dados_abast_temp, "id_despesa_ciclo", desp_ciclo.id_despesa_ciclo,
-                            )
-                        continue
-                    desp_salva = ViagemDespesa(
-                            id_viagem=vg.id_viagem,
-                            id_fornecedor=dt.get("id_fornecedor") or None,
-                            tipo_despesa=dt["tipo_despesa"],
-                            descricao_detalhe=dt["descricao_detalhe"],
-                            quantidade=dt["quantidade"],
-                            valor_unitario=dt["valor_unitario"],
-                            valor_total=dt["valor_total"],
-                            odometro_abastecimento=dt.get("odometro_abastecimento"),
-                            data_despesa=dt.get("data_despesa"),
-                    )
-                    session.add(desp_salva)
-                    session.flush()
-                    if dt["tipo_despesa"] in {"Posto de Combustível", "Abast. ARLA"}:
-                        dados_abast_temp = dict(dt)
-                        dados_abast_temp["id_veiculo_abast"] = dt.get("id_veiculo_abast") or vg.id_veiculo
-                        registrar_abastecimento_do_lancamento(
-                            session, dados_abast_temp, "id_despesa_viagem", desp_salva.id_despesa,
-                        )
+                    compartilhada = dt.get("destino_temp") == "ciclo"
+                    dados = {**dt, "data_despesa": dt.get("data_despesa") or date.today(),
+                             "id_fornecedor": dt.get("id_fornecedor") or None,
+                             "id_veiculo_abast": dt.get("id_veiculo_abast") or vg.id_veiculo}
+                    registrar_despesa(session, "Ciclo" if compartilhada else "Frete",
+                                     ciclo.id_ciclo if compartilhada else vg.id_viagem,
+                                     dados, dt.get("coincidencias_confirmadas", ()))
                 # Saídas preparadas antes do primeiro salvamento passam a integrar
                 # a operação na MESMA transação do frete, sem duplicidade.
                 from database.rascunhos import publicar_saidas_rascunho

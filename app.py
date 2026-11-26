@@ -32,7 +32,7 @@ from faeg_app.pages.etapa_10_consultas import render as render_etapa_10
 from faeg_app.pages.etapa_11_cadastros import render as render_etapa_11
 
 # Inicialização do esquema declarativo, após a configuração do Streamlit.
-inicializar_banco_uma_vez(schema_v=16)
+inicializar_banco_uma_vez(schema_v=17)
 aplicar_tema()
 
 # Dados de referência compartilhados pelas 11 etapas da interface.

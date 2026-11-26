@@ -4,7 +4,7 @@
 
 Sistema web para gerenciamento operacional e financeiro de fretes individuais e ciclos de transporte. O projeto reúne registros de frota, cargas, clientes, negociações, coletas, entregas, despesas, recebimentos, quilometragem e indicadores em uma plataforma integrada.
 
-O produto foi desenvolvido a partir da rotina logística da FAEG, inicialmente controlada por planilhas, como MVP no contexto do **Startup Challenge UMC 2026**.
+Desenvolvemos o MVP para o **Startup Challenge UMC 2026** a partir da planilha que usávamos para controlar as viagens da FAEG.
 
 **Aplicação:** [Sistema Web FAEG](https://testefaeg.streamlit.app/)
 
@@ -45,9 +45,11 @@ As saídas são registradas na **Etapa 2**. O fechamento utiliza os registros op
 | Relatórios | Exportação PDF e Excel |
 | Testes | pytest e GitHub Actions |
 
-A aplicação possui 11 módulos de interface em [`faeg_app/pages/`](faeg_app/pages/), serviços compartilhados em [`faeg_app/`](faeg_app/), componentes de operação em [`views/`](views/) e regras de persistência em [`database/`](database/). O modelo de dados contém **19 tabelas ORM**.
+Na Etapa 7, registramos e corrigimos despesas de fretes, ciclos e veículos. O histórico das correções fica disponível na própria etapa e na exportação Excel.
 
-A [documentação técnica](docs/README.md) inclui requisitos, regras de negócio, diagramas UML, modelo de dados, decisões arquiteturais e testes.
+A aplicação possui 11 módulos de interface em [`faeg_app/pages/`](faeg_app/pages/), serviços compartilhados em [`faeg_app/`](faeg_app/), componentes de operação em [`views/`](views/) e regras de persistência em [`database/`](database/). O modelo de dados contém **20 tabelas ORM**.
+
+A [documentação técnica](docs/README.md) inclui requisitos, regras de negócio, diagramas UML, modelo de dados e testes.
 
 ## Instalação local
 
@@ -79,7 +81,7 @@ python -m pytest -q tests
 - [Índice técnico](docs/README.md)
 - [Requisitos funcionais](docs/requisitos.md) e [regras de negócio](docs/regras_negocio.md)
 - [Arquitetura](docs/arquitetura_aplicacao.md) e [modelo de dados](docs/arquitetura_banco.md)
-- [Diagramas](docs/diagramas/README.md) e [decisões arquiteturais](docs/decisoes/README.md)
+- [Diagramas](docs/diagramas/README.md)
 - [Plano de testes](docs/plano_testes.md) e [histórico de alterações](CHANGELOG.md)
 - [Política de segurança](SECURITY.md) e [licenciamento](docs/licenciamento.md)
 

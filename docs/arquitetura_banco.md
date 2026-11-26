@@ -1,6 +1,6 @@
 # Arquitetura do banco de dados
 
-A persistência utiliza PostgreSQL (Neon), SQLAlchemy ORM e sessões definidas em `database/connection.py`. A estrutura das entidades e a rotina de sincronização estão em [`database/models.py`](../database/models.py). O modelo contém **19 tabelas**.
+A persistência utiliza PostgreSQL (Neon), SQLAlchemy ORM e sessões definidas em `database/connection.py`. A estrutura das entidades e a rotina de sincronização estão em [`database/models.py`](../database/models.py). O modelo contém **20 tabelas**.
 
 ## Inventário das tabelas
 
@@ -19,6 +19,7 @@ A persistência utiliza PostgreSQL (Neon), SQLAlchemy ORM e sessões definidas e
 | `viagens_despesas` | `id_despesa` | Despesa financeira ligada a `id_viagem`; fornecedor e campo legado `odometro_abastecimento` são opcionais |
 | `ciclos_despesas` | `id_despesa_ciclo` | Despesa compartilhada associada uma vez ao `id_ciclo`, com fornecedor opcional e cancelamento auditável; não é distribuída por frete |
 | `veiculos_despesas` | `id_despesa_veiculo` | Origem de gasto do veículo: **pendente fora dos resultados** ou atribuído a frete/ciclo (contabilizado apenas no destino), com cancelamento auditável |
+| `despesas_edicoes` | `id_edicao` | Data e hora e valores antes e depois da edição. As chaves identificam a despesa de origem e, quando atribuída, a despesa no destino |
 | `veiculos_despesas_atribuicoes` | `id_evento` | Eventos imutáveis de atribuição/estorno com destino, data/hora e justificativa |
 | `abastecimentos` | `id_abastecimento` | Visão operacional de Diesel/ARLA por veículo, criada a partir da **mesma despesa**, com vínculo à despesa de frete/ciclo/veículo, odômetro e cancelamento |
 | `saidas_operacionais` | `id_saida` | Saídas físicas de um ciclo (inclusive individual), com veículo, motorista opcional, datas, três componentes de KM planejado, odômetros e total calculado |

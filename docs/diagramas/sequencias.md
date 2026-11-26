@@ -94,3 +94,23 @@ sequenceDiagram
 ```
 
 **Regra:** os odômetros de saída e chegada à base determinam o KM real. Uma saída com múltiplos fretes contribui apenas uma vez para os totais físicos do ciclo.
+
+## Edição de uma despesa salva
+
+```mermaid
+sequenceDiagram
+    actor Operador
+    participant Tela as Etapa 7
+    participant Banco
+    Operador->>Tela: Abrir despesa
+    Tela->>Banco: Ler valores e vínculos
+    Operador->>Tela: Corrigir e salvar
+    Tela->>Banco: Conferir versão aberta e comprovantes
+    alt Despesa atual e válida
+        Banco->>Banco: Atualizar origem, destino atribuído e abastecimento aplicáveis
+        Banco->>Banco: Gravar valores anteriores e atuais na mesma transação
+        Banco-->>Tela: Confirmar edição
+    else Dados divergentes
+        Banco-->>Tela: Informar divergência
+    end
+```

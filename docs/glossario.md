@@ -20,7 +20,6 @@
 | **DRE gerencial parcial** | Receitas menos os custos considerados na aplicação; não equivale ao lucro líquido contábil. |
 | **ORM** | Mapeamento objeto-relacional SQLAlchemy que associa classes Python às tabelas. |
 | **CI** | Integração contínua: verificações automáticas disparadas por push/pull request. |
-| **ADR** | Registro de Decisão de Arquitetura que documenta contexto, escolha e consequências. |
 | **Neon** | Plataforma PostgreSQL utilizada para persistência da aplicação publicada. |
 
 

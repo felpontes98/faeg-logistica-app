@@ -13,4 +13,4 @@ Os diagramas representam a arquitetura e os fluxos do Sistema Web FAEG. Foram cr
 | [Estados](estados.md) | Situações operacionais e financeiras | `stateDiagram-v2` |
 | [Implantação](implantacao.md) | Aplicação, navegador e banco | Fluxograma de implantação |
 
-**Escopo da modelagem:** a aplicação utiliza Streamlit e SQLAlchemy, sem API REST intermediária. Os diagramas de estados e casos de uso são representações conceituais; o DER acompanha as 19 tabelas ORM definidas no código.
+**Escopo da modelagem:** a aplicação utiliza Streamlit e SQLAlchemy, sem API REST intermediária. Os diagramas de estados e casos de uso são representações conceituais; o DER acompanha as 20 tabelas ORM definidas no código.

@@ -141,6 +141,13 @@ classDiagram
     Viagem "1" --> "0..*" ViagemDespesa
     CicloOperacional "1" --> "0..*" CicloDespesa
     Veiculo "1" --> "0..*" VeiculoDespesa
+    class DespesaEdicao {
+      +int id_edicao
+      +datetime data_edicao
+    }
+    ViagemDespesa "0..1" --> "0..*" DespesaEdicao
+    CicloDespesa "0..1" --> "0..*" DespesaEdicao
+    VeiculoDespesa "0..1" --> "0..*" DespesaEdicao
     VeiculoDespesa "1" --> "0..*" VeiculoDespesaAtribuicao
     Veiculo "1" --> "0..*" Abastecimento
     Veiculo "1" --> "0..1" ParametroConsumoVeiculo

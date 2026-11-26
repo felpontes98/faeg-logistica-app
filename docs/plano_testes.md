@@ -46,6 +46,7 @@ python -m pytest -q tests
 | TI-12 | RI-01–06 | Revisar permissões, restauração do backup e dados pessoais | Plano de segurança e ata de aceite |
 | TI-13 | RF-52–53 | Registrar dois fretes na mesma saída e outros em uma segunda saída do mesmo ciclo; verificar IDs automáticos e KM físico não duplicado | Teste de vínculos e conferência de KM |
 | TI-14 | RF-52–53 | Impedir vínculo de frete a saída de outro ciclo ou veículo; preservar identificadores anteriores | Testes de integridade e histórico |
+| TI-15 | RF-54 | Editar um custo, conferir total e histórico, corrigir Diesel e testar estorno após edição de uma despesa atribuída | Etapas 7 a 9 e aba Edicoes_Despesas |
 
 ### Processo de execução
 

@@ -15,7 +15,7 @@ flowchart TD
     G --> H{"Outros fretes no mesmo ciclo?"}
     H -->|"Sim"| I["Cadastrar outro frete sem duplicar o percurso"]
     I --> H
-    H -->|"Não"| J["Etapa 7: lançar despesas e abastecimentos uma única vez"]
+    H -->|"Não"| J["Etapa 7: registrar ou editar despesas e abastecimentos"]
     J --> K["Etapa 8: conferir KM, receitas, despesas e recebimentos"]
     K --> L{"Operação concluída?"}
     L -->|"Não"| M["Complementar informações operacionais"]

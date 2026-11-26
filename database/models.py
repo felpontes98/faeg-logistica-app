@@ -1,6 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
+    JSON,
     Column,
     Date,
     DateTime,
@@ -10,10 +12,16 @@ from sqlalchemy import (
     String,
     Text,
     Time,
+    func,
     text,
 )
 from sqlalchemy.orm import relationship
 from database.connection import Base, engine
+
+
+def _agora_utc():
+    """As colunas DateTime sem fuso armazenam a hora UTC."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Motorista(Base):
@@ -163,7 +171,7 @@ class Viagem(Base):
     id_veiculo = Column(Integer, ForeignKey("veiculos.id_veiculo"), nullable=False)
     id_frete_externo = Column(String(60))
     id_saida_coleta = Column(Integer, ForeignKey("saidas_operacionais.id_saida", ondelete="SET NULL"), nullable=True, index=True)
-    data_criacao = Column(DateTime, default=datetime.utcnow)
+    data_criacao = Column(DateTime, default=_agora_utc)
     status_viagem = Column(String(50), default="Planejada")
     tipo_viagem = Column(String(30), default="Individual")
     tipo_frete = Column(String(50), default="Dedicado")
@@ -252,7 +260,7 @@ class RecebimentoFrete(Base):
     referencia = Column(String(120))
     observacao = Column(String(200))
     valor_recebido = Column(Numeric(12, 2), nullable=False)
-    criado_em = Column(DateTime, default=datetime.utcnow)
+    criado_em = Column(DateTime, default=_agora_utc)
     cancelado = Column(Boolean, nullable=False, default=False)
     data_cancelamento = Column(Date, nullable=True)
     motivo_cancelamento = Column(String(200), nullable=True)
@@ -302,7 +310,7 @@ class VeiculoDespesa(Base):
     valor_unitario = Column(Numeric(12, 4), nullable=False)
     valor_total = Column(Numeric(12, 2), nullable=False)
     data_despesa = Column(Date, nullable=False)
-    criado_em = Column(DateTime, default=datetime.utcnow)
+    criado_em = Column(DateTime, default=_agora_utc)
     cancelado = Column(Boolean, nullable=False, default=False)
     data_cancelamento = Column(Date)
     motivo_cancelamento = Column(String(200))
@@ -332,7 +340,7 @@ class VeiculoDespesaAtribuicao(Base):
     tipo_destino = Column(String(20), nullable=False)
     id_destino = Column(Integer, nullable=False)
     id_lancamento_destino = Column(Integer, nullable=False)
-    data_evento = Column(DateTime, default=datetime.utcnow, nullable=False)
+    data_evento = Column(DateTime, default=_agora_utc, nullable=False)
     motivo = Column(String(200), nullable=False)
 
     despesa_origem = relationship("VeiculoDespesa", back_populates="historico_atribuicoes")
@@ -352,7 +360,7 @@ class CicloDespesa(Base):
     valor_unitario = Column(Numeric(12, 4), nullable=False)
     valor_total = Column(Numeric(12, 2), nullable=False)
     data_despesa = Column(Date, nullable=False)
-    criado_em = Column(DateTime, default=datetime.utcnow)
+    criado_em = Column(DateTime, default=_agora_utc)
     cancelado = Column(Boolean, nullable=False, default=False)
     data_cancelamento = Column(Date)
     motivo_cancelamento = Column(String(200))
@@ -390,6 +398,22 @@ class Abastecimento(Base):
     fornecedor = relationship("Fornecedor", back_populates="abastecimentos")
 
 
+class DespesaEdicao(Base):
+    """Valores de cada correção, com referência à origem e ao eventual destino atribuído."""
+    __tablename__ = "despesas_edicoes"
+    __table_args__ = (
+        CheckConstraint("id_despesa_viagem IS NOT NULL OR id_despesa_ciclo IS NOT NULL OR id_despesa_veiculo IS NOT NULL"),
+        CheckConstraint("id_despesa_viagem IS NULL OR id_despesa_ciclo IS NULL"),
+    )
+    id_edicao = Column(Integer, primary_key=True)
+    data_edicao = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    id_despesa_viagem = Column(Integer, ForeignKey("viagens_despesas.id_despesa"), index=True)
+    id_despesa_ciclo = Column(Integer, ForeignKey("ciclos_despesas.id_despesa_ciclo"), index=True)
+    id_despesa_veiculo = Column(Integer, ForeignKey("veiculos_despesas.id_despesa_veiculo"), index=True)
+    anterior = Column(JSON, nullable=False)
+    atualizado = Column(JSON, nullable=False)
+
+
 class RascunhoViagem(Base):
     """Progresso de preenchimento antes de atender os campos obrigatórios do frete.
 
@@ -399,7 +423,7 @@ class RascunhoViagem(Base):
     id_rascunho = Column(Integer, primary_key=True, autoincrement=True)
     titulo = Column(String(150), nullable=False)
     conteudo_json = Column(Text, nullable=False)
-    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = Column(DateTime, default=_agora_utc, onupdate=_agora_utc)
 
 
 class SaidaOperacional(Base):
@@ -452,7 +476,7 @@ class ParametroConsumoVeiculo(Base):
     id_veiculo = Column(Integer, ForeignKey("veiculos.id_veiculo"), primary_key=True)
     km_por_litro = Column(Numeric(10, 3), nullable=False)
     preco_litro_referencia = Column(Numeric(12, 4), nullable=False)
-    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_em = Column(DateTime, default=_agora_utc, onupdate=_agora_utc)
 
     veiculo = relationship("Veiculo")
 

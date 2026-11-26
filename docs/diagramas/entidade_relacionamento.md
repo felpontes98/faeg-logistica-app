@@ -1,6 +1,6 @@
-# Modelo entidade-relacionamento — 19 tabelas
+# Modelo entidade-relacionamento — 20 tabelas
 
-O diagrama deriva das classes em [`database/models.py`](../../database/models.py), com as chaves e os relacionamentos principais. Inclui todas as 19 tabelas, embora nem todos os atributos e FKs opcionais estejam desenhados para preservar a legibilidade.
+O diagrama deriva das classes em [`database/models.py`](../../database/models.py), com as chaves e os relacionamentos principais. Inclui todas as 20 tabelas, embora nem todos os atributos e FKs opcionais estejam desenhados para preservar a legibilidade.
 
 ```mermaid
 erDiagram
@@ -119,13 +119,22 @@ erDiagram
         string titulo
         string conteudo_json
     }
+    VIAGENS_DESPESAS |o--o{ DESPESAS_EDICOES : registra
+    CICLOS_DESPESAS |o--o{ DESPESAS_EDICOES : registra
+    VEICULOS_DESPESAS |o--o{ DESPESAS_EDICOES : registra
+    DESPESAS_EDICOES {
+        int id_edicao PK
+        datetime data_edicao
+        json anterior
+        json atualizado
+    }
     PARAMETROS_CONSUMO_VEICULO {
         int id_veiculo PK
         decimal km_por_litro
     }
 ```
 
-**Vínculos não desenhados:** `viagens` referencia `locais` duas vezes (coleta e entrega); os campos de origem de `abastecimentos` são FKs opcionais e alternativas; `veiculos_despesas` mantém possíveis FKs para despesas de destino após atribuição. Verificar restrições efetivas no PostgreSQL antes de afirmar exclusividade transacional completa.
+**Vínculos não desenhados:** `viagens` referencia `locais` duas vezes (coleta e entrega); os campos de origem de `abastecimentos` são FKs opcionais e alternativas; `veiculos_despesas` mantém possíveis FKs para despesas de destino após atribuição.
 
 As chaves primárias de `CICLOS_FINANCEIRO`, `FRETES_FINANCEIRO` e `PARAMETROS_CONSUMO_VEICULO` também participam de relacionamentos por chave estrangeira.
 

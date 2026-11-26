@@ -44,6 +44,7 @@ def retomar_rascunho(id_rascunho):
     form["status_viagem"] = situacao_operacional(form.get("status_viagem"))
     st.session_state["form_data"] = form
     st.session_state["saidas_provisorias"] = saidas
+    st.session_state.pop("edicao_despesa", None)
     st.session_state["despesas_temp"] = despesas
     st.session_state["rascunho_ativo_id"] = int(id_rascunho)
     st.session_state["viagem_ativa_id"] = 0

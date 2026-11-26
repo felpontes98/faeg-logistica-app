@@ -28,8 +28,6 @@ from faeg_app.core import (
 
 def render(ctx):
     MENU_ITENS = ctx.menu_itens
-    motoristas_db = ctx.motoristas_db
-    veiculos_db = ctx.veiculos_db
     viagem_sel_id = ctx.viagem_sel_id
 
     st.markdown(
@@ -240,7 +238,6 @@ def render(ctx):
         )
 
     v_neg_dre = to_float(get_campo("valor_negociado", 0.0))
-    v_rec_dre = to_float(get_campo("valor_adiant", 0.0)) + to_float(get_campo("valor_saldo", 0.0))
     receita_dre = v_neg_dre
 
     if viagem_sel_id == 0:
